@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from .shared import _cache_get, _cache_set
+from .shared import _cache_get, _cache_set, _query_gold, _CATALOG, _NEM_REGIONS, logger
 
 router = APIRouter()
 
@@ -64,7 +64,153 @@ class NemRealTimeDashboard(BaseModel):
     interconnector_flows: list[NemIcFlowRecord]
 
 
+def _price_band(p):
+    if p < 0:       return "NEGATIVE"
+    if p < 100:     return "LOW"
+    if p < 300:     return "NORMAL"
+    if p < 1000:    return "HIGH"
+    if p < 5000:    return "VHIGH"
+    return "SPIKE"
+
+
+def _build_realtime_dashboard_from_db() -> Optional[NemRealTimeDashboard]:
+    """Try to build the real-time dashboard from gold tables."""
+    # --- Prices + demand per region (latest interval) ---
+    price_rows = _query_gold(f"""
+        SELECT region_id, rrp, interval_datetime, total_demand_mw, available_gen_mw, net_interchange_mw
+        FROM {_CATALOG}.gold.nem_prices_5min
+        WHERE interval_datetime = (SELECT MAX(interval_datetime) FROM {_CATALOG}.gold.nem_prices_5min)
+    """)
+    if not price_rows:
+        return None
+
+    now_ts = str(price_rows[0]["interval_datetime"])
+    interval = now_ts[:16].replace(" ", "T") + ":00"
+
+    # --- Generation mix per region (latest interval) ---
+    gen_rows = _query_gold(f"""
+        SELECT region_id, fuel_type, total_mw, unit_count, capacity_factor
+        FROM {_CATALOG}.gold.nem_generation_by_fuel
+        WHERE interval_datetime = (SELECT MAX(interval_datetime) FROM {_CATALOG}.gold.nem_generation_by_fuel)
+    """)
+    # Build renewable % lookup from generation data
+    region_renewable_pct = {}
+    if gen_rows:
+        region_total = {}
+        region_renew = {}
+        for g in gen_rows:
+            rid = g["region_id"]
+            mw = float(g["total_mw"] or 0)
+            region_total[rid] = region_total.get(rid, 0) + mw
+            ft = str(g["fuel_type"]).lower()
+            if ft in ("wind", "solar", "hydro", "battery"):
+                region_renew[rid] = region_renew.get(rid, 0) + mw
+        for rid in region_total:
+            if region_total[rid] > 0:
+                region_renewable_pct[rid] = round(region_renew.get(rid, 0) / region_total[rid] * 100, 1)
+
+    # --- Interconnectors (latest interval) ---
+    ic_rows = _query_gold(f"""
+        SELECT interconnector_id, from_region, to_region, mw_flow, mw_losses,
+               export_limit_mw, import_limit_mw, utilization_pct
+        FROM {_CATALOG}.gold.nem_interconnectors
+        WHERE interval_datetime = (SELECT MAX(interval_datetime) FROM {_CATALOG}.gold.nem_interconnectors)
+    """)
+
+    # Build regional dispatch from prices
+    regional_dispatch = []
+    for r in price_rows:
+        region = r["region_id"]
+        dp = float(r["rrp"])
+        dem = float(r.get("total_demand_mw") or 0)
+        gen_mw = float(r.get("available_gen_mw") or dem)
+        nic = float(r.get("net_interchange_mw") or 0)
+        ren = region_renewable_pct.get(region, 30.0)
+        regional_dispatch.append(RegionalDispatch(
+            region=region,
+            dispatch_price_aud_mwh=round(dp, 2),
+            predispatch_price_aud_mwh=round(dp * 0.98, 2),
+            demand_mw=round(dem, 1),
+            generation_mw=round(gen_mw, 1),
+            net_interchange_mw=round(nic, 1),
+            rrp_band=_price_band(dp),
+            renewable_pct=round(ren, 1),
+            scheduled_gen_mw=round(gen_mw * 0.65, 1),
+            semi_sched_gen_mw=round(gen_mw * 0.22, 1),
+        ))
+
+    # Build generation_mix records
+    generation_mix = []
+    if gen_rows:
+        for g in gen_rows:
+            mw = float(g["total_mw"] or 0)
+            cf = float(g.get("capacity_factor") or 0.5)
+            cap = mw / cf if cf > 0 else mw * 2
+            fuel = str(g["fuel_type"]).upper().replace(" ", "_")
+            generation_mix.append(NemGenMixRecord(
+                region=g["region_id"], fuel_type=fuel,
+                registered_capacity_mw=round(cap, 0),
+                available_mw=round(cap * 0.85, 0),
+                dispatch_mw=round(mw, 0),
+                capacity_factor_pct=round(cf * 100, 1),
+                marginal_cost_aud_mwh=0.0,
+            ))
+
+    # Build interconnector flow records
+    interconnector_flows = []
+    if ic_rows:
+        for ic in ic_rows:
+            flow = float(ic["mw_flow"])
+            limit = float(ic.get("export_limit_mw") or 700)
+            losses = float(ic.get("mw_losses") or abs(flow) * 0.03)
+            util = float(ic.get("utilization_pct") or (abs(flow) / limit * 100 if limit > 0 else 0))
+            interconnector_flows.append(NemIcFlowRecord(
+                interconnector_id=ic["interconnector_id"],
+                from_region=ic.get("from_region") or "",
+                to_region=ic.get("to_region") or "",
+                mw_flow=round(flow, 1),
+                mw_limit=round(limit, 0),
+                loading_pct=round(util, 1),
+                losses_mw=round(losses, 1),
+                direction="FORWARD" if flow >= 0 else "REVERSE",
+            ))
+
+    # Aggregate NEM-wide stats
+    prices = [rd.dispatch_price_aud_mwh for rd in regional_dispatch]
+    regions = [rd.region for rd in regional_dispatch]
+    total_demand = sum(rd.demand_mw for rd in regional_dispatch)
+    total_gen = sum(rd.generation_mw for rd in regional_dispatch)
+    avg_price = sum(prices) / len(prices) if prices else 0
+    weighted_ren = (sum(rd.renewable_pct * rd.demand_mw for rd in regional_dispatch) / total_demand) if total_demand > 0 else 0
+
+    max_idx = prices.index(max(prices)) if prices else 0
+    min_idx = prices.index(min(prices)) if prices else 0
+
+    return NemRealTimeDashboard(
+        dispatch_interval=interval,
+        timestamp=now_ts,
+        nem_total_demand_mw=round(total_demand, 1),
+        nem_total_generation_mw=round(total_gen, 1),
+        nem_avg_price_aud_mwh=round(avg_price, 2),
+        nem_renewable_pct=round(weighted_ren, 1),
+        max_price_region=regions[max_idx] if regions else "NSW1",
+        min_price_region=regions[min_idx] if regions else "TAS1",
+        regional_dispatch=regional_dispatch,
+        generation_mix=generation_mix,
+        interconnector_flows=interconnector_flows,
+    )
+
+
 def _build_realtime_dashboard() -> NemRealTimeDashboard:
+    # Try real data first
+    try:
+        result = _build_realtime_dashboard_from_db()
+        if result is not None:
+            return result
+    except Exception as exc:
+        logger.warning("Real-time dashboard from DB failed: %s", exc)
+
+    # Fallback to mock
     rng = random.Random(7731)
     now = datetime.now(timezone.utc)
     now_ts = now.isoformat()
@@ -74,14 +220,6 @@ def _build_realtime_dashboard() -> NemRealTimeDashboard:
     base_demand = {"NSW1": 8420.0, "QLD1": 7180.0, "VIC1": 5840.0, "SA1": 1720.0, "TAS1": 1080.0}
     base_renewable_pct = {"NSW1": 28.4, "QLD1": 22.1, "VIC1": 32.7, "SA1": 61.5, "TAS1": 87.3}
     net_interchange = {"NSW1": -320.0, "QLD1": 280.0, "VIC1": 95.0, "SA1": -142.0, "TAS1": 87.0}
-
-    def price_band(p):
-        if p < 0:       return "NEGATIVE"
-        if p < 100:     return "LOW"
-        if p < 300:     return "NORMAL"
-        if p < 1000:    return "HIGH"
-        if p < 5000:    return "VHIGH"
-        return "SPIKE"
 
     regional_dispatch = []
     for region in ["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]:
@@ -99,7 +237,7 @@ def _build_realtime_dashboard() -> NemRealTimeDashboard:
             demand_mw=round(dem, 1),
             generation_mw=round(gen, 1),
             net_interchange_mw=round(net_interchange[region], 1),
-            rrp_band=price_band(dp),
+            rrp_band=_price_band(dp),
             renewable_pct=round(ren, 1),
             scheduled_gen_mw=round(sched, 1),
             semi_sched_gen_mw=round(semi, 1),

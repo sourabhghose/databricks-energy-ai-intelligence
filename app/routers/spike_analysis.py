@@ -1,8 +1,9 @@
 from __future__ import annotations
 import random as _r
-from datetime import datetime as _dt, timedelta as _td
+from datetime import datetime as _dt, timedelta as _td, timezone as _tz
 from typing import Optional
 from fastapi import APIRouter, Query
+from .shared import _query_gold, _CATALOG, _NEM_REGIONS, logger
 
 router = APIRouter()
 
@@ -13,8 +14,6 @@ router = APIRouter()
 
 @router.get("/api/spike-analysis/dashboard")
 def spike_analysis_dashboard():
-    _r.seed(101)
-    regions = ["NSW1", "VIC1", "QLD1", "SA1", "TAS1"]
     root_causes = [
         "GENERATION_SHORTFALL", "NETWORK_CONSTRAINT", "DEMAND_SPIKE",
         "STRATEGIC_BIDDING", "WEATHER",
@@ -32,52 +31,115 @@ def spike_analysis_dashboard():
         "CS Energy", "Stanwell", "Alinta Energy", "Engie",
     ]
 
-    event_names = [
-        "SA Heatwave Jan 2024", "QLD Cyclone Grid Stress", "VIC Evening Ramp Failure",
-        "NSW Coal Trip Aug 2023", "TAS Low Hydro Event", "SA Interconnector Trip",
-        "QLD Summer Demand Peak", "NSW Strategic Rebid Event",
-        "VIC Wind Drought Feb 2024", "SA Solar Cliff Event",
-        "QLD Generator Outage Mar 2024", "NSW Bushfire Network Fault",
-    ]
+    # Try real spike data from prices
+    spike_rows = _query_gold(f"""
+        SELECT region_id, rrp, interval_datetime, total_demand_mw
+        FROM {_CATALOG}.gold.nem_prices_5min
+        WHERE rrp > 300
+        ORDER BY rrp DESC
+        LIMIT 30
+    """)
 
     spike_events = []
-    for i, name in enumerate(event_names):
-        region = regions[i % len(regions)]
-        base_date = _dt(2022, 6, 1) + _td(days=_r.randint(0, 900))
-        peak = _r.choice([5000, 8500, 12000, 15100, 16600])
-        dur = _r.choice([30, 60, 90, 120, 180, 240, 360])
-        pre_avg = _r.uniform(40, 120)
-        spike_events.append({
-            "spike_id": f"SPK-{2022 + i // 4}-{i + 1:03d}",
-            "event_name": name,
-            "region": region,
-            "event_date": base_date.strftime("%Y-%m-%d"),
-            "start_time": f"{_r.randint(6, 20):02d}:{_r.choice(['00', '30'])}",
-            "end_time": f"{_r.randint(7, 23):02d}:{_r.choice(['00', '30'])}",
-            "duration_minutes": dur,
-            "peak_price_aud_mwh": peak,
-            "avg_price_during_spike": round(peak * _r.uniform(0.35, 0.65), 2),
-            "pre_spike_avg_price": round(pre_avg, 2),
-            "price_multiple": round(peak / pre_avg, 1),
-            "total_revenue_m_aud": round(_r.uniform(1.5, 45.0), 2),
-            "consumer_cost_m_aud": round(_r.uniform(2.0, 55.0), 1),
-            "hedged_consumer_cost_m_aud": round(_r.uniform(0.5, 15.0), 2),
-            "root_cause": _r.choice(root_causes),
-            "severity": _r.choice(severities),
-        })
+    rng = _r.Random(101)
+
+    if spike_rows and len(spike_rows) > 0:
+        # Group consecutive spikes by region+date into events
+        seen_events = {}
+        for sr in spike_rows:
+            region = sr["region_id"]
+            ts = str(sr["interval_datetime"])
+            date_str = ts[:10]
+            key = f"{region}-{date_str}"
+            price = float(sr["rrp"])
+            if key not in seen_events:
+                seen_events[key] = {
+                    "region": region, "date": date_str, "peak": price,
+                    "start": ts, "end": ts, "count": 1,
+                }
+            else:
+                if price > seen_events[key]["peak"]:
+                    seen_events[key]["peak"] = price
+                seen_events[key]["count"] += 1
+                seen_events[key]["end"] = ts
+
+        for i, (key, ev) in enumerate(sorted(seen_events.items(), key=lambda x: -x[1]["peak"])):
+            peak = ev["peak"]
+            dur = ev["count"] * 5
+            if peak > 5000:
+                sev = "EXTREME"
+            elif peak > 1000:
+                sev = "HIGH"
+            else:
+                sev = "MODERATE"
+            pre_avg = rng.uniform(40, 120)
+            spike_events.append({
+                "spike_id": f"SPK-{ev['date'][:4]}-{i + 1:03d}",
+                "event_name": f"{ev['region']} Price Spike {ev['date']}",
+                "region": ev["region"],
+                "event_date": ev["date"],
+                "start_time": ev["start"][11:16] if len(ev["start"]) > 11 else "12:00",
+                "end_time": ev["end"][11:16] if len(ev["end"]) > 11 else "13:00",
+                "duration_minutes": dur,
+                "peak_price_aud_mwh": round(peak, 0),
+                "avg_price_during_spike": round(peak * rng.uniform(0.35, 0.65), 2),
+                "pre_spike_avg_price": round(pre_avg, 2),
+                "price_multiple": round(peak / pre_avg, 1),
+                "total_revenue_m_aud": round(peak * dur / 60 / 1000 * rng.uniform(0.5, 2), 2),
+                "consumer_cost_m_aud": round(peak * dur / 60 / 1000 * rng.uniform(1, 3), 1),
+                "hedged_consumer_cost_m_aud": round(peak * dur / 60 / 1000 * rng.uniform(0.1, 0.5), 2),
+                "root_cause": rng.choice(root_causes),
+                "severity": sev,
+            })
+
+    if not spike_events:
+        # Fallback to mock
+        _r.seed(101)
+        regions = ["NSW1", "VIC1", "QLD1", "SA1", "TAS1"]
+        event_names = [
+            "SA Heatwave Jan 2024", "QLD Cyclone Grid Stress", "VIC Evening Ramp Failure",
+            "NSW Coal Trip Aug 2023", "TAS Low Hydro Event", "SA Interconnector Trip",
+            "QLD Summer Demand Peak", "NSW Strategic Rebid Event",
+            "VIC Wind Drought Feb 2024", "SA Solar Cliff Event",
+            "QLD Generator Outage Mar 2024", "NSW Bushfire Network Fault",
+        ]
+        for i, name in enumerate(event_names):
+            region = regions[i % len(regions)]
+            base_date = _dt(2022, 6, 1) + _td(days=_r.randint(0, 900))
+            peak = _r.choice([5000, 8500, 12000, 15100, 16600])
+            dur = _r.choice([30, 60, 90, 120, 180, 240, 360])
+            pre_avg = _r.uniform(40, 120)
+            spike_events.append({
+                "spike_id": f"SPK-{2022 + i // 4}-{i + 1:03d}",
+                "event_name": name,
+                "region": region,
+                "event_date": base_date.strftime("%Y-%m-%d"),
+                "start_time": f"{_r.randint(6, 20):02d}:{_r.choice(['00', '30'])}",
+                "end_time": f"{_r.randint(7, 23):02d}:{_r.choice(['00', '30'])}",
+                "duration_minutes": dur,
+                "peak_price_aud_mwh": peak,
+                "avg_price_during_spike": round(peak * _r.uniform(0.35, 0.65), 2),
+                "pre_spike_avg_price": round(pre_avg, 2),
+                "price_multiple": round(peak / pre_avg, 1),
+                "total_revenue_m_aud": round(_r.uniform(1.5, 45.0), 2),
+                "consumer_cost_m_aud": round(_r.uniform(2.0, 55.0), 1),
+                "hedged_consumer_cost_m_aud": round(_r.uniform(0.5, 15.0), 2),
+                "root_cause": _r.choice(root_causes),
+                "severity": _r.choice(severities),
+            })
 
     contributors = []
     for ev in spike_events:
-        for _ in range(_r.randint(2, 5)):
+        for _ in range(rng.randint(2, 5)):
             contributors.append({
                 "spike_id": ev["spike_id"],
-                "participant_name": _r.choice(participants),
-                "technology": _r.choice(technologies),
-                "contribution_type": _r.choice(contribution_types),
-                "mw_impact": round(_r.uniform(-500, 800), 0),
-                "price_contribution_aud_mwh": round(_r.uniform(200, 8000), 0),
-                "revenue_gained_m_aud": round(_r.uniform(0.2, 12.0), 1),
-                "regulatory_action": _r.choice(regulatory_actions),
+                "participant_name": rng.choice(participants),
+                "technology": rng.choice(technologies),
+                "contribution_type": rng.choice(contribution_types),
+                "mw_impact": round(rng.uniform(-500, 800), 0),
+                "price_contribution_aud_mwh": round(rng.uniform(200, 8000), 0),
+                "revenue_gained_m_aud": round(rng.uniform(0.2, 12.0), 1),
+                "regulatory_action": rng.choice(regulatory_actions),
             })
 
     consumer_impacts = []
@@ -87,11 +149,11 @@ def spike_analysis_dashboard():
                 "spike_id": ev["spike_id"],
                 "consumer_segment": seg,
                 "region": ev["region"],
-                "hedged_exposure_pct": round(_r.uniform(30, 95), 1),
-                "unhedged_cost_m_aud": round(_r.uniform(0.1, 18.0), 1),
-                "demand_response_mw": round(_r.uniform(5, 350), 0),
-                "air_con_curtailment_mw": round(_r.uniform(0, 180), 0),
-                "price_signal_response_pct": round(_r.uniform(2, 25), 1),
+                "hedged_exposure_pct": round(rng.uniform(30, 95), 1),
+                "unhedged_cost_m_aud": round(rng.uniform(0.1, 18.0), 1),
+                "demand_response_mw": round(rng.uniform(5, 350), 0),
+                "air_con_curtailment_mw": round(rng.uniform(0, 180), 0),
+                "price_signal_response_pct": round(rng.uniform(2, 25), 1),
             })
 
     regional_timelines = []
@@ -104,25 +166,31 @@ def spike_analysis_dashboard():
                     _dt.strptime(ev["event_date"], "%Y-%m-%d")
                     + _td(minutes=minute_offset)
                 ).isoformat(),
-                "spot_price": round(_r.uniform(-50, ev["peak_price_aud_mwh"]), 2),
-                "generation_mw": round(_r.uniform(6000, 12000), 0),
-                "demand_mw": round(_r.uniform(7000, 13000), 0),
-                "interconnector_flow_mw": round(_r.uniform(-1000, 1000), 0),
-                "reserve_margin_pct": round(_r.uniform(-5, 25), 1),
+                "spot_price": round(rng.uniform(-50, ev["peak_price_aud_mwh"]), 2),
+                "generation_mw": round(rng.uniform(6000, 12000), 0),
+                "demand_mw": round(rng.uniform(7000, 13000), 0),
+                "interconnector_flow_mw": round(rng.uniform(-1000, 1000), 0),
+                "reserve_margin_pct": round(rng.uniform(-5, 25), 1),
             })
 
+    # Find most affected region
+    region_counts = {}
+    for ev in spike_events:
+        region_counts[ev["region"]] = region_counts.get(ev["region"], 0) + 1
+    most_affected = max(region_counts, key=region_counts.get) if region_counts else "SA1"
+
     return {
-        "timestamp": _dt.utcnow().isoformat(),
+        "timestamp": _dt.now(_tz.utc).isoformat(),
         "spike_events": spike_events,
         "contributors": contributors,
         "consumer_impacts": consumer_impacts,
         "regional_timelines": regional_timelines,
-        "total_spike_events_2024": sum(1 for e in spike_events if "2024" in e["event_date"]),
+        "total_spike_events_2024": sum(1 for e in spike_events if "2024" in e.get("event_date", "")),
         "total_consumer_cost_m_aud": round(sum(e["consumer_cost_m_aud"] for e in spike_events), 1),
         "avg_spike_duration_min": round(
             sum(e["duration_minutes"] for e in spike_events) / len(spike_events), 0
-        ),
-        "most_affected_region": "SA1",
+        ) if spike_events else 0,
+        "most_affected_region": most_affected,
     }
 
 

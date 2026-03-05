@@ -358,6 +358,23 @@ async def prices_compare(
     interval_minutes: int = Query(30),
 ):
     """Compare prices across all NEM regions over a time window."""
+    # Try real data — pivot regions into columns
+    rows = _query_gold(f"""
+        SELECT interval_datetime, region_id, rrp
+        FROM {_CATALOG}.gold.nem_prices_5min
+        WHERE interval_datetime >= current_timestamp() - INTERVAL 24 HOURS
+        ORDER BY interval_datetime
+    """)
+    if rows and len(rows) > 20:
+        by_ts = {}
+        for r in rows:
+            ts = str(r["interval_datetime"])
+            if ts not in by_ts:
+                by_ts[ts] = {"timestamp": ts}
+            by_ts[ts][r["region_id"]] = round(float(r["rrp"]), 2)
+        return list(by_ts.values())
+
+    # Fallback to mock
     now = datetime.now(timezone.utc)
     start_dt = now - timedelta(hours=24)
     steps = int(24 * 60 / interval_minutes)
@@ -556,8 +573,53 @@ async def prices_volatility():
 @router.get("/api/generation/units", summary="Generator units", tags=["Market Data"])
 async def generation_units(region: str = Query("NSW1"), fuel_type: str = Query(None), min_output_mw: float = Query(0)):
     """Return GeneratorRecord[] matching frontend interface."""
-    rng = random.Random(hash(region) + int(time.time() // 300))
+    if region not in _NEM_REGIONS:
+        region = "NSW1"
     renewables = {"wind", "solar", "hydro", "battery"}
+
+    # Try real SCADA data
+    fuel_filter = ""
+    if fuel_type:
+        safe_fuel = fuel_type.replace("'", "")
+        fuel_filter = f"AND LOWER(s.fuel_type) LIKE '%{safe_fuel.lower()}%'"
+    scada_rows = _query_gold(f"""
+        WITH latest AS (
+            SELECT s.duid, s.fuel_type, s.generation_MW, s.is_battery,
+                   f.capacity_mw, f.station_name,
+                   ROW_NUMBER() OVER (PARTITION BY s.duid ORDER BY s.interval DESC) AS rn
+            FROM {_CATALOG}.nemweb_analytics.silver_nem_dispatch_unit_scada s
+            LEFT JOIN {_CATALOG}.gold.nem_facilities f ON s.duid = f.duid
+            WHERE s.generation_MW >= {min_output_mw}
+            {fuel_filter}
+        )
+        SELECT duid, fuel_type, generation_MW, is_battery, capacity_mw, station_name
+        FROM latest WHERE rn = 1
+        ORDER BY generation_MW DESC
+        LIMIT 50
+    """)
+    if scada_rows and len(scada_rows) > 3:
+        result = []
+        for r in scada_rows:
+            ft = str(r.get("fuel_type") or "Unknown")
+            ft_lower = ft.lower()
+            gen_mw = float(r["generation_MW"] or 0)
+            cap = float(r.get("capacity_mw") or max(gen_mw * 1.3, 100))
+            is_renew = any(k in ft_lower for k in renewables)
+            result.append({
+                "duid": r["duid"],
+                "station_name": r.get("station_name") or r["duid"],
+                "fuel_type": ft.title(),
+                "region": region,
+                "registered_capacity_mw": round(cap, 1),
+                "current_output_mw": round(gen_mw, 1),
+                "availability_mw": round(cap * 0.9, 1),
+                "capacity_factor": round(gen_mw / cap, 3) if cap > 0 else 0,
+                "is_renewable": is_renew,
+            })
+        return result
+
+    # Fallback to mock
+    rng = random.Random(hash(region) + int(time.time() // 300))
     units_data = {
         "NSW1": [
             {"duid": "BW01", "station_name": "Bayswater", "fuel_type": "Black Coal", "cap": 2640, "out": 2100},

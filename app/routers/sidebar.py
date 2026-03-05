@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Query
-from .shared import _NEM_REGIONS, _REGION_BASE_PRICES
+from .shared import _NEM_REGIONS, _REGION_BASE_PRICES, _query_gold, _CATALOG, logger
 
 router = APIRouter()
 
@@ -125,24 +125,54 @@ async def sustainability_dashboard(region: str = Query("NSW1")):
     now = datetime.now(timezone.utc)
     rng = random.Random(hash(region) + int(time.time() // 30))
     regions = ["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]
+
+    # Try real generation data for regional renewable %
+    gen_rows = _query_gold(f"""
+        SELECT region_id, fuel_type, total_mw
+        FROM {_CATALOG}.gold.nem_generation_by_fuel
+        WHERE interval_datetime = (SELECT MAX(interval_datetime) FROM {_CATALOG}.gold.nem_generation_by_fuel)
+    """)
+    real_mix = {}  # region -> {fuel: mw}
+    real_renewable_pct = {}
+    if gen_rows:
+        for g in gen_rows:
+            rid = g["region_id"]
+            ft = str(g["fuel_type"]).lower()
+            mw = float(g["total_mw"] or 0)
+            if rid not in real_mix:
+                real_mix[rid] = {}
+            real_mix[rid][ft] = real_mix[rid].get(ft, 0) + mw
+        for rid, mix in real_mix.items():
+            total = sum(mix.values())
+            renew = sum(mw for ft, mw in mix.items() if ft in ("wind", "solar", "hydro", "battery"))
+            real_renewable_pct[rid] = round(renew / total * 100, 1) if total > 0 else 0
+
     regional_intensity = []
-    fuel_mix_by_region = {
-        "NSW1": {"black_coal": 55, "gas": 8, "hydro": 7, "wind": 14, "solar": 12, "battery": 4},
-        "QLD1": {"black_coal": 48, "gas": 15, "hydro": 3, "wind": 12, "solar": 18, "battery": 4},
-        "VIC1": {"brown_coal": 40, "gas": 10, "hydro": 8, "wind": 22, "solar": 15, "battery": 5},
-        "SA1": {"gas": 18, "wind": 42, "solar": 28, "battery": 12},
-        "TAS1": {"hydro": 72, "wind": 20, "gas": 5, "solar": 3},
-    }
     for r in regions:
-        ren_pct = round(rng.uniform(18, 65), 0)
+        if r in real_mix:
+            mix = real_mix[r]
+            total = sum(mix.values())
+            mix_pct = {ft: round(mw / total * 100, 0) for ft, mw in mix.items()} if total > 0 else {}
+            ren_pct = real_renewable_pct.get(r, 30.0)
+            # Estimate carbon intensity: ~0.9 for coal, ~0.4 for gas, 0 for renewables
+            coal_pct = sum(mw for ft, mw in mix.items() if "coal" in ft) / total * 100 if total > 0 else 0
+            gas_pct = sum(mw for ft, mw in mix.items() if ft in ("gas", "natural gas")) / total * 100 if total > 0 else 0
+            carbon_intensity = round(coal_pct * 9 + gas_pct * 4, 0)
+        else:
+            ren_pct = round(rng.uniform(18, 65), 0)
+            mix_pct = {"coal": 50, "gas": 20, "wind": 15, "solar": 15}
+            carbon_intensity = round(rng.uniform(400, 850), 0)
         regional_intensity.append({
             "region": r,
             "timestamp": now.isoformat(),
-            "carbon_intensity_kg_co2_mwh": round(rng.uniform(400, 850), 0),
+            "carbon_intensity_kg_co2_mwh": carbon_intensity,
             "renewable_pct": ren_pct,
             "fossil_pct": round(100 - ren_pct, 0),
-            "generation_mix": fuel_mix_by_region.get(r, {"coal": 50, "gas": 20, "wind": 15, "solar": 15}),
+            "generation_mix": mix_pct if r in real_mix else {"coal": 50, "gas": 20, "wind": 15, "solar": 15},
         })
+
+    nem_ren_pct = round(sum(real_renewable_pct.get(r, 35) for r in regions) / len(regions), 1) if real_renewable_pct else round(rng.uniform(30, 48), 1)
+
     intensity_history = []
     for i in range(48):
         ts = now - timedelta(minutes=30 * (48 - i))
@@ -159,7 +189,7 @@ async def sustainability_dashboard(region: str = Query("NSW1")):
     return {
         "timestamp": now.isoformat(),
         "nem_carbon_intensity": round(rng.uniform(0.50, 0.75), 2),
-        "nem_renewable_pct": round(rng.uniform(30, 48), 1),
+        "nem_renewable_pct": nem_ren_pct,
         "annual_emissions_mt_co2": round(rng.uniform(130, 155), 1),
         "emissions_vs_2005_pct": round(rng.uniform(-40, -28), 1),
         "renewable_capacity_gw": round(rng.uniform(28, 36), 1),
@@ -401,8 +431,47 @@ async def trading_spreads():
 @router.get("/api/alerts", summary="Active alerts", tags=["Alerts"])
 async def alerts_list():
     """Return Alert[] matching frontend interface."""
-    rng = random.Random(int(time.time() // 30))
     now = datetime.now(timezone.utc)
+    alerts = []
+
+    # Try to derive price alerts from real data
+    price_rows = _query_gold(f"""
+        SELECT region_id, rrp, interval_datetime
+        FROM {_CATALOG}.gold.nem_prices_5min
+        WHERE interval_datetime >= current_timestamp() - INTERVAL 24 HOURS
+          AND (rrp > 300 OR rrp < 0)
+        ORDER BY interval_datetime DESC
+        LIMIT 10
+    """)
+    if price_rows:
+        for i, r in enumerate(price_rows):
+            price = float(r["rrp"])
+            region = r["region_id"]
+            if price < 0:
+                metric = "price"
+                threshold = 0
+                status = "triggered"
+            elif price > 1000:
+                metric = "price"
+                threshold = 1000
+                status = "triggered"
+            else:
+                metric = "price"
+                threshold = 300
+                status = "triggered"
+            alerts.append({
+                "id": f"ALT-{str(i + 1).zfill(3)}",
+                "region": region,
+                "metric": metric,
+                "threshold": threshold,
+                "status": status,
+                "triggeredAt": str(r["interval_datetime"]),
+                "isActive": True,
+                "notificationChannel": "SLACK",
+            })
+
+    # Always include the full set of alert definitions (some armed, some from real triggers)
+    rng = random.Random(int(time.time() // 30))
     alert_defs = [
         {"region": "NSW1", "metric": "price", "threshold": 300},
         {"region": "SA1", "metric": "frequency", "threshold": 49.85},
@@ -418,20 +487,16 @@ async def alerts_list():
         {"region": "VIC1", "metric": "price", "threshold": 300},
     ]
     channels = ["SLACK", "EMAIL"]
-    statuses = ["armed", "triggered", "resolved"]
-    alerts = []
+    existing_count = len(alerts)
     for i, a in enumerate(alert_defs):
-        is_active = rng.random() > 0.3
-        status = rng.choice(statuses)
-        triggered_at = (now - timedelta(hours=rng.uniform(0.5, 48))).isoformat() if status != "armed" else None
         alerts.append({
-            "id": f"ALT-{str(i + 1).zfill(3)}",
+            "id": f"ALT-{str(existing_count + i + 1).zfill(3)}",
             "region": a["region"],
             "metric": a["metric"],
             "threshold": a["threshold"],
-            "status": status,
-            "triggeredAt": triggered_at,
-            "isActive": is_active,
+            "status": "armed",
+            "triggeredAt": None,
+            "isActive": True,
             "notificationChannel": rng.choice(channels),
         })
     return alerts
@@ -510,27 +575,63 @@ async def market_events_dashboard():
         "frequency deviation outside normal band",
     ]
 
-    # Recent events
+    # Try real price spike events from gold table
     recent_events = []
-    for i in range(rng.randint(6, 12)):
-        et = rng.choice(event_types)
-        sev = "critical" if et in ("LOR3", "administered_pricing") else rng.choice(severities)
-        start = now - timedelta(hours=rng.uniform(0.5, 168))
-        resolved = rng.random() > 0.2
-        dur = rng.randint(5, 480) if resolved else None
-        recent_events.append({
-            "event_id": f"NEM-EVT-{2026}{i+1:04d}",
-            "event_type": et,
-            "region": rng.choice(regions),
-            "start_time": start.isoformat(),
-            "end_time": (start + timedelta(minutes=dur)).isoformat() if dur else None,
-            "duration_minutes": dur,
-            "severity": sev,
-            "description": rng.choice(causes),
-            "affected_capacity_mw": round(rng.uniform(100, 2500), 0) if et != "frequency_event" else None,
-            "administered_price": round(rng.uniform(300, 600), 2) if et == "administered_pricing" else None,
-            "resolved": resolved,
-        })
+    spike_rows = _query_gold(f"""
+        SELECT region_id, rrp, interval_datetime
+        FROM {_CATALOG}.gold.nem_prices_5min
+        WHERE rrp > 300 AND interval_datetime >= current_timestamp() - INTERVAL 7 DAYS
+        ORDER BY interval_datetime DESC
+        LIMIT 20
+    """)
+    if spike_rows:
+        for i, sr in enumerate(spike_rows):
+            price = float(sr["rrp"])
+            if price > 5000:
+                sev = "critical"
+                et = "administered_pricing"
+            elif price > 1000:
+                sev = "high"
+                et = "LOR2"
+            elif price > 300:
+                sev = "medium"
+                et = "LOR1"
+            else:
+                sev = "low"
+                et = "constraint_violation"
+            recent_events.append({
+                "event_id": f"NEM-EVT-{2026}{i+1:04d}",
+                "event_type": et,
+                "region": sr["region_id"],
+                "start_time": str(sr["interval_datetime"]),
+                "end_time": str(sr["interval_datetime"]),
+                "duration_minutes": 5,
+                "severity": sev,
+                "description": f"Price spike to ${price:.0f}/MWh in {sr['region_id']}",
+                "affected_capacity_mw": None,
+                "administered_price": round(price, 2) if et == "administered_pricing" else None,
+                "resolved": True,
+            })
+    if not recent_events:
+        for i in range(rng.randint(6, 12)):
+            et = rng.choice(event_types)
+            sev = "critical" if et in ("LOR3", "administered_pricing") else rng.choice(severities)
+            start = now - timedelta(hours=rng.uniform(0.5, 168))
+            resolved = rng.random() > 0.2
+            dur = rng.randint(5, 480) if resolved else None
+            recent_events.append({
+                "event_id": f"NEM-EVT-{2026}{i+1:04d}",
+                "event_type": et,
+                "region": rng.choice(regions),
+                "start_time": start.isoformat(),
+                "end_time": (start + timedelta(minutes=dur)).isoformat() if dur else None,
+                "duration_minutes": dur,
+                "severity": sev,
+                "description": rng.choice(causes),
+                "affected_capacity_mw": round(rng.uniform(100, 2500), 0) if et != "frequency_event" else None,
+                "administered_price": round(rng.uniform(300, 600), 2) if et == "administered_pricing" else None,
+                "resolved": resolved,
+            })
     recent_events.sort(key=lambda e: e["start_time"], reverse=True)
 
     # Interventions
@@ -772,13 +873,58 @@ async def market_notices_frontend(severity: str = Query(None), notice_type: str 
 @router.get("/api/dispatch/intervals", summary="Dispatch interval analysis", tags=["Market Data"])
 async def dispatch_intervals(region: str = Query("NSW1"), count: int = Query(12)):
     """Return DispatchSummary matching frontend interface."""
+    if region not in _NEM_REGIONS:
+        region = "NSW1"
+    safe_count = min(max(1, count), 288)
+
+    # Try real data
+    rows = _query_gold(f"""
+        SELECT interval_datetime, rrp, total_demand_mw, available_gen_mw, net_interchange_mw
+        FROM {_CATALOG}.gold.nem_prices_5min
+        WHERE region_id = '{region}'
+        ORDER BY interval_datetime DESC
+        LIMIT {safe_count}
+    """)
+    if rows and len(rows) >= 2:
+        rows.reverse()  # chronological order
+        intervals = []
+        deviations = []
+        for i, r in enumerate(rows):
+            rrp = round(float(r["rrp"]), 2)
+            # Use previous interval as pseudo pre-dispatch estimate
+            pd_rrp = round(float(rows[i - 1]["rrp"]), 2) if i > 0 else rrp
+            dev = round(rrp - pd_rrp, 2)
+            deviations.append(abs(dev))
+            intervals.append({
+                "interval_datetime": str(r["interval_datetime"]),
+                "region": region,
+                "rrp": rrp,
+                "predispatch_rrp": pd_rrp,
+                "rrp_deviation": dev,
+                "totaldemand": round(float(r.get("total_demand_mw") or 0), 0),
+                "dispatchablegeneration": round(float(r.get("available_gen_mw") or 0), 0),
+                "net_interchange": round(float(r.get("net_interchange_mw") or 0), 0),
+                "lower_reg_mw": 0,
+            })
+        max_dev = max(deviations) if deviations else 0
+        base_price = float(rows[-1]["rrp"]) if rows else 70
+        surprise_count = sum(1 for d in deviations if d > max(base_price * 0.1, 10))
+        return {
+            "region": region,
+            "intervals": intervals,
+            "mean_deviation": round(sum(deviations) / len(deviations), 2) if deviations else 0,
+            "max_surprise": round(max_dev, 2),
+            "surprise_intervals": surprise_count,
+        }
+
+    # Fallback to mock
     rng = random.Random(hash(region) + int(time.time() // 30))
     now = datetime.now(timezone.utc)
     base_price = _REGION_BASE_PRICES.get(region, 70.0)
     intervals = []
     deviations = []
-    for i in range(count):
-        ts = now - timedelta(minutes=5 * (count - i))
+    for i in range(safe_count):
+        ts = now - timedelta(minutes=5 * (safe_count - i))
         rrp = round(base_price + rng.gauss(0, base_price * 0.15), 2)
         pd_rrp = round(rrp + rng.gauss(0, 10), 2)
         dev = round(rrp - pd_rrp, 2)
@@ -809,6 +955,35 @@ async def dispatch_intervals(region: str = Query("NSW1"), count: int = Query(12)
 @router.get("/api/settlement/summary", summary="Settlement records", tags=["Market Data"])
 async def settlement_summary():
     """Return SettlementRecord[] matching frontend interface."""
+    # Try real data — last 6 intervals per region
+    rows = _query_gold(f"""
+        WITH ranked AS (
+            SELECT region_id, interval_datetime, rrp, total_demand_mw, net_interchange_mw,
+                   ROW_NUMBER() OVER (PARTITION BY region_id ORDER BY interval_datetime DESC) AS rn
+            FROM {_CATALOG}.gold.nem_prices_5min
+        )
+        SELECT region_id, interval_datetime, rrp, total_demand_mw, net_interchange_mw
+        FROM ranked WHERE rn <= 6
+        ORDER BY region_id, interval_datetime
+    """)
+    if rows and len(rows) > 5:
+        rng = random.Random(42)
+        records = []
+        for r in rows:
+            records.append({
+                "trading_interval": str(r["interval_datetime"]),
+                "region": r["region_id"],
+                "totaldemand_mw": round(float(r.get("total_demand_mw") or 0), 0),
+                "net_interchange_mw": round(float(r.get("net_interchange_mw") or 0), 0),
+                "rrp_aud_mwh": round(float(r["rrp"]), 2),
+                "raise_reg_rrp": round(rng.uniform(5, 25), 2),
+                "lower_reg_rrp": round(rng.uniform(3, 15), 2),
+                "raise6sec_rrp": round(rng.uniform(2, 20), 2),
+                "lower6sec_rrp": round(rng.uniform(1, 12), 2),
+            })
+        return records
+
+    # Fallback to mock
     rng = random.Random(int(time.time() // 30))
     now = datetime.now(timezone.utc)
     records = []
