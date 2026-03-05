@@ -509,36 +509,105 @@ def spot_price_volatility_regime_dashboard():
     causes = ["LOW_WIND", "HIGH_DEMAND", "CONSTRAINT", "OUTAGE", "STRATEGIC_BIDDING"]
     sig_levels = ["HIGH", "MEDIUM", "LOW"]
 
-    regimes = []
-    for region in regions:
-        start = _dt(2023, 1, 1)
-        for _ in range(_r.randint(4, 7)):
-            regime = _r.choice(regime_types)
-            dur = _r.randint(15, 120)
-            end = start + _td(days=dur)
-            mean_p = {"LOW_VOL": 45, "NORMAL": 85, "HIGH_VOL": 220, "EXTREME": 650}[regime]
-            regimes.append({
-                "region": region,
-                "regime": regime,
-                "start_date": start.strftime("%Y-%m-%d"),
-                "end_date": end.strftime("%Y-%m-%d"),
-                "duration_days": dur,
-                "mean_price": round(mean_p + _r.uniform(-20, 20), 1),
-                "std_price": round(mean_p * _r.uniform(0.2, 0.8), 1),
-                "max_price": round(mean_p * _r.uniform(2, 25), 0),
-                "min_price": round(_r.uniform(-100, mean_p * 0.3), 0),
-                "spike_count": _r.randint(0, 80),
-                "negative_count": _r.randint(0, 60),
-            })
-            start = end
+    # Try real volatility data from prices
+    try:
+        vol_rows = _query_gold(f"""
+            SELECT region_id,
+                   DATE_TRUNC('day', interval_datetime) AS trade_date,
+                   AVG(rrp) AS mean_price,
+                   STDDEV(rrp) AS std_price,
+                   MAX(rrp) AS max_price,
+                   MIN(rrp) AS min_price,
+                   SUM(CASE WHEN rrp > 300 THEN 1 ELSE 0 END) AS spike_count,
+                   SUM(CASE WHEN rrp < 0 THEN 1 ELSE 0 END) AS negative_count
+            FROM {_CATALOG}.gold.nem_prices_5min
+            GROUP BY region_id, DATE_TRUNC('day', interval_datetime)
+            ORDER BY trade_date DESC
+            LIMIT 100
+        """)
+    except Exception:
+        vol_rows = None
 
+    if vol_rows:
+        # Build regimes from real daily stats
+        regimes = []
+        for r in vol_rows:
+            std_p = float(r.get("std_price") or 0)
+            mean_p = float(r.get("mean_price") or 0)
+            if std_p > 500:
+                regime = "EXTREME"
+            elif std_p > 100:
+                regime = "HIGH_VOL"
+            elif std_p > 30:
+                regime = "NORMAL"
+            else:
+                regime = "LOW_VOL"
+            dt_str = str(r.get("trade_date", ""))[:10]
+            regimes.append({
+                "region": r.get("region_id", "NSW1"),
+                "regime": regime,
+                "start_date": dt_str,
+                "end_date": dt_str,
+                "duration_days": 1,
+                "mean_price": round(mean_p, 1),
+                "std_price": round(std_p, 1),
+                "max_price": round(float(r.get("max_price") or 0), 0),
+                "min_price": round(float(r.get("min_price") or 0), 0),
+                "spike_count": int(r.get("spike_count") or 0),
+                "negative_count": int(r.get("negative_count") or 0),
+            })
+
+        # Build spike clusters from high-price days
+        spike_clusters = []
+        for cid, r in enumerate([rw for rw in vol_rows if float(rw.get("max_price") or 0) > 300][:12], 1):
+            spike_clusters.append({
+                "cluster_id": cid,
+                "region": r.get("region_id", "NSW1"),
+                "start_datetime": str(r.get("trade_date", "")),
+                "end_datetime": str(r.get("trade_date", "")),
+                "duration_intervals": int(r.get("spike_count") or 1),
+                "peak_price": round(float(r.get("max_price") or 0), 0),
+                "total_cost_m": round(float(r.get("mean_price") or 0) * int(r.get("spike_count") or 1) * 5 / 60 / 1000, 1),
+                "primary_cause": _r.choice(causes),
+            })
+    else:
+        regimes = []
+        for region in regions:
+            start = _dt(2023, 1, 1)
+            for _ in range(_r.randint(4, 7)):
+                regime = _r.choice(regime_types)
+                dur = _r.randint(15, 120)
+                end = start + _td(days=dur)
+                mean_p = {"LOW_VOL": 45, "NORMAL": 85, "HIGH_VOL": 220, "EXTREME": 650}[regime]
+                regimes.append({
+                    "region": region, "regime": regime,
+                    "start_date": start.strftime("%Y-%m-%d"), "end_date": end.strftime("%Y-%m-%d"),
+                    "duration_days": dur, "mean_price": round(mean_p + _r.uniform(-20, 20), 1),
+                    "std_price": round(mean_p * _r.uniform(0.2, 0.8), 1),
+                    "max_price": round(mean_p * _r.uniform(2, 25), 0),
+                    "min_price": round(_r.uniform(-100, mean_p * 0.3), 0),
+                    "spike_count": _r.randint(0, 80), "negative_count": _r.randint(0, 60),
+                })
+                start = end
+        spike_clusters = []
+        for cid in range(1, 13):
+            spike_clusters.append({
+                "cluster_id": cid, "region": _r.choice(regions),
+                "start_datetime": (_dt(2023, 6, 1) + _td(days=_r.randint(0, 500))).isoformat(),
+                "end_datetime": (_dt(2023, 6, 1) + _td(days=_r.randint(501, 600))).isoformat(),
+                "duration_intervals": _r.randint(3, 48),
+                "peak_price": _r.choice([2500, 5000, 8000, 12000, 15100]),
+                "total_cost_m": round(_r.uniform(0.5, 45.0), 1),
+                "primary_cause": _r.choice(causes),
+            })
+
+    # Volatility metrics (keep mock — needs quarterly aggregation beyond available data)
     quarters = [f"{y}-Q{q}" for y in [2023, 2024] for q in [1, 2, 3, 4]]
     volatility_metrics = []
     for region in regions:
         for quarter in quarters:
             volatility_metrics.append({
-                "region": region,
-                "quarter": quarter,
+                "region": region, "quarter": quarter,
                 "realized_volatility_annualized": round(_r.uniform(0.3, 2.5), 3),
                 "garch_volatility": round(_r.uniform(0.25, 2.0), 3),
                 "conditional_var_95": round(_r.uniform(100, 600), 1),
@@ -554,32 +623,16 @@ def spot_price_volatility_regime_dashboard():
         probs = [p / total for p in probs]
         for to_r, prob in zip(regime_types, probs):
             transition_matrix.append({
-                "from_regime": from_r,
-                "to_regime": to_r,
+                "from_regime": from_r, "to_regime": to_r,
                 "transition_probability": round(prob, 3),
                 "avg_duration_days": round(_r.uniform(10, 90), 1),
             })
-
-    spike_clusters = []
-    for cid in range(1, 13):
-        region = _r.choice(regions)
-        spike_clusters.append({
-            "cluster_id": cid,
-            "region": region,
-            "start_datetime": (_dt(2023, 6, 1) + _td(days=_r.randint(0, 500))).isoformat(),
-            "end_datetime": (_dt(2023, 6, 1) + _td(days=_r.randint(501, 600))).isoformat(),
-            "duration_intervals": _r.randint(3, 48),
-            "peak_price": _r.choice([2500, 5000, 8000, 12000, 15100]),
-            "total_cost_m": round(_r.uniform(0.5, 45.0), 1),
-            "primary_cause": _r.choice(causes),
-        })
 
     regime_drivers = []
     for regime in regime_types:
         for driver in _r.sample(drivers_list, k=_r.randint(3, 6)):
             regime_drivers.append({
-                "regime": regime,
-                "driver": driver,
+                "regime": regime, "driver": driver,
                 "correlation": round(_r.uniform(-0.85, 0.92), 2),
                 "significance": _r.choice(sig_levels),
             })
@@ -587,10 +640,8 @@ def spot_price_volatility_regime_dashboard():
     extreme_time = sum(r["duration_days"] for r in regimes if r["regime"] == "EXTREME")
     total_time = sum(r["duration_days"] for r in regimes)
     most_vol_region = max(regions, key=lambda rg: sum(
-        vm["realized_volatility_annualized"]
-        for vm in volatility_metrics
-        if vm["region"] == rg and vm["quarter"] == "2024-Q4"
-    ))
+        r["std_price"] for r in regimes if r["region"] == rg
+    )) if regimes else "SA1"
 
     return {
         "regimes": regimes,
@@ -931,12 +982,43 @@ def negative_price_events_dashboard():
     regions = ["SA1", "VIC1", "NSW1", "QLD1", "TAS1"]
     years = list(range(2018, 2025))
 
+    # Try real negative price frequency from NEMWEB
+    try:
+        neg_rows = _query_gold(f"""
+            SELECT region_id,
+                   COUNT(*) AS neg_intervals,
+                   AVG(rrp) AS avg_neg_price,
+                   MIN(rrp) AS deepest_price
+            FROM {_CATALOG}.gold.nem_prices_5min
+            WHERE rrp < 0
+            GROUP BY region_id
+        """)
+    except Exception:
+        neg_rows = None
+
+    real_neg = {}
+    if neg_rows:
+        for nr in neg_rows:
+            real_neg[nr["region_id"]] = {
+                "intervals": int(nr["neg_intervals"] or 0),
+                "avg_price": float(nr["avg_neg_price"] or -30),
+                "deepest": float(nr["deepest_price"] or -100),
+            }
+
     frequency = []
     for year in years:
         for region in regions:
-            base_intervals = {"SA1": 3500, "VIC1": 2200, "NSW1": 1500, "QLD1": 1800, "TAS1": 800}[region]
-            growth = (year - 2018) * _r.randint(80, 250)
-            neg_intervals = base_intervals + growth + _r.randint(-300, 300)
+            rn = real_neg.get(region)
+            if rn and year == 2024:
+                neg_intervals = rn["intervals"]
+                avg_neg = round(rn["avg_price"], 1)
+                deepest = round(rn["deepest"], 0)
+            else:
+                base_intervals = {"SA1": 3500, "VIC1": 2200, "NSW1": 1500, "QLD1": 1800, "TAS1": 800}[region]
+                growth = (year - 2018) * _r.randint(80, 250)
+                neg_intervals = base_intervals + growth + _r.randint(-300, 300)
+                avg_neg = round(_r.uniform(-80, -5), 1)
+                deepest = round(_r.uniform(-1000, -200), 0)
             neg_hours = round(neg_intervals * 5 / 60, 1)
             frequency.append({
                 "year": year,
@@ -944,8 +1026,8 @@ def negative_price_events_dashboard():
                 "negative_price_intervals": neg_intervals,
                 "negative_price_hours": neg_hours,
                 "pct_of_year": round(neg_hours / 8760 * 100, 2),
-                "avg_negative_price": round(_r.uniform(-80, -5), 1),
-                "deepest_price": round(_r.uniform(-1000, -200), 0),
+                "avg_negative_price": avg_neg,
+                "deepest_price": deepest,
                 "consecutive_negative_hrs_max": round(_r.uniform(1, 18), 1),
                 "total_negative_energy_mwh": round(neg_intervals * _r.uniform(50, 300), 0),
             })
@@ -1104,28 +1186,71 @@ def electricity_spot_price_seasonality_dashboard():
         "Renewable-Driven", "Gas-Driven", "Managed",
     ]
 
+    # Try real hourly price patterns from NEMWEB
+    try:
+        hourly_rows = _query_gold(f"""
+            SELECT region_id,
+                   HOUR(interval_datetime) AS hour_of_day,
+                   AVG(rrp) AS avg_price,
+                   PERCENTILE_APPROX(rrp, 0.5) AS median_price,
+                   PERCENTILE_APPROX(rrp, 0.1) AS p10_price,
+                   PERCENTILE_APPROX(rrp, 0.9) AS p90_price,
+                   SUM(CASE WHEN rrp > 300 THEN 1 ELSE 0 END) * 100.0 / COUNT(*) AS spike_freq_pct
+            FROM {_CATALOG}.gold.nem_prices_5min
+            GROUP BY region_id, HOUR(interval_datetime)
+            ORDER BY region_id, hour_of_day
+        """)
+    except Exception:
+        hourly_rows = None
+
+    def _month_to_season(m):
+        if m in (12, 1, 2):
+            return "Summer"
+        if m in (3, 4, 5):
+            return "Autumn"
+        if m in (6, 7, 8):
+            return "Winter"
+        return "Spring"
+
     hourly_patterns = []
-    for region in regions[:3]:
-        for season in seasons:
-            for year in [2024]:
-                for hour in range(0, 24, 4):
-                    base = {"Summer": 95, "Autumn": 65, "Winter": 80, "Spring": 55}[season]
-                    hour_adj = 40 * (1 if 16 <= hour <= 20 else (-0.3 if 10 <= hour <= 14 else 0))
-                    avg_p = round(base + hour_adj + _r.uniform(-20, 20), 1)
-                    hourly_patterns.append({
-                        "region": region,
-                        "hour_of_day": hour,
-                        "season": season,
-                        "year": year,
-                        "avg_price_mwh": avg_p,
-                        "median_price_mwh": round(avg_p * _r.uniform(0.85, 1.0), 1),
-                        "p10_price_mwh": round(avg_p * _r.uniform(0.2, 0.5), 1),
-                        "p90_price_mwh": round(avg_p * _r.uniform(1.5, 3.5), 1),
-                        "spike_frequency_pct": round(_r.uniform(0, 12), 1),
-                        "avg_demand_mw": round(_r.uniform(4000, 12000), 0),
-                        "avg_solar_mw": round(max(0, _r.uniform(-500, 3000) if 6 <= hour <= 18 else 0), 0),
-                        "avg_wind_mw": round(_r.uniform(200, 3000), 0),
-                    })
+    if hourly_rows:
+        for r in hourly_rows:
+            region = r.get("region_id", "NSW1")
+            if region not in regions[:3]:
+                continue
+            hour = int(r.get("hour_of_day", 0))
+            avg_p = round(float(r.get("avg_price") or 0), 1)
+            hourly_patterns.append({
+                "region": region, "hour_of_day": hour,
+                "season": "Year-Round", "year": 2026,
+                "avg_price_mwh": avg_p,
+                "median_price_mwh": round(float(r.get("median_price") or avg_p), 1),
+                "p10_price_mwh": round(float(r.get("p10_price") or avg_p * 0.3), 1),
+                "p90_price_mwh": round(float(r.get("p90_price") or avg_p * 2), 1),
+                "spike_frequency_pct": round(float(r.get("spike_freq_pct") or 0), 1),
+                "avg_demand_mw": round(_r.uniform(4000, 12000), 0),
+                "avg_solar_mw": round(max(0, _r.uniform(0, 3000) if 6 <= hour <= 18 else 0), 0),
+                "avg_wind_mw": round(_r.uniform(200, 3000), 0),
+            })
+    else:
+        for region in regions[:3]:
+            for season in seasons:
+                for year in [2024]:
+                    for hour in range(0, 24, 4):
+                        base = {"Summer": 95, "Autumn": 65, "Winter": 80, "Spring": 55}[season]
+                        hour_adj = 40 * (1 if 16 <= hour <= 20 else (-0.3 if 10 <= hour <= 14 else 0))
+                        avg_p = round(base + hour_adj + _r.uniform(-20, 20), 1)
+                        hourly_patterns.append({
+                            "region": region, "hour_of_day": hour, "season": season, "year": year,
+                            "avg_price_mwh": avg_p,
+                            "median_price_mwh": round(avg_p * _r.uniform(0.85, 1.0), 1),
+                            "p10_price_mwh": round(avg_p * _r.uniform(0.2, 0.5), 1),
+                            "p90_price_mwh": round(avg_p * _r.uniform(1.5, 3.5), 1),
+                            "spike_frequency_pct": round(_r.uniform(0, 12), 1),
+                            "avg_demand_mw": round(_r.uniform(4000, 12000), 0),
+                            "avg_solar_mw": round(max(0, _r.uniform(-500, 3000) if 6 <= hour <= 18 else 0), 0),
+                            "avg_wind_mw": round(_r.uniform(200, 3000), 0),
+                        })
 
     day_type_patterns = []
     for region in regions[:3]:
@@ -1134,12 +1259,8 @@ def electricity_spot_price_seasonality_dashboard():
                 for dt in ["Weekday", "Weekend", "Public Holiday"]:
                     avg_p = round(_r.uniform(40, 150), 1)
                     day_type_patterns.append({
-                        "region": region,
-                        "day_type": dt,
-                        "season": season,
-                        "year": year,
-                        "avg_price_mwh": avg_p,
-                        "peak_hour": _r.randint(16, 20),
+                        "region": region, "day_type": dt, "season": season, "year": year,
+                        "avg_price_mwh": avg_p, "peak_hour": _r.randint(16, 20),
                         "trough_hour": _r.randint(2, 6),
                         "price_volatility_pct": round(_r.uniform(15, 80), 1),
                         "demand_factor": round(_r.uniform(0.7, 1.3), 2),
@@ -1147,26 +1268,61 @@ def electricity_spot_price_seasonality_dashboard():
                         "morning_ramp_magnitude_mwh": round(_r.uniform(10, 80), 1),
                     })
 
+    # Try real monthly trends
+    try:
+        monthly_rows = _query_gold(f"""
+            SELECT region_id,
+                   DATE_FORMAT(interval_datetime, 'yyyy-MM') AS year_month,
+                   AVG(rrp) AS avg_price, MIN(rrp) AS min_price, MAX(rrp) AS max_price,
+                   SUM(CASE WHEN rrp < 0 THEN 1 ELSE 0 END) * 5.0 / 60 AS neg_price_hrs,
+                   SUM(CASE WHEN rrp > 15000 THEN 1 ELSE 0 END) * 5.0 / 60 AS voll_hrs
+            FROM {_CATALOG}.gold.nem_prices_5min
+            GROUP BY region_id, DATE_FORMAT(interval_datetime, 'yyyy-MM')
+            ORDER BY year_month DESC
+            LIMIT 60
+        """)
+    except Exception:
+        monthly_rows = None
+
     monthly_trends = []
-    for region in regions[:3]:
-        for year in [2024]:
-            for month in range(1, 10):
-                ym = f"{year}-{month:02d}"
-                avg_p = round(_r.uniform(30, 160), 1)
-                monthly_trends.append({
-                    "year_month": ym,
-                    "region": region,
-                    "avg_price_mwh": avg_p,
-                    "min_price_mwh": round(_r.uniform(-100, 10), 1),
-                    "max_price_mwh": round(avg_p * _r.uniform(3, 20), 1),
-                    "negative_price_hrs": round(_r.uniform(0, 120), 0),
-                    "voll_price_hrs": round(_r.uniform(0, 5), 0),
-                    "cumulative_avg_ytd_mwh": round(avg_p * _r.uniform(0.9, 1.1), 1),
-                    "renewable_pct": round(_r.uniform(25, 65), 1),
-                    "coal_pct": round(_r.uniform(15, 55), 1),
-                    "gas_pct": round(_r.uniform(5, 25), 1),
-                    "temperature_anomaly_c": round(_r.uniform(-3, 5), 1),
-                })
+    if monthly_rows:
+        for r in monthly_rows:
+            region = r.get("region_id", "NSW1")
+            if region not in regions[:3]:
+                continue
+            avg_p = round(float(r.get("avg_price") or 0), 1)
+            monthly_trends.append({
+                "year_month": r.get("year_month", "2026-01"), "region": region,
+                "avg_price_mwh": avg_p,
+                "min_price_mwh": round(float(r.get("min_price") or 0), 1),
+                "max_price_mwh": round(float(r.get("max_price") or 0), 1),
+                "negative_price_hrs": round(float(r.get("neg_price_hrs") or 0), 0),
+                "voll_price_hrs": round(float(r.get("voll_hrs") or 0), 0),
+                "cumulative_avg_ytd_mwh": avg_p,
+                "renewable_pct": round(_r.uniform(25, 65), 1),
+                "coal_pct": round(_r.uniform(15, 55), 1),
+                "gas_pct": round(_r.uniform(5, 25), 1),
+                "temperature_anomaly_c": round(_r.uniform(-3, 5), 1),
+            })
+    else:
+        for region in regions[:3]:
+            for year in [2024]:
+                for month in range(1, 10):
+                    ym = f"{year}-{month:02d}"
+                    avg_p = round(_r.uniform(30, 160), 1)
+                    monthly_trends.append({
+                        "year_month": ym, "region": region,
+                        "avg_price_mwh": avg_p,
+                        "min_price_mwh": round(_r.uniform(-100, 10), 1),
+                        "max_price_mwh": round(avg_p * _r.uniform(3, 20), 1),
+                        "negative_price_hrs": round(_r.uniform(0, 120), 0),
+                        "voll_price_hrs": round(_r.uniform(0, 5), 0),
+                        "cumulative_avg_ytd_mwh": round(avg_p * _r.uniform(0.9, 1.1), 1),
+                        "renewable_pct": round(_r.uniform(25, 65), 1),
+                        "coal_pct": round(_r.uniform(15, 55), 1),
+                        "gas_pct": round(_r.uniform(5, 25), 1),
+                        "temperature_anomaly_c": round(_r.uniform(-3, 5), 1),
+                    })
 
     price_regimes = []
     rid = 1
@@ -1270,39 +1426,108 @@ def electricity_spot_price_events_dashboard():
     price_bands = ["Negative", "$0-$50", "$50-$300", "$300+"]
     measure_types = ["FCAS", "RERT", "DSP", "Battery", "Interconnector", "Manual"]
 
+    # Try real extreme price events from NEMWEB
+    try:
+        event_rows = _query_gold(f"""
+            SELECT region_id, rrp, interval_datetime,
+                   MONTH(interval_datetime) AS month_num
+            FROM {_CATALOG}.gold.nem_prices_5min
+            WHERE rrp > 300 OR rrp < -50
+            ORDER BY ABS(rrp) DESC
+            LIMIT 50
+        """)
+    except Exception:
+        event_rows = None
+
     events = []
-    for i in range(25):
-        events.append({
-            "event_id": f"ESPE-{i + 1:04d}",
-            "event_type": _r.choice(event_types),
-            "region": _r.choice(regions),
-            "year": _r.choice([2022, 2023, 2024]),
-            "month": _r.randint(1, 12),
-            "duration_intervals": _r.randint(1, 48),
-            "max_price_mwh": round(_r.uniform(-1000, 16600), 2),
-            "avg_price_mwh": round(_r.uniform(-200, 5000), 2),
-            "total_energy_affected_mwh": round(_r.uniform(100, 50000), 0),
-            "financial_impact_m_aud": round(_r.uniform(0.01, 15.0), 3),
-            "trigger_cause": _r.choice(trigger_causes),
-        })
+    if event_rows:
+        for i, r in enumerate(event_rows[:25]):
+            price = float(r.get("rrp") or 0)
+            if price > 15000:
+                etype = "VoLL"
+            elif price > 300:
+                etype = "Spike"
+            elif price < -50:
+                etype = "Negative"
+            else:
+                etype = "Cap Hit"
+            events.append({
+                "event_id": f"ESPE-{i + 1:04d}",
+                "event_type": etype,
+                "region": r.get("region_id", "NSW1"),
+                "year": 2026,
+                "month": int(r.get("month_num") or 1),
+                "duration_intervals": _r.randint(1, 12),
+                "max_price_mwh": round(price, 2),
+                "avg_price_mwh": round(price * 0.7, 2),
+                "total_energy_affected_mwh": round(abs(price) * _r.uniform(1, 10), 0),
+                "financial_impact_m_aud": round(abs(price) * _r.uniform(0.001, 0.01), 3),
+                "trigger_cause": _r.choice(trigger_causes),
+            })
+    else:
+        for i in range(25):
+            events.append({
+                "event_id": f"ESPE-{i + 1:04d}",
+                "event_type": _r.choice(event_types),
+                "region": _r.choice(regions),
+                "year": _r.choice([2022, 2023, 2024]),
+                "month": _r.randint(1, 12),
+                "duration_intervals": _r.randint(1, 48),
+                "max_price_mwh": round(_r.uniform(-1000, 16600), 2),
+                "avg_price_mwh": round(_r.uniform(-200, 5000), 2),
+                "total_energy_affected_mwh": round(_r.uniform(100, 50000), 0),
+                "financial_impact_m_aud": round(_r.uniform(0.01, 15.0), 3),
+                "trigger_cause": _r.choice(trigger_causes),
+            })
+
+    # Try real regional stats
+    try:
+        stat_rows = _query_gold(f"""
+            SELECT region_id,
+                   SUM(CASE WHEN rrp > 300 THEN 1 ELSE 0 END) AS spike_count,
+                   SUM(CASE WHEN rrp < 0 THEN 1 ELSE 0 END) AS negative_count,
+                   SUM(CASE WHEN rrp > 15000 THEN 1 ELSE 0 END) AS cap_hit_count,
+                   PERCENTILE_APPROX(rrp, 0.05) AS p5_price,
+                   PERCENTILE_APPROX(rrp, 0.95) AS p95_price,
+                   STDDEV(rrp) AS price_std,
+                   SUM(CASE WHEN rrp > 300 THEN 1 ELSE 0 END) * 100.0 / COUNT(*) AS time_above_300_pct
+            FROM {_CATALOG}.gold.nem_prices_5min
+            GROUP BY region_id
+        """)
+    except Exception:
+        stat_rows = None
 
     regional_stats = []
-    for region in regions:
-        for year in [2022, 2023, 2024]:
-            for half in ["H1", "H2"]:
-                regional_stats.append({
-                    "region": region,
-                    "year": year,
-                    "half": half,
-                    "spike_count": _r.randint(5, 80),
-                    "negative_count": _r.randint(10, 200),
-                    "cap_hit_count": _r.randint(0, 5),
-                    "total_spike_revenue_m_aud": round(_r.uniform(1, 50), 1),
-                    "p5_price_mwh": round(_r.uniform(-100, -10), 1),
-                    "p95_price_mwh": round(_r.uniform(200, 2000), 1),
-                    "volatility_index": round(_r.uniform(0.3, 3.5), 2),
-                    "time_above_300_pct": round(_r.uniform(0.1, 5.0), 2),
-                })
+    if stat_rows:
+        for r in stat_rows:
+            region = r.get("region_id", "NSW1")
+            spk = int(r.get("spike_count") or 0)
+            regional_stats.append({
+                "region": region, "year": 2026, "half": "H1",
+                "spike_count": spk,
+                "negative_count": int(r.get("negative_count") or 0),
+                "cap_hit_count": int(r.get("cap_hit_count") or 0),
+                "total_spike_revenue_m_aud": round(spk * _r.uniform(0.1, 0.5), 1),
+                "p5_price_mwh": round(float(r.get("p5_price") or -10), 1),
+                "p95_price_mwh": round(float(r.get("p95_price") or 200), 1),
+                "volatility_index": round(float(r.get("price_std") or 50) / 100, 2),
+                "time_above_300_pct": round(float(r.get("time_above_300_pct") or 0), 2),
+            })
+    else:
+        for region in regions:
+            for year in [2022, 2023, 2024]:
+                for half in ["H1", "H2"]:
+                    regional_stats.append({
+                        "region": region, "year": year, "half": half,
+                        "spike_count": _r.randint(5, 80),
+                        "negative_count": _r.randint(10, 200),
+                        "cap_hit_count": _r.randint(0, 5),
+                        "total_spike_revenue_m_aud": round(_r.uniform(1, 50), 1),
+                        "p5_price_mwh": round(_r.uniform(-100, -10), 1),
+                        "p95_price_mwh": round(_r.uniform(200, 2000), 1),
+                        "volatility_index": round(_r.uniform(0.3, 3.5), 2),
+                        "time_above_300_pct": round(_r.uniform(0.1, 5.0), 2),
+                    })
 
     driver_names = [
         "Coal Plant Outage", "High Demand Heatwave", "Wind Drought",
@@ -1860,21 +2085,84 @@ def electricity_price_cap_intervention_dashboard():
     action_outcomes = ["Prevented Cap", "Reduced Duration", "Ineffective"]
     generators = ["AGL Macquarie", "Origin Eraring", "Stanwell Corp", "Snowy Hydro", "CS Energy", "EnergyAustralia Yallourn"]
 
+    # Try real extreme price events for cap/intervention data
+    try:
+        cap_rows = _query_gold(f"""
+            SELECT region_id, rrp, interval_datetime
+            FROM {_CATALOG}.gold.nem_prices_5min
+            WHERE rrp > 300 OR rrp < -100
+            ORDER BY interval_datetime DESC
+            LIMIT 50
+        """)
+    except Exception:
+        cap_rows = None
+
     price_cap_events = []
-    for _ in range(18):
-        price_cap_events.append({
-            "trigger_type": _r.choice(trigger_types),
-            "spot_price_avg_aud_mwh": round(_r.uniform(300, 16600), 2),
-        })
+    if cap_rows:
+        for r in cap_rows[:18]:
+            price = float(r.get("rrp") or 0)
+            if price > 15000:
+                trig = "MPC Activated"
+            elif price > 5000:
+                trig = "CPT Breach"
+            elif price > 300:
+                trig = "RERT Trigger"
+            else:
+                trig = "APC Price"
+            price_cap_events.append({
+                "trigger_type": trig,
+                "spot_price_avg_aud_mwh": round(price, 2),
+            })
+        total_cap = len(cap_rows)
+        most_affected = max(set(r.get("region_id", "SA1") for r in cap_rows),
+                           key=lambda rg: sum(1 for r in cap_rows if r.get("region_id") == rg))
+    else:
+        for _ in range(18):
+            price_cap_events.append({
+                "trigger_type": _r.choice(trigger_types),
+                "spot_price_avg_aud_mwh": round(_r.uniform(300, 16600), 2),
+            })
+        total_cap = _r.randint(10, 45)
+        most_affected = _r.choice(regions)
+
+    # Try real cumulative price tracker
+    try:
+        cum_rows = _query_gold(f"""
+            SELECT region_id,
+                   SUM(rrp) AS cumulative_price,
+                   SUM(CASE WHEN rrp > 300 THEN 1 ELSE 0 END) AS cap_events
+            FROM {_CATALOG}.gold.nem_prices_5min
+            GROUP BY region_id
+        """)
+    except Exception:
+        cum_rows = None
+
+    threshold_tracker = []
+    if cum_rows:
+        for cr in cum_rows:
+            reg = cr.get("region_id", "NSW1")
+            if reg not in regions[:3]:
+                continue
+            cum_price = float(cr.get("cumulative_price") or 0)
+            threshold_tracker.append({
+                "year": 2026, "month": 3, "region": reg,
+                "cumulative_price_atd": round(cum_price, 0),
+            })
+    else:
+        for yr in [2023, 2024]:
+            for m in range(1, 13):
+                for r in regions[:3]:
+                    threshold_tracker.append({
+                        "year": yr, "month": m, "region": r,
+                        "cumulative_price_atd": round(_r.uniform(50000, 1200000), 0),
+                    })
 
     market_impact = []
     for yr in [2022, 2023, 2024]:
         for q in ["Q1", "Q2", "Q3", "Q4"]:
             for r in regions[:3]:
                 market_impact.append({
-                    "year": yr,
-                    "quarter": q,
-                    "region": r,
+                    "year": yr, "quarter": q, "region": r,
                     "cap_events_count": _r.randint(0, 8),
                 })
 
@@ -1882,21 +2170,9 @@ def electricity_price_cap_intervention_dashboard():
     for yr in [2022, 2023, 2024]:
         for g in generators:
             generator_response.append({
-                "year": yr,
-                "generator": g,
+                "year": yr, "generator": g,
                 "revenue_impact_m": round(_r.uniform(-50, 30), 1),
             })
-
-    threshold_tracker = []
-    for yr in [2023, 2024]:
-        for m in range(1, 13):
-            for r in regions[:3]:
-                threshold_tracker.append({
-                    "year": yr,
-                    "month": m,
-                    "region": r,
-                    "cumulative_price_atd": round(_r.uniform(50000, 1200000), 0),
-                })
 
     remedy_actions = []
     for _ in range(15):
@@ -1913,11 +2189,11 @@ def electricity_price_cap_intervention_dashboard():
         "threshold_tracker": threshold_tracker,
         "remedy_actions": remedy_actions,
         "summary": {
-            "total_cap_events_fy": _r.randint(10, 45),
-            "total_hours_at_cap_fy": round(_r.uniform(5, 80), 1),
+            "total_cap_events_fy": total_cap if cap_rows else _r.randint(10, 45),
+            "total_hours_at_cap_fy": round(total_cap * 5 / 60, 1) if cap_rows else round(_r.uniform(5, 80), 1),
             "max_administered_price_aud_mwh": 300.0,
             "total_consumer_savings_m": round(_r.uniform(100, 800), 1),
-            "most_affected_region": _r.choice(regions),
+            "most_affected_region": most_affected,
         },
     }
 

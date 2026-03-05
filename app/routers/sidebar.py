@@ -241,27 +241,65 @@ async def merit_order(region: str = Query("NSW1")):
     """Return MeritOrderCurve shape with units sorted by offer price."""
     rng = random.Random(hash(region) + int(time.time() // 30))
     now = datetime.now(timezone.utc)
-    fuel_label = {"coal": "Black Coal", "gas": "Gas (CCGT)", "solar": "Solar", "wind": "Wind", "hydro": "Hydro"}
-    generators = [
-        {"duid": "ERGS1", "station_name": "Eraring", "fuel_type": "Black Coal", "region": "NSW1", "capacity_mw": 720, "fuel_key": "coal"},
-        {"duid": "BW01", "station_name": "Bayswater", "fuel_type": "Black Coal", "region": "NSW1", "capacity_mw": 660, "fuel_key": "coal"},
-        {"duid": "BAYSW3", "station_name": "Bayswater 3", "fuel_type": "Black Coal", "region": "NSW1", "capacity_mw": 660, "fuel_key": "coal"},
-        {"duid": "CALL_B_1", "station_name": "Callide B", "fuel_type": "Black Coal", "region": "QLD1", "capacity_mw": 700, "fuel_key": "coal"},
-        {"duid": "TALWA1", "station_name": "Tallawarra", "fuel_type": "Gas (CCGT)", "region": "NSW1", "capacity_mw": 435, "fuel_key": "gas"},
-        {"duid": "MOREESF1", "station_name": "Moree Solar Farm", "fuel_type": "Solar", "region": "NSW1", "capacity_mw": 56, "fuel_key": "solar"},
-        {"duid": "SNWYSF1", "station_name": "Snowy 2.0", "fuel_type": "Hydro", "region": "NSW1", "capacity_mw": 2040, "fuel_key": "hydro"},
-        {"duid": "HDWF1", "station_name": "Hornsdale Wind Farm", "fuel_type": "Wind", "region": "SA1", "capacity_mw": 315, "fuel_key": "wind"},
-        {"duid": "URANQ1", "station_name": "Uranquinty", "fuel_type": "Gas (CCGT)", "region": "NSW1", "capacity_mw": 664, "fuel_key": "gas"},
-        {"duid": "MACARTH1", "station_name": "Macarthur Wind", "fuel_type": "Wind", "region": "VIC1", "capacity_mw": 420, "fuel_key": "wind"},
-    ]
-    cost_ranges = {"coal": (20, 45), "gas": (55, 120), "solar": (-60, 0), "wind": (-55, 5), "hydro": (10, 70)}
-    for g in generators:
-        lo, hi = cost_ranges.get(g["fuel_key"], (30, 80))
-        g["marginal_cost_aud_mwh"] = round(rng.uniform(lo, hi), 1)
-        g["current_offer_price"] = round(g["marginal_cost_aud_mwh"] + rng.uniform(0, 8), 1)
-        pct = rng.uniform(0.3, 1.0)
-        g["dispatched_mw"] = round(g["capacity_mw"] * pct, 0)
-        del g["fuel_key"]
+
+    if region not in _NEM_REGIONS:
+        region = "NSW1"
+
+    # Try real SCADA dispatch stack
+    cost_ranges = {"coal": (20, 45), "gas": (55, 120), "solar": (-60, 0), "wind": (-55, 5), "hydro": (10, 70), "battery": (0, 50)}
+    try:
+        scada_rows = _query_gold(f"""
+            SELECT s.duid, MAX(s.generation_MW) AS gen_mw,
+                   MAX(f.fuel_type) AS fuel_type, MAX(f.station_name) AS station_name,
+                   MAX(f.capacity_mw) AS capacity_mw
+            FROM {_CATALOG}.nemweb_analytics.silver_nem_dispatch_unit_scada s
+            LEFT JOIN {_CATALOG}.gold.nem_facilities f ON s.duid = f.duid
+            WHERE s.generation_MW > 1
+              AND s.interval >= current_timestamp() - INTERVAL 30 MINUTES
+            GROUP BY s.duid
+            ORDER BY gen_mw DESC
+            LIMIT 20
+        """)
+    except Exception:
+        scada_rows = None
+
+    if scada_rows and len(scada_rows) >= 3:
+        generators = []
+        for r in scada_rows:
+            ft = str(r.get("fuel_type") or "Unknown").lower()
+            fuel_key = "coal" if "coal" in ft else "gas" if "gas" in ft else "solar" if "solar" in ft else "wind" if "wind" in ft else "hydro" if "hydro" in ft else "battery" if "batter" in ft else "gas"
+            lo, hi = cost_ranges.get(fuel_key, (30, 80))
+            mc = round(rng.uniform(lo, hi), 1)
+            generators.append({
+                "duid": str(r.get("duid", "")),
+                "station_name": str(r.get("station_name") or r.get("duid", "Unknown")),
+                "fuel_type": str(r.get("fuel_type") or "Unknown"),
+                "region": region,
+                "capacity_mw": round(float(r.get("capacity_mw") or r.get("gen_mw") or 100), 0),
+                "marginal_cost_aud_mwh": mc,
+                "current_offer_price": round(mc + rng.uniform(0, 8), 1),
+                "dispatched_mw": round(float(r.get("gen_mw") or 0), 0),
+            })
+    else:
+        generators = [
+            {"duid": "ERGS1", "station_name": "Eraring", "fuel_type": "Black Coal", "region": "NSW1", "capacity_mw": 720, "fuel_key": "coal"},
+            {"duid": "BW01", "station_name": "Bayswater", "fuel_type": "Black Coal", "region": "NSW1", "capacity_mw": 660, "fuel_key": "coal"},
+            {"duid": "BAYSW3", "station_name": "Bayswater 3", "fuel_type": "Black Coal", "region": "NSW1", "capacity_mw": 660, "fuel_key": "coal"},
+            {"duid": "CALL_B_1", "station_name": "Callide B", "fuel_type": "Black Coal", "region": "QLD1", "capacity_mw": 700, "fuel_key": "coal"},
+            {"duid": "TALWA1", "station_name": "Tallawarra", "fuel_type": "Gas (CCGT)", "region": "NSW1", "capacity_mw": 435, "fuel_key": "gas"},
+            {"duid": "MOREESF1", "station_name": "Moree Solar Farm", "fuel_type": "Solar", "region": "NSW1", "capacity_mw": 56, "fuel_key": "solar"},
+            {"duid": "SNWYSF1", "station_name": "Snowy 2.0", "fuel_type": "Hydro", "region": "NSW1", "capacity_mw": 2040, "fuel_key": "hydro"},
+            {"duid": "HDWF1", "station_name": "Hornsdale Wind Farm", "fuel_type": "Wind", "region": "SA1", "capacity_mw": 315, "fuel_key": "wind"},
+            {"duid": "URANQ1", "station_name": "Uranquinty", "fuel_type": "Gas (CCGT)", "region": "NSW1", "capacity_mw": 664, "fuel_key": "gas"},
+            {"duid": "MACARTH1", "station_name": "Macarthur Wind", "fuel_type": "Wind", "region": "VIC1", "capacity_mw": 420, "fuel_key": "wind"},
+        ]
+        for g in generators:
+            lo, hi = cost_ranges.get(g["fuel_key"], (30, 80))
+            g["marginal_cost_aud_mwh"] = round(rng.uniform(lo, hi), 1)
+            g["current_offer_price"] = round(g["marginal_cost_aud_mwh"] + rng.uniform(0, 8), 1)
+            g["dispatched_mw"] = round(g["capacity_mw"] * rng.uniform(0.3, 1.0), 0)
+            del g["fuel_key"]
+
     generators.sort(key=lambda x: x["current_offer_price"])
     cumulative = 0
     for g in generators:
@@ -738,23 +776,57 @@ async def surveillance_dashboard():
             "civil_penalty": ref_to_aer and rng.random() > 0.5,
         })
 
+    # Try real price anomalies from NEMWEB
     anomalies = []
-    for i in range(rng.randint(5, 15)):
-        expected = round(rng.uniform(30, 120), 2)
-        actual = round(expected * rng.uniform(1.5, 10), 2) if rng.random() > 0.3 else round(expected * rng.uniform(-0.5, 0.5), 2)
-        anomalies.append({
-            "anomaly_id": f"MA-{2026}-{i+1:04d}",
-            "region": rng.choice(regions),
-            "trading_interval": (now - timedelta(hours=rng.uniform(0, 168))).isoformat(),
-            "anomaly_type": rng.choice(anomaly_types),
-            "spot_price": actual,
-            "expected_price": expected,
-            "deviation_pct": round(((actual - expected) / expected) * 100, 1) if expected != 0 else 0,
-            "generator_id": rng.choice(["BW01", "TORRB1", "APTS1", "YWPS1", "LD01", "MP1", "VPGS1", None]),
-            "flagged": rng.random() > 0.4,
-            "explanation": rng.choice([None, "demand forecast error", "generator trip", "rebid ahead of constraint",
-                                        "correlated bidding pattern", "capacity withholding suspected"]),
-        })
+    try:
+        anomaly_rows = _query_gold(f"""
+            SELECT region_id, rrp, interval_datetime,
+                   AVG(rrp) OVER (PARTITION BY region_id ORDER BY interval_datetime
+                     ROWS BETWEEN 12 PRECEDING AND 1 PRECEDING) AS expected_price
+            FROM {_CATALOG}.gold.nem_prices_5min
+            WHERE interval_datetime >= current_timestamp() - INTERVAL 7 DAYS
+            QUALIFY ABS(rrp - expected_price) / GREATEST(ABS(expected_price), 1) > 1.0
+            ORDER BY interval_datetime DESC
+            LIMIT 20
+        """)
+    except Exception:
+        anomaly_rows = None
+
+    if anomaly_rows:
+        for i, r in enumerate(anomaly_rows):
+            actual = float(r.get("rrp") or 0)
+            expected = float(r.get("expected_price") or 70)
+            deviation = round(((actual - expected) / max(abs(expected), 1)) * 100, 1)
+            atype = "price_spike_unexplained" if actual > 300 else "generation_withdrawal" if actual < 0 else "bid_stack_manipulation"
+            anomalies.append({
+                "anomaly_id": f"MA-{2026}-{i+1:04d}",
+                "region": r.get("region_id", "NSW1"),
+                "trading_interval": str(r.get("interval_datetime", "")),
+                "anomaly_type": atype,
+                "spot_price": round(actual, 2),
+                "expected_price": round(expected, 2),
+                "deviation_pct": deviation,
+                "generator_id": None,
+                "flagged": abs(deviation) > 200,
+                "explanation": "Real price anomaly detected from NEMWEB data",
+            })
+    else:
+        for i in range(rng.randint(5, 15)):
+            expected = round(rng.uniform(30, 120), 2)
+            actual = round(expected * rng.uniform(1.5, 10), 2) if rng.random() > 0.3 else round(expected * rng.uniform(-0.5, 0.5), 2)
+            anomalies.append({
+                "anomaly_id": f"MA-{2026}-{i+1:04d}",
+                "region": rng.choice(regions),
+                "trading_interval": (now - timedelta(hours=rng.uniform(0, 168))).isoformat(),
+                "anomaly_type": rng.choice(anomaly_types),
+                "spot_price": actual,
+                "expected_price": expected,
+                "deviation_pct": round(((actual - expected) / expected) * 100, 1) if expected != 0 else 0,
+                "generator_id": rng.choice(["BW01", "TORRB1", "APTS1", "YWPS1", "LD01", "MP1", "VPGS1", None]),
+                "flagged": rng.random() > 0.4,
+                "explanation": rng.choice([None, "demand forecast error", "generator trip", "rebid ahead of constraint",
+                                            "correlated bidding pattern", "capacity withholding suspected"]),
+            })
 
     referred = sum(1 for c in compliance if c["referred_to_aer"])
     total_penalties = sum(c["penalty_aud"] for c in compliance)
