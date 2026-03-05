@@ -1184,68 +1184,135 @@ async def realtime_ops_dashboard():
     rng = random.Random(int(time.time() // 30))
     now = datetime.now(timezone.utc)
 
-    # Regions
-    region_configs = {
-        "NSW1": {"demand": 8500, "gen": 9200, "pv": 1800, "base_price": 85},
-        "QLD1": {"demand": 6200, "gen": 6800, "pv": 2200, "base_price": 72},
-        "VIC1": {"demand": 5800, "gen": 6100, "pv": 1200, "base_price": 58},
-        "SA1":  {"demand": 1800, "gen": 2100, "pv": 900,  "base_price": 81},
-        "TAS1": {"demand": 1100, "gen": 1300, "pv": 100,  "base_price": 42},
-    }
-    fuel_bases = {
-        "NSW1": {"coal": 4800, "gas": 800, "wind": 1200, "solar": 1400, "hydro": 700, "battery": 300},
-        "QLD1": {"coal": 3600, "gas": 600, "wind": 500,  "solar": 1500, "hydro": 200, "battery": 400},
-        "VIC1": {"coal": 3200, "gas": 500, "wind": 1600, "solar": 400,  "hydro": 200, "battery": 200},
-        "SA1":  {"gas": 500,   "wind": 900, "solar": 400, "battery": 300},
-        "TAS1": {"hydro": 900, "wind": 250, "gas": 50,    "solar": 100},
-    }
+    # --- Try real data for regions ---
+    price_rows = _query_gold(f"""
+        SELECT region_id, rrp, total_demand_mw, available_gen_mw, net_interchange_mw
+        FROM {_CATALOG}.gold.nem_prices_5min
+        WHERE interval_datetime = (SELECT MAX(interval_datetime) FROM {_CATALOG}.gold.nem_prices_5min)
+    """)
+    gen_rows = _query_gold(f"""
+        SELECT region_id, fuel_type, total_mw
+        FROM {_CATALOG}.gold.nem_generation_by_fuel
+        WHERE interval_datetime = (SELECT MAX(interval_datetime) FROM {_CATALOG}.gold.nem_generation_by_fuel)
+    """)
+    ic_rows = _query_gold(f"""
+        SELECT interconnector_id, from_region, to_region, mw_flow, export_limit_mw, mw_losses, utilization_pct
+        FROM {_CATALOG}.gold.nem_interconnectors
+        WHERE interval_datetime = (SELECT MAX(interval_datetime) FROM {_CATALOG}.gold.nem_interconnectors)
+    """)
+
+    # Build generation mix per region
+    real_mix = {}
+    if gen_rows:
+        for g in gen_rows:
+            rid = g["region_id"]
+            ft = str(g["fuel_type"]).lower()
+            mw = float(g["total_mw"] or 0)
+            if rid not in real_mix:
+                real_mix[rid] = {}
+            real_mix[rid][ft] = real_mix[rid].get(ft, 0) + round(mw, 0)
+
     regions = []
-    for reg, cfg in region_configs.items():
-        demand = round(cfg["demand"] + rng.gauss(0, cfg["demand"] * 0.04), 0)
-        gen = round(cfg["gen"] + rng.gauss(0, cfg["gen"] * 0.03), 0)
-        pv = round(cfg["pv"] * rng.uniform(0.3, 1.0), 0)
-        price = round(cfg["base_price"] + rng.gauss(0, cfg["base_price"] * 0.2), 2)
-        freq = round(50 + rng.gauss(0, 0.02), 3)
-        mix = {}
-        for fuel, base_mw in fuel_bases.get(reg, {}).items():
-            mix[fuel] = round(base_mw * rng.uniform(0.6, 1.2), 0)
-        regions.append({
-            "region": reg,
-            "timestamp": now.isoformat(),
-            "total_demand_mw": demand,
-            "generation_mw": gen,
-            "rooftop_solar_mw": pv,
-            "net_interchange_mw": round(gen - demand, 0),
-            "spot_price_aud_mwh": price,
-            "frequency_hz": freq,
-            "reserve_mw": round(max(0, gen - demand + rng.uniform(200, 800)), 0),
-            "generation_mix": mix,
-        })
+    if price_rows:
+        for r in price_rows:
+            reg = r["region_id"]
+            demand = float(r.get("total_demand_mw") or 0)
+            gen = float(r.get("available_gen_mw") or demand)
+            nic = float(r.get("net_interchange_mw") or 0)
+            price = float(r["rrp"])
+            mix = real_mix.get(reg, {})
+            solar_mw = mix.get("solar", 0)
+            regions.append({
+                "region": reg,
+                "timestamp": now.isoformat(),
+                "total_demand_mw": round(demand, 0),
+                "generation_mw": round(gen, 0),
+                "rooftop_solar_mw": round(solar_mw * 0.3, 0),  # Estimate rooftop as ~30% of total solar
+                "net_interchange_mw": round(nic, 0),
+                "spot_price_aud_mwh": round(price, 2),
+                "frequency_hz": round(50 + rng.gauss(0, 0.02), 3),
+                "reserve_mw": round(max(0, gen - demand), 0),
+                "generation_mix": mix,
+            })
 
-    # Interconnectors
-    ic_defs = [
-        {"ic": "N-Q-MNSP1",  "from": "NSW1", "to": "QLD1", "cap": 700,  "base": 280},
-        {"ic": "VIC1-NSW1",   "from": "VIC1", "to": "NSW1", "cap": 1350, "base": 420},
-        {"ic": "V-SA",        "from": "VIC1", "to": "SA1",  "cap": 680,  "base": -142},
-        {"ic": "T-V-MNSP1",   "from": "TAS1", "to": "VIC1", "cap": 594,  "base": 87},
-        {"ic": "Murraylink",   "from": "SA1",  "to": "VIC1", "cap": 220,  "base": 95},
-    ]
+    if not regions:
+        # Fallback to mock
+        region_configs = {
+            "NSW1": {"demand": 8500, "gen": 9200, "pv": 1800, "base_price": 85},
+            "QLD1": {"demand": 6200, "gen": 6800, "pv": 2200, "base_price": 72},
+            "VIC1": {"demand": 5800, "gen": 6100, "pv": 1200, "base_price": 58},
+            "SA1":  {"demand": 1800, "gen": 2100, "pv": 900,  "base_price": 81},
+            "TAS1": {"demand": 1100, "gen": 1300, "pv": 100,  "base_price": 42},
+        }
+        fuel_bases = {
+            "NSW1": {"coal": 4800, "gas": 800, "wind": 1200, "solar": 1400, "hydro": 700, "battery": 300},
+            "QLD1": {"coal": 3600, "gas": 600, "wind": 500,  "solar": 1500, "hydro": 200, "battery": 400},
+            "VIC1": {"coal": 3200, "gas": 500, "wind": 1600, "solar": 400,  "hydro": 200, "battery": 200},
+            "SA1":  {"gas": 500,   "wind": 900, "solar": 400, "battery": 300},
+            "TAS1": {"hydro": 900, "wind": 250, "gas": 50,    "solar": 100},
+        }
+        for reg, cfg in region_configs.items():
+            demand = round(cfg["demand"] + rng.gauss(0, cfg["demand"] * 0.04), 0)
+            gen = round(cfg["gen"] + rng.gauss(0, cfg["gen"] * 0.03), 0)
+            pv = round(cfg["pv"] * rng.uniform(0.3, 1.0), 0)
+            price = round(cfg["base_price"] + rng.gauss(0, cfg["base_price"] * 0.2), 2)
+            mix = {}
+            for fuel, base_mw in fuel_bases.get(reg, {}).items():
+                mix[fuel] = round(base_mw * rng.uniform(0.6, 1.2), 0)
+            regions.append({
+                "region": reg,
+                "timestamp": now.isoformat(),
+                "total_demand_mw": demand,
+                "generation_mw": gen,
+                "rooftop_solar_mw": pv,
+                "net_interchange_mw": round(gen - demand, 0),
+                "spot_price_aud_mwh": price,
+                "frequency_hz": round(50 + rng.gauss(0, 0.02), 3),
+                "reserve_mw": round(max(0, gen - demand + rng.uniform(200, 800)), 0),
+                "generation_mix": mix,
+            })
+
+    # Interconnectors — real or mock
     interconnectors = []
-    for ic in ic_defs:
-        flow = round(ic["base"] * rng.uniform(0.5, 1.5), 1)
-        util = round(abs(flow) / ic["cap"] * 100, 1)
-        interconnectors.append({
-            "interconnector": ic["ic"],
-            "from_region": ic["from"],
-            "to_region": ic["to"],
-            "flow_mw": flow,
-            "capacity_mw": ic["cap"],
-            "utilisation_pct": util,
-            "binding": util > 85,
-            "marginal_loss": round(rng.uniform(0.005, 0.04), 4),
-        })
+    if ic_rows:
+        for ic in ic_rows:
+            flow = float(ic["mw_flow"])
+            cap = float(ic.get("export_limit_mw") or 700)
+            util = float(ic.get("utilization_pct") or (abs(flow) / cap * 100 if cap > 0 else 0))
+            losses = float(ic.get("mw_losses") or abs(flow) * 0.03)
+            interconnectors.append({
+                "interconnector": ic["interconnector_id"],
+                "from_region": ic.get("from_region") or "",
+                "to_region": ic.get("to_region") or "",
+                "flow_mw": round(flow, 1),
+                "capacity_mw": round(cap, 0),
+                "utilisation_pct": round(util, 1),
+                "binding": util > 85,
+                "marginal_loss": round(losses / max(abs(flow), 1), 4),
+            })
+    else:
+        ic_defs = [
+            {"ic": "N-Q-MNSP1",  "from": "NSW1", "to": "QLD1", "cap": 700,  "base": 280},
+            {"ic": "VIC1-NSW1",   "from": "VIC1", "to": "NSW1", "cap": 1350, "base": 420},
+            {"ic": "V-SA",        "from": "VIC1", "to": "SA1",  "cap": 680,  "base": -142},
+            {"ic": "T-V-MNSP1",   "from": "TAS1", "to": "VIC1", "cap": 594,  "base": 87},
+            {"ic": "Murraylink",   "from": "SA1",  "to": "VIC1", "cap": 220,  "base": 95},
+        ]
+        for ic in ic_defs:
+            flow = round(ic["base"] * rng.uniform(0.5, 1.5), 1)
+            util = round(abs(flow) / ic["cap"] * 100, 1)
+            interconnectors.append({
+                "interconnector": ic["ic"],
+                "from_region": ic["from"],
+                "to_region": ic["to"],
+                "flow_mw": flow,
+                "capacity_mw": ic["cap"],
+                "utilisation_pct": util,
+                "binding": util > 85,
+                "marginal_loss": round(rng.uniform(0.005, 0.04), 4),
+            })
 
-    # FCAS
+    # FCAS — still mock (no NEMWEB source)
     fcas_services = ["RAISE_6SEC", "RAISE_60SEC", "RAISE_5MIN", "RAISE_REG",
                      "LOWER_6SEC", "LOWER_60SEC", "LOWER_5MIN", "LOWER_REG"]
     fcas = []
@@ -1261,28 +1328,41 @@ async def realtime_ops_dashboard():
             "surplus_pct": max(0, surplus),
         })
 
-    # Alerts
-    alert_msgs = [
-        ("PRICE", "CRITICAL", "Spot price exceeded $300/MWh in {r}"),
-        ("FREQUENCY", "WARNING", "System frequency deviation >0.15 Hz in {r}"),
-        ("RESERVE", "WARNING", "LOR1 declared — reserve margin below 1500 MW in {r}"),
-        ("CONSTRAINT", "INFO", "Constraint set {r}_XFER_LIMIT binding at 92% capacity"),
-        ("MARKET", "INFO", "AEMO market notice: updated demand forecast for {r}"),
-        ("PRICE", "WARNING", "Negative pricing event in {r} — current $-15.20/MWh"),
-        ("RESERVE", "CRITICAL", "LOR2 risk — reserve below 750 MW in {r}"),
-    ]
+    # Alerts — derive from real price data
     alerts = []
-    for i in range(rng.randint(3, 7)):
-        cat, sev, msg_tmpl = rng.choice(alert_msgs)
-        r = rng.choice(_NEM_REGIONS)
+    if price_rows:
+        for r in price_rows:
+            price = float(r["rrp"])
+            reg = r["region_id"]
+            if price > 300:
+                alerts.append({
+                    "alert_id": f"RTO-{hash(reg) % 90000 + 10000}",
+                    "severity": "CRITICAL",
+                    "category": "PRICE",
+                    "message": f"Spot price ${price:.0f}/MWh in {reg}",
+                    "region": reg,
+                    "timestamp": now.isoformat(),
+                    "acknowledged": False,
+                })
+            elif price < 0:
+                alerts.append({
+                    "alert_id": f"RTO-{hash(reg) % 90000 + 10000}",
+                    "severity": "WARNING",
+                    "category": "PRICE",
+                    "message": f"Negative pricing ${price:.2f}/MWh in {reg}",
+                    "region": reg,
+                    "timestamp": now.isoformat(),
+                    "acknowledged": False,
+                })
+    if not alerts:
         alerts.append({
             "alert_id": f"RTO-{rng.randint(10000, 99999)}",
-            "severity": sev,
-            "category": cat,
-            "message": msg_tmpl.format(r=r),
-            "region": r,
-            "timestamp": (now - timedelta(minutes=rng.uniform(1, 120))).isoformat(),
-            "acknowledged": rng.random() > 0.6,
+            "severity": "INFO",
+            "category": "MARKET",
+            "message": "All regions within normal operating parameters",
+            "region": "NEM",
+            "timestamp": now.isoformat(),
+            "acknowledged": True,
         })
     alerts.sort(key=lambda a: ({"CRITICAL": 0, "WARNING": 1, "INFO": 2}.get(a["severity"], 3), a["timestamp"]))
 
