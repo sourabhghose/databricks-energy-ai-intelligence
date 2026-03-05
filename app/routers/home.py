@@ -37,7 +37,7 @@ async def prices_latest():
                 "region": r["region_id"],
                 "price": round(price, 2),
                 "trend": trend,
-                "updatedAt": str(r["interval_datetime"]),
+                "updatedAt": str(r["interval_datetime"]).replace(" ", "T"),
             })
         # Fill any missing regions
         found = {r["region"] for r in result}
@@ -75,7 +75,7 @@ async def prices_history(
         ORDER BY interval_datetime
     """)
     if rows and len(rows) > 10:
-        return [{"timestamp": str(r["interval_datetime"]), "price": round(float(r["rrp"]), 2)} for r in rows]
+        return [{"timestamp": str(r["interval_datetime"]).replace(" ", "T"), "price": round(float(r["rrp"]), 2)} for r in rows]
 
     # Fallback to mock
     base = _REGION_BASE_PRICES.get(region, 70.0)
@@ -110,7 +110,7 @@ async def market_summary_latest():
             "summary_date": str(r["trading_date"]),
             "narrative": r["summary_text"],
             "model_id": "gold-table",
-            "generated_at": str(r.get("generated_at") or datetime.now(timezone.utc).isoformat()),
+            "generated_at": str(r.get("generated_at") or datetime.now(timezone.utc).isoformat()).replace(" ", "T"),
             "word_count": len(str(r["summary_text"]).split()),
             "generation_succeeded": True,
         }
@@ -174,7 +174,7 @@ async def generation_timeseries(
         # Pivot: group by interval, fuel_type columns
         by_interval = {}
         for r in rows:
-            ts = str(r["interval_datetime"])
+            ts = str(r["interval_datetime"]).replace(" ", "T")
             if ts not in by_interval:
                 by_interval[ts] = {"timestamp": ts}
             fuel = str(r["fuel_type"]).lower()
@@ -321,7 +321,7 @@ async def forecasts(
             h = int(r.get("horizon_intervals") or 1)
             conf = round(max(0.5, 0.92 - h * 0.02), 2)
             points.append({
-                "timestamp": str(r["interval_datetime"]),
+                "timestamp": str(r["interval_datetime"]).replace(" ", "T"),
                 "predicted": round(pred, 2),
                 "lower": round(lo, 2),
                 "upper": round(hi, 2),
@@ -368,7 +368,7 @@ async def prices_compare(
     if rows and len(rows) > 20:
         by_ts = {}
         for r in rows:
-            ts = str(r["interval_datetime"])
+            ts = str(r["interval_datetime"]).replace(" ", "T")
             if ts not in by_ts:
                 by_ts[ts] = {"timestamp": ts}
             by_ts[ts][r["region_id"]] = round(float(r["rrp"]), 2)
@@ -417,7 +417,7 @@ async def prices_spikes(
     if rows:
         spikes = []
         for i, r in enumerate(rows):
-            dt = str(r.get("interval_datetime") or r["detected_at"])
+            dt = str(r.get("interval_datetime") or r["detected_at"]).replace(" ", "T")
             price = round(float(r.get("metric_value") or 300), 2)
             etype = str(r.get("event_type") or "price_spike")
             if etype == "negative_price":

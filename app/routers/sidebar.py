@@ -655,7 +655,7 @@ async def alerts_list():
                 "metric": metric,
                 "threshold": threshold,
                 "status": status,
-                "triggeredAt": str(r["interval_datetime"]),
+                "triggeredAt": str(r["interval_datetime"]).replace(" ", "T"),
                 "isActive": True,
                 "notificationChannel": "SLACK",
             })
@@ -1120,7 +1120,7 @@ async def dispatch_intervals(region: str = Query("NSW1"), count: int = Query(12)
             dev = round(rrp - pd_rrp, 2)
             deviations.append(abs(dev))
             intervals.append({
-                "interval_datetime": str(r["interval_datetime"]),
+                "interval_datetime": str(r["interval_datetime"]).replace(" ", "T"),
                 "region": region,
                 "rrp": rrp,
                 "predispatch_rrp": pd_rrp,
@@ -1195,7 +1195,7 @@ async def settlement_summary():
         records = []
         for r in rows:
             records.append({
-                "trading_interval": str(r["interval_datetime"]),
+                "trading_interval": str(r["interval_datetime"]).replace(" ", "T"),
                 "region": r["region_id"],
                 "totaldemand_mw": round(float(r.get("total_demand_mw") or 0), 0),
                 "net_interchange_mw": round(float(r.get("net_interchange_mw") or 0), 0),

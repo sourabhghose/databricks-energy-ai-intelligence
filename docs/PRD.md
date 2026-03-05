@@ -223,7 +223,7 @@ Build an AI-first market intelligence platform that:
 
 **Repository:** `databricks-industry-solutions/australian-energy-nemweb-analytics` (private, Databricks)
 **Author:** David O'Keeffe (Databricks)
-**Status:** Phase 3 in progress (streaming WIP, batch fully functional)
+**Status:** Deployed to `energy_copilot_catalog.nemweb_analytics` (2026-03-05). Bid pipeline fully operational (2026-03-06) with streaming CSV parser fix for serverless 1GB memory limit.
 
 #### Overview
 
@@ -271,17 +271,17 @@ A Databricks Solution Accelerator providing a production-grade NEMWEB ingestion 
 
 **Gold (~5 tables):** `gold_nem_dispatch_price_30min`, `gold_nem_dispatch_price_daily`, `gold_nem_generation_by_fuel_type`, `gold_nem_interconnector_flow_30min`, `gold_nem_curtailment_30min`
 
-#### Integration Plan
+#### Integration Plan — Status
 
-1. **Deploy the accelerator** to `energy_copilot_catalog` — change `databricks.yml` variables (catalog, schema, warehouse)
-2. **Create views** mapping accelerator gold tables to our existing table names:
-   - `gold_nem_dispatch_price_30min` → `gold.nem_prices_5min` (view with column renames)
-   - `gold_nem_generation_by_fuel_type` → `gold.nem_generation_by_fuel` (view)
-   - `gold_nem_interconnector_flow_30min` → `gold.nem_interconnectors` (view)
+1. **[DONE] Deploy the accelerator** to `energy_copilot_catalog` — 78 tables in `nemweb_analytics` schema, DLT pipeline running every 5 min
+2. **[DONE] Create views** mapping accelerator gold tables to `energy_copilot_catalog.gold`:
+   - `gold.nem_prices_5min` (167K rows), `gold.nem_generation_by_fuel` (968K rows), `gold.nem_interconnectors` (167K rows), `gold.nem_facilities` (650 rows), `gold.nem_region_summary` (3.5K rows)
+   - **[DONE 2026-03-06]** `gold.nem_bid_stack` (11.5M rows) — bid price/volume by DUID/band/interval, joined with facilities for region/fuel metadata
+   - **[DONE 2026-03-06]** `gold.nem_bid_statistics` (12 rows) — aggregated bid metrics per region
 3. **Keep our weather + solar pipelines** — the accelerator doesn't cover Open-Meteo or APVI API
-4. **Keep our Copilot / Genie / App layer unchanged** — just reads from richer gold tables
-5. **Retire** `nemweb_downloader.py`, `01_nemweb_ingest.py`, `00_historical_backfill.py`
-6. **Adopt their ML models** for demand forecasting + price spike detection (replaces our forecast pipeline stubs)
+4. **[DONE] App layer reads from gold views** — ~61 endpoints wired to real data across 8 router files
+5. **Retire** `nemweb_downloader.py`, `01_nemweb_ingest.py`, `00_historical_backfill.py` — superseded
+6. **ML models deployed** but tables not yet populated (training jobs need to be triggered)
 
 #### Key Benefits
 
@@ -298,32 +298,38 @@ A Databricks Solution Accelerator providing a production-grade NEMWEB ingestion 
 - **Gold table names differ** from ours — need views or rename to maintain API compatibility
 - **Azure workspace** (original) — needs testing on AWS (our workspace is AWS `fevm-energy-copilot`)
 
-### 5.5 Data Gap Action Plan — From 11 Real Endpoints to ~150
+### 5.5 Data Gap Action Plan — Progress Tracker
 
-Currently 11 of ~155 dashboard endpoints query real data (all in `home.py`). The remaining serve hardcoded mock data. This action plan closes the gap in ~15 days of pipeline work.
+**Current state (2026-03-06):** ~61 of ~172 API endpoints serve real NEMWEB data. The remaining serve mock data with fallback.
 
 #### Dashboard Coverage After Each Step
 
-| Step | Action | Real Endpoints | Cumulative |
-|---|---|---|---|
-| Current state | 11 home.py endpoints query gold tables | 11 | 11 |
-| Step 1 | Deploy NEMWEB accelerator + build silver/gold views | +99 | ~110 |
-| Step 2 | Add settlement + SRA ingestion | +11 | ~121 |
-| Step 3 | Add AEMO Market Notices API | +3 | ~124 |
-| Step 4 | Scrape ASX Energy free end-of-day futures prices | +15 | ~139 |
-| Step 5 | Load static lookups (emissions, DER register, LGC) | +8 | ~147 |
-| Step 6 | Add Gas Bulletin Board API | +1 | ~148 |
-| Step 7 | Keep synthetic (credit risk, cyber, retail) | +0 | ~148 |
+| Step | Action | Real Endpoints | Cumulative | Status |
+|---|---|---|---|---|
+| Step 1a | Deploy NEMWEB accelerator + gold views | +56 | ~56 | **DONE** (2026-03-05) |
+| Step 1b | Wire bidding endpoints to bid pipeline | +5 | ~61 | **DONE** (2026-03-06) |
+| Step 1c | Wire remaining endpoints using existing gold tables | +6-8 | ~69 | Planned |
+| Step 2 | Add settlement + SRA ingestion | +11 | ~80 | Planned |
+| Step 3 | Add AEMO Market Notices API | +3 | ~83 | Planned |
+| Step 4 | Scrape ASX Energy free end-of-day futures prices | +15 | ~98 | Planned |
+| Step 5 | Load static lookups (emissions, DER register, LGC) | +8 | ~106 | Planned |
+| Step 6 | Add Gas Bulletin Board API | +1 | ~107 | Planned |
+| Step 7 | Run ML training/inference for forecast endpoints | +8 | ~115 | Planned |
+| Step 8 | Keep synthetic (credit risk, cyber, retail) | +0 | ~115 | By design |
 
-#### Step 1: Deploy NEMWEB Solution Accelerator (3-5 days)
+#### Step 1: Deploy NEMWEB Solution Accelerator — COMPLETED (2026-03-05 / 2026-03-06)
 
-**Unlocks:** ~110 endpoints (home, spot prices, generation, interconnectors, forecasting, bidding, constraints, curtailment, FCAS, PSS, rooftop PV)
+**Unlocked:** ~61 endpoints serving real NEMWEB data
 
-- Deploy `australian-energy-nemweb-analytics` DAB to `energy_copilot_catalog`
-- Build silver/gold aggregation views for bids, FCAS, STPASA (accelerator has bronze, needs aggregation)
-- Create compatibility views mapping accelerator gold table names to our existing schema
-- Keep our weather (Open-Meteo) and solar (APVI) pipelines
-- Retire custom `nemweb_downloader.py`, `01_nemweb_ingest.py`, `00_historical_backfill.py`
+**Completed:**
+- [x] Deployed `australian-energy-nemweb-analytics` DAB to `energy_copilot_catalog.nemweb_analytics` (78 tables)
+- [x] Created gold views in `energy_copilot_catalog.gold` (nem_prices_5min, nem_generation_by_fuel, nem_interconnectors, nem_facilities, nem_region_summary)
+- [x] Fixed BIDPEROFFER_D OOM: streaming CSV parser (`_parse_csv_streaming()`) + 10K-row chunked RecordBatch yielding for serverless 1GB limit
+- [x] Created bid gold views: `gold.nem_bid_stack` (11.5M rows), `gold.nem_bid_statistics` (12 rows)
+- [x] Wired ~61 endpoints across 8 router files (home, dashboards, sidebar, stubs, spike_analysis, batch_futures_hedging, batch_forecasting, batch_bidding)
+- [x] 5 bidding endpoints serving real DUIDs (TUMUT3, MURRAY, ERB01, ADPBA1, etc.)
+
+**Key technical fix:** NEMWEB `Bidmove_Complete` files contain BIDPEROFFER_D with ~600K+ rows per day. The default CSV parser loaded everything into memory, hitting the 1GB serverless UDF limit. Fixed by adding a streaming generator that yields row dicts one at a time and batches into 10K-row Arrow RecordBatches.
 
 #### Step 2: Add Settlement & SRA Ingestion (2-3 days)
 
@@ -409,6 +415,133 @@ Currently 11 of ~155 dashboard endpoints query real data (all in `home.py`). The
 | AEMO GBB (gas) | ~1 | Public, free | $0 |
 | Synthetic (customer-specific) | ~7 | N/A | $0 |
 | **Total** | **~155** | | **$0** |
+
+### 5.6 Lakebase Serving Layer — Sub-10ms Dashboard Reads
+
+#### Problem
+
+The 11 real-data endpoints in `home.py` query gold Delta tables via a SQL Warehouse connection. This has two issues:
+1. **Latency:** SQL Warehouse queries take 200-800ms (cold start can be seconds), too slow for real-time dashboard UX
+2. **Cost:** Every page load spins a SQL Warehouse, even for data that changes only every 5 minutes
+3. **Mock endpoints:** The remaining ~145 endpoints serve hardcoded inline mock data with no path to real data without a low-latency read layer
+
+#### Solution: Gold → Synced Tables → Lakebase → FastAPI
+
+```
+Gold Delta Tables (analytics)
+    ↓ Synced Tables (Continuous mode, ~15s latency)
+Lakebase Postgres (OLTP reads)
+    ↓ psycopg2 connection pool
+FastAPI endpoints (<10ms reads, mock fallback)
+```
+
+#### Architecture
+
+**Single snapshot table** — `energy_copilot_catalog.gold.dashboard_snapshots` stores pre-computed JSON payloads keyed by `(endpoint_path, region)`. This avoids creating 155 individual tables.
+
+```sql
+CREATE TABLE energy_copilot_catalog.gold.dashboard_snapshots (
+    endpoint_path   STRING      NOT NULL,
+    region          STRING      NOT NULL DEFAULT 'ALL',
+    snapshot_at     TIMESTAMP   NOT NULL,
+    payload_json    STRING      NOT NULL,
+    CONSTRAINT pk PRIMARY KEY (endpoint_path, region)
+) USING DELTA
+TBLPROPERTIES ('delta.enableChangeDataFeed' = 'true');
+```
+
+**Synced Tables** (GA, replaces deprecated Online Tables) auto-replicate Delta → Lakebase with ~15s latency in Continuous mode. Requires CDF enabled + primary key on the Delta table.
+
+**Lakebase Postgres** serves as the low-latency OLTP read layer. The FastAPI backend connects via a `psycopg2` threaded connection pool (2-10 connections).
+
+#### FastAPI Integration
+
+Three new helpers in `app/routers/shared.py`:
+
+| Helper | Purpose |
+|---|---|
+| `_get_lakebase_pool()` | Lazy-init psycopg2 `ThreadedConnectionPool` using `LAKEBASE_HOST/PORT/DATABASE/USER/PASSWORD` env vars |
+| `_query_lakebase(sql, params)` | Run arbitrary SQL against Lakebase Postgres, return list of dicts (same interface as `_query_gold`) |
+| `_query_snapshot(endpoint_path, region)` | Read pre-computed JSON payload from `dashboard_snapshots` table, parse and return, or `None` on miss |
+
+#### Endpoint Rewiring Pattern
+
+Every mock endpoint gets a 3-line addition at the top of the function body. Zero risk — if Lakebase is unavailable, `_query_snapshot()` returns `None` and the endpoint falls through to existing mock logic unchanged.
+
+```python
+@router.get("/api/some/endpoint")
+async def some_endpoint(region: str = "NSW1"):
+    # --- Lakebase snapshot lookup ---
+    snap = _query_snapshot("/api/some/endpoint", region)
+    if snap is not None:
+        return snap
+    # --- existing mock logic below (unchanged) ---
+    ...
+```
+
+**Modules to rewire:**
+
+| Module | Endpoints | Pattern |
+|---|---|---|
+| `dashboards.py` | 12 | Snapshot lookup before cache/mock |
+| `sidebar.py` | 26 | Snapshot lookup, some with `region` param |
+| `stubs.py` | 31 | Snapshot lookup before inline mock |
+| `market_events.py` | 10 | Snapshot lookup before mock |
+| `spike_analysis.py` | 18 | Snapshot lookup before mock |
+| `batch_forecasting.py` | 9 | Snapshot lookup before mock |
+| `batch_futures_hedging.py` | 27 | Snapshot lookup before mock |
+| `batch_bidding.py` | 9 | Snapshot lookup before mock |
+| **Total** | **~142** | |
+
+#### Home.py Migration
+
+The 11 real SQL Warehouse endpoints in `home.py` switch from `_query_gold(sql)` to `_query_lakebase(sql)`. The SQL stays the same (both speak PostgreSQL-compatible SQL). The existing mock fallback remains.
+
+#### Mock Data Generator
+
+A Databricks Job (`pipelines/09_dashboard_snapshot_generator.py`) runs every 5 minutes:
+1. Generates JSON payloads for all ~155 endpoints (same logic as inline mock, extracted to helper functions)
+2. Writes/merges into `gold.dashboard_snapshots` using `MERGE INTO` on `(endpoint_path, region)`
+3. Synced Tables replicates to Lakebase within ~15 seconds
+
+As real data pipelines come online (section 5.5), the generator is replaced endpoint-by-endpoint with real aggregations from gold tables.
+
+#### Health Check
+
+`/api/system/health` includes a Lakebase connectivity check:
+
+| Field | Description |
+|---|---|
+| `lakebase_ok` | `true` if `SELECT 1` succeeds against Lakebase pool |
+| `snapshot_count` | Number of endpoints with active snapshots |
+| `snapshot_freshness_seconds` | Age of oldest snapshot |
+
+#### Environment Variables
+
+| Variable | Value | Description |
+|---|---|---|
+| `LAKEBASE_HOST` | (from Lakebase provisioning) | Postgres host endpoint |
+| `LAKEBASE_PORT` | `5432` | Default Postgres port |
+| `LAKEBASE_DATABASE` | `energy_copilot` | Lakebase database name |
+| `LAKEBASE_USER` | `energy_copilot_app` | Service principal or app user |
+| `LAKEBASE_PASSWORD` | (from secret scope) | Connection password |
+
+#### Rollback
+
+Every endpoint retains its full mock logic. If Lakebase is unavailable:
+- `_query_snapshot()` returns `None` → endpoint falls through to mock data
+- `_query_lakebase()` returns `None` → `home.py` endpoints fall through to existing `_query_gold()` → mock
+- Zero-risk deployment with graceful degradation
+
+#### Performance Targets
+
+| Metric | Target | Current (mock) | Current (SQL Warehouse) |
+|---|---|---|---|
+| Dashboard endpoint latency (p50) | < 10ms | ~2ms (inline mock) | 200-800ms |
+| Dashboard endpoint latency (p99) | < 50ms | ~5ms | 2-5s (cold start) |
+| Data freshness | < 20 seconds | N/A (static mock) | ~25s (cache TTL) |
+| SQL Warehouse dependency for reads | None | None | Required |
+| Fallback on Lakebase failure | Mock data | N/A | N/A |
 
 ---
 

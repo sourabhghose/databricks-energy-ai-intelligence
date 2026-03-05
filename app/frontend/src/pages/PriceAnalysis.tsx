@@ -38,7 +38,8 @@ function formatPriceDecimal(value: number): string {
 }
 
 function formatTime(isoString: string): string {
-  const d = new Date(isoString + (isoString.endsWith('Z') ? '' : 'Z'))
+  const hasTz = /Z|[+-]\d{2}:\d{2}$/.test(isoString)
+  const d = new Date(hasTz ? isoString : isoString + 'Z')
   return d.toLocaleTimeString('en-AU', {
     timeZone: 'Australia/Sydney',
     hour: '2-digit',
@@ -48,7 +49,8 @@ function formatTime(isoString: string): string {
 }
 
 function formatDateTime(isoString: string): string {
-  const d = new Date(isoString + (isoString.endsWith('Z') ? '' : 'Z'))
+  const hasTz = /Z|[+-]\d{2}:\d{2}$/.test(isoString)
+  const d = new Date(hasTz ? isoString : isoString + 'Z')
   return d.toLocaleString('en-AU', {
     timeZone: 'Australia/Sydney',
     day: '2-digit',

@@ -276,7 +276,7 @@ def _build_spot_cap_data():
             events.append({
                 "event_id": f"CE-2026-{i+1:04d}",
                 "region": r["region_id"],
-                "trading_interval": str(r["interval_datetime"]),
+                "trading_interval": str(r["interval_datetime"]).replace(" ", "T"),
                 "spot_price": round(price, 2),
                 "market_price_cap": 15500,
                 "below_floor": is_floor,
