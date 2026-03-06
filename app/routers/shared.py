@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import threading
 import time
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
@@ -80,6 +81,36 @@ def _cache_set(key: str, data: Any, ttl_seconds: float = 3600.0) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Data source tracking — lets endpoints report which backend served the data
+# ---------------------------------------------------------------------------
+_local = threading.local()
+_query_stats: Dict[str, int] = defaultdict(int)  # global counters
+
+
+def _set_last_source(source: str, elapsed_ms: float, sql_snippet: str = "") -> None:
+    """Record which backend served the last query (per-thread)."""
+    _local.last_source = source
+    _local.last_elapsed_ms = elapsed_ms
+    _query_stats[source] += 1
+    logger.info("query_source=%s elapsed_ms=%.1f rows_from=%s sql=%s",
+                source, elapsed_ms, source, sql_snippet[:80])
+
+
+def _get_last_source() -> str:
+    """Return the source that served the most recent query in this thread."""
+    return getattr(_local, "last_source", "unknown")
+
+
+def _get_last_elapsed_ms() -> float:
+    return getattr(_local, "last_elapsed_ms", -1.0)
+
+
+def _get_query_stats() -> Dict[str, int]:
+    """Return cumulative query counts by source since process start."""
+    return dict(_query_stats)
+
+
+# ---------------------------------------------------------------------------
 # NEM constants
 # ---------------------------------------------------------------------------
 _NEM_REGIONS = ["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]
@@ -141,70 +172,135 @@ def _get_sql_connection():
 # Lakebase (Postgres) query helper — sub-10ms reads when provisioned
 # ---------------------------------------------------------------------------
 _lakebase_pool = None
+_lakebase_last_error: Optional[str] = None
+
+
+_lakebase_token = None
+_lakebase_token_expires = 0.0
+
+
+def _get_lakebase_token():
+    """Generate or return cached OAuth token for Lakebase Postgres."""
+    global _lakebase_token, _lakebase_token_expires
+    if _lakebase_token and time.monotonic() < _lakebase_token_expires:
+        return _lakebase_token
+    instance_name = os.environ.get("LAKEBASE_INSTANCE_NAME")
+    if not instance_name:
+        return None
+    try:
+        import uuid
+        from databricks.sdk import WorkspaceClient
+        w = WorkspaceClient()
+        cred = w.database.generate_database_credential(
+            request_id=str(uuid.uuid4()),
+            instance_names=[instance_name],
+        )
+        _lakebase_token = cred.token
+        _lakebase_token_expires = time.monotonic() + 50 * 60  # refresh 10 min before expiry
+        logger.info("Lakebase OAuth token generated for %s", instance_name)
+        return _lakebase_token
+    except Exception as exc:
+        logger.warning("Lakebase token generation failed: %s", exc)
+        return None
 
 
 def _get_lakebase_pool():
-    """Lazily create a psycopg2 connection pool for Lakebase."""
-    global _lakebase_pool
+    """Lazily create a psycopg3 connection pool for Lakebase with OAuth token.
+
+    Uses psycopg3 (not psycopg2) because Lakebase on port 443 requires
+    TLS handling that psycopg2 cannot negotiate.  psycopg3 + hostaddr works.
+    """
+    global _lakebase_pool, _lakebase_last_error
     if _lakebase_pool is not None:
         return _lakebase_pool
 
     host = os.environ.get("LAKEBASE_HOST")
     if not host:
+        _lakebase_last_error = "LAKEBASE_HOST not set"
+        return None
+
+    token = _get_lakebase_token()
+    if not token:
+        _lakebase_last_error = "Token generation failed"
         return None
 
     try:
-        import psycopg2
-        import psycopg2.pool
+        import socket
+        from psycopg_pool import ConnectionPool
 
-        _lakebase_pool = psycopg2.pool.SimpleConnectionPool(
-            minconn=1,
-            maxconn=5,
-            host=host,
-            port=int(os.environ.get("LAKEBASE_PORT", "5432")),
-            dbname=os.environ.get("LAKEBASE_DATABASE", "energy_copilot"),
-            user=os.environ.get("LAKEBASE_USER", "energy_copilot_app"),
-            password=os.environ.get("LAKEBASE_PASSWORD", ""),
-            connect_timeout=5,
+        # Get username from SDK
+        try:
+            from databricks.sdk import WorkspaceClient
+            username = WorkspaceClient().current_user.me().user_name
+        except Exception:
+            username = os.environ.get("LAKEBASE_USER", "databricks")
+
+        port = int(os.environ.get("LAKEBASE_PORT", "443"))
+        dbname = os.environ.get("LAKEBASE_DATABASE", "energy_copilot_db")
+
+        # Resolve DNS to IP — required for psycopg3 hostaddr param
+        ip = socket.gethostbyname(host)
+        logger.info("Lakebase pool connecting: host=%s ip=%s port=%d db=%s user=%s",
+                     host, ip, port, dbname, username)
+
+        conninfo = (
+            f"host={host} hostaddr={ip} port={port} dbname={dbname} "
+            f"user={username} password={token} sslmode=require connect_timeout=10"
         )
-        logger.info("Lakebase pool created: %s", host)
+
+        _lakebase_pool = ConnectionPool(
+            conninfo=conninfo,
+            min_size=1,
+            max_size=5,
+            open=False,
+        )
+        _lakebase_last_error = None
+        logger.info("Lakebase psycopg3 pool created: %s -> %s", host, ip)
         return _lakebase_pool
     except Exception as exc:
-        logger.warning("Lakebase pool creation failed: %s", exc)
+        _lakebase_last_error = f"{type(exc).__name__}: {exc}"
+        logger.warning("Lakebase pool creation failed: %s", _lakebase_last_error)
         return None
 
 
+def _get_lakebase_last_error() -> Optional[str]:
+    return _lakebase_last_error
+
+
 def _query_lakebase(sql: str, params: Optional[tuple] = None) -> Optional[List[Dict[str, Any]]]:
-    """Run a query against Lakebase (Postgres) and return list of dicts."""
+    """Run a query against Lakebase (Postgres) via psycopg3 pool."""
     cache_key = f"lb:{hash(sql)}:{params}"
     cached = _cache_get(cache_key)
     if cached is not None:
+        _set_last_source("lakebase-cache", 0.0, sql)
         return cached
 
     pool = _get_lakebase_pool()
     if pool is None:
         return None
 
-    conn = None
+    t0 = time.monotonic()
     try:
-        conn = pool.getconn()
-        with conn.cursor() as cur:
-            cur.execute(sql, params)
-            columns = [desc[0] for desc in cur.description]
-            rows = cur.fetchall()
-            result = [dict(zip(columns, row)) for row in rows]
-            if result:
-                _cache_set(cache_key, result, ttl_seconds=10)
-            return result
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, params)
+                columns = [desc[0] for desc in cur.description]
+                rows = cur.fetchall()
+                result = [dict(zip(columns, row)) for row in rows]
+                elapsed = (time.monotonic() - t0) * 1000
+                _set_last_source("lakebase", elapsed, sql)
+                if result:
+                    _cache_set(cache_key, result, ttl_seconds=10)
+                return result
     except Exception as exc:
-        logger.warning("Lakebase query failed: %s — %s", exc, sql[:120])
+        elapsed = (time.monotonic() - t0) * 1000
+        logger.warning("Lakebase query failed (%.1fms): %s — %s", elapsed, exc, sql[:120])
+        _set_last_source("lakebase-error", elapsed, sql)
+        # Token may have expired — reset pool so next call gets fresh token
+        global _lakebase_pool, _lakebase_token_expires
+        _lakebase_pool = None
+        _lakebase_token_expires = 0.0
         return None
-    finally:
-        if conn:
-            try:
-                pool.putconn(conn)
-            except Exception:
-                pass
 
 
 def _query_with_fallback(sql_lb: str, sql_wh: str, params_lb=None, params_wh=None) -> Optional[List[Dict[str, Any]]]:
@@ -215,16 +311,63 @@ def _query_with_fallback(sql_lb: str, sql_wh: str, params_lb=None, params_wh=Non
     return _query_gold(sql_wh, params_wh)
 
 
+def _query_snapshot(endpoint_path: str, region: str = "ALL") -> Optional[Dict[str, Any]]:
+    """Read a pre-computed JSON snapshot for an endpoint from dashboard_snapshots.
+
+    Tries Lakebase first (sub-10ms), then SQL Warehouse fallback.
+    Returns parsed JSON dict or None on miss/error.
+    """
+    cache_key = f"snap:{endpoint_path}:{region}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    # Try Lakebase first (psycopg3 pool)
+    pool = _get_lakebase_pool()
+    if pool is not None:
+        try:
+            with pool.connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT payload_json FROM gold.dashboard_snapshots_synced WHERE endpoint_path = %s AND region = %s",
+                        (endpoint_path, region),
+                    )
+                    row = cur.fetchone()
+                    if row:
+                        result = json.loads(row[0])
+                        _cache_set(cache_key, result, ttl_seconds=30)
+                        return result
+        except Exception as exc:
+            logger.debug("Lakebase snapshot miss for %s: %s", endpoint_path, exc)
+
+    # Fallback to SQL Warehouse
+    try:
+        rows = _query_gold(
+            f"SELECT payload_json FROM {_CATALOG}.gold.dashboard_snapshots "
+            f"WHERE endpoint_path = '{endpoint_path}' AND region = '{region}' LIMIT 1"
+        )
+        if rows and rows[0].get("payload_json"):
+            result = json.loads(rows[0]["payload_json"])
+            _cache_set(cache_key, result, ttl_seconds=30)
+            return result
+    except Exception as exc:
+        logger.debug("SQL snapshot miss for %s: %s", endpoint_path, exc)
+
+    return None
+
+
 def _query_gold(sql: str, params: Optional[dict] = None) -> Optional[List[Dict[str, Any]]]:
     """Run a SQL query and return list of dicts, or None on failure."""
     cache_key = f"sql:{hash(sql)}:{params}"
     cached = _cache_get(cache_key)
     if cached is not None:
+        _set_last_source("sql-warehouse-cache", 0.0, sql)
         return cached
 
     conn = _get_sql_connection()
     if conn is None:
         return None
+    t0 = time.monotonic()
     cursor = None
     try:
         cursor = conn.cursor()
@@ -232,12 +375,16 @@ def _query_gold(sql: str, params: Optional[dict] = None) -> Optional[List[Dict[s
         columns = [desc[0] for desc in cursor.description]
         rows = cursor.fetchall()
         result = [dict(zip(columns, row)) for row in rows]
+        elapsed = (time.monotonic() - t0) * 1000
+        _set_last_source("sql-warehouse", elapsed, sql)
         # Only cache non-empty results to avoid caching transient misses
         if result:
             _cache_set(cache_key, result, ttl_seconds=25)
         return result
     except Exception as exc:
-        logger.warning("SQL query failed: %s — %s", exc, sql[:120])
+        elapsed = (time.monotonic() - t0) * 1000
+        logger.warning("SQL query failed (%.1fms): %s — %s", elapsed, exc, sql[:120])
+        _set_last_source("sql-warehouse-error", elapsed, sql)
         return None
     finally:
         if cursor:

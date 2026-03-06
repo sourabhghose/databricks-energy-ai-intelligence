@@ -18,11 +18,11 @@ env:
   - name: LAKEBASE_USER
     value: energy_copilot_app
   - name: LAKEBASE_HOST
-    value: ""
-  - name: LAKEBASE_PASSWORD
-    value: ""
+    value: "instance-79b76ee4-4780-44f2-bfc0-5194dd163dd6.database.cloud.databricks.com"
+  - name: LAKEBASE_INSTANCE_NAME
+    value: "energy-copilot-db"
   - name: LAKEBASE_PORT
-    value: "5432"
+    value: "443"
   - name: LOG_LEVEL
     value: INFO
   - name: PYTHONPATH

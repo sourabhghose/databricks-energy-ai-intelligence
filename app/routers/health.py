@@ -1,7 +1,11 @@
 from fastapi import APIRouter
 from datetime import datetime, timezone, timedelta
 
-from .shared import _get_sql_connection, _query_gold, _CATALOG, logger, RATE_LIMIT_REQUESTS
+from .shared import (
+    _get_sql_connection, _get_lakebase_pool, _get_lakebase_token,
+    _get_lakebase_last_error, _query_gold, _query_lakebase,
+    _get_query_stats, _CATALOG, logger, RATE_LIMIT_REQUESTS,
+)
 
 router = APIRouter()
 
@@ -92,6 +96,83 @@ async def system_health():
         "pipeline_last_run": pipeline_last_run or (now - timedelta(minutes=5)).isoformat(),
         "data_freshness_minutes": freshness_minutes if freshness_minutes is not None else 5.0,
         "model_details": model_details,
+    }
+
+
+@router.get("/api/health/datasource", tags=["Health"], summary="Data source diagnostics")
+async def datasource_health():
+    """Show which data backends are active and query stats.
+
+    Hit this endpoint to see if Lakebase is connected and how many queries
+    have been served by each backend since the process started.
+    """
+    import os
+    import time as _t
+
+    sql_ok = _get_sql_connection() is not None
+
+    # Lakebase diagnostics — report exactly why it's not connected
+    lb_host = os.environ.get("LAKEBASE_HOST", "")
+    lb_instance = os.environ.get("LAKEBASE_INSTANCE_NAME", "")
+    lb_error = None
+    lb_token_ok = False
+
+    if not lb_host:
+        lb_error = "LAKEBASE_HOST env var not set"
+    elif not lb_instance:
+        lb_error = "LAKEBASE_INSTANCE_NAME env var not set"
+    else:
+        # Try generating a token
+        try:
+            token = _get_lakebase_token()
+            if token:
+                lb_token_ok = True
+            else:
+                lb_error = "Token generation returned None (check SDK version or permissions)"
+        except Exception as exc:
+            lb_error = f"Token generation exception: {exc}"
+
+    lb_pool = _get_lakebase_pool()
+    lb_ok = lb_pool is not None
+    if not lb_ok and not lb_error:
+        lb_error = _get_lakebase_last_error() or "Pool creation failed (unknown reason)"
+
+    # Quick probe: run a trivial query on each backend and measure latency
+    lb_latency_ms = None
+    lb_row_count = None
+    if lb_ok:
+        t0 = _t.monotonic()
+        probe = _query_lakebase("SELECT COUNT(*) AS n FROM gold.nem_prices_5min_dedup_synced")
+        lb_latency_ms = round((_t.monotonic() - t0) * 1000, 1)
+        if probe:
+            lb_row_count = probe[0].get("n")
+
+    wh_latency_ms = None
+    wh_row_count = None
+    if sql_ok:
+        t0 = _t.monotonic()
+        probe = _query_gold(f"SELECT COUNT(*) AS n FROM {_CATALOG}.gold.nem_prices_5min")
+        wh_latency_ms = round((_t.monotonic() - t0) * 1000, 1)
+        if probe:
+            wh_row_count = probe[0].get("n")
+
+    return {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "lakebase": {
+            "connected": lb_ok,
+            "host": lb_host[:40] + "..." if len(lb_host) > 40 else lb_host,
+            "instance_name": lb_instance,
+            "token_generated": lb_token_ok,
+            "latency_ms": lb_latency_ms,
+            "probe_row_count": lb_row_count,
+            "error": lb_error,
+        },
+        "sql_warehouse": {
+            "connected": sql_ok,
+            "latency_ms": wh_latency_ms,
+            "probe_row_count": wh_row_count,
+        },
+        "query_counts_since_start": _get_query_stats(),
     }
 
 

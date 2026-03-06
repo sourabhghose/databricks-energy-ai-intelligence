@@ -4,8 +4,8 @@ import random
 import time
 from datetime import datetime, timezone, timedelta, date
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Query
-from .shared import _NEM_REGIONS, _REGION_BASE_PRICES, _AEST, _CATALOG, _query_gold, _cache_get, _cache_set, logger
+from fastapi import APIRouter, Query, Response
+from .shared import _NEM_REGIONS, _REGION_BASE_PRICES, _AEST, _CATALOG, _query_gold, _query_lakebase, _get_last_source, _get_last_elapsed_ms, _cache_get, _cache_set, logger
 
 router = APIRouter()
 
@@ -13,13 +13,13 @@ router = APIRouter()
 @router.get("/api/prices/latest", summary="Latest spot prices", tags=["Market Data"])
 async def prices_latest():
     """Current spot prices for all 5 NEM regions with trend indicators."""
-    # Try gold table first
-    rows = _query_gold(f"""
+    # Try Lakebase (Postgres) first for sub-10ms reads
+    rows = _query_lakebase("""
         WITH latest AS (
             SELECT region_id, rrp, interval_datetime,
                    LAG(rrp) OVER (PARTITION BY region_id ORDER BY interval_datetime) AS prev_rrp
-            FROM {_CATALOG}.gold.nem_prices_5min
-            WHERE interval_datetime >= current_timestamp() - INTERVAL 1 HOUR
+            FROM gold.nem_prices_5min_dedup_synced
+            WHERE interval_datetime >= NOW() - INTERVAL '1 hour'
         )
         SELECT region_id, rrp, interval_datetime, prev_rrp
         FROM latest
@@ -27,6 +27,21 @@ async def prices_latest():
             SELECT region_id, MAX(interval_datetime) FROM latest GROUP BY region_id
         )
     """)
+    # Fallback to SQL Warehouse
+    if not rows:
+        rows = _query_gold(f"""
+            WITH latest AS (
+                SELECT region_id, rrp, interval_datetime,
+                       LAG(rrp) OVER (PARTITION BY region_id ORDER BY interval_datetime) AS prev_rrp
+                FROM {_CATALOG}.gold.nem_prices_5min
+                WHERE interval_datetime >= current_timestamp() - INTERVAL 1 HOUR
+            )
+            SELECT region_id, rrp, interval_datetime, prev_rrp
+            FROM latest
+            WHERE (region_id, interval_datetime) IN (
+                SELECT region_id, MAX(interval_datetime) FROM latest GROUP BY region_id
+            )
+        """)
     if rows:
         result = []
         for r in rows:
@@ -67,13 +82,21 @@ async def prices_history(
     end: Optional[str] = Query(None),
 ):
     """Return 24 hours of 5-minute price points for a region."""
-    rows = _query_gold(f"""
-        SELECT interval_datetime, rrp
-        FROM {_CATALOG}.gold.nem_prices_5min
-        WHERE region_id = '{region}'
-          AND interval_datetime >= current_timestamp() - INTERVAL 24 HOURS
-        ORDER BY interval_datetime
-    """)
+    # Try Lakebase first
+    rows = _query_lakebase(
+        "SELECT interval_datetime, rrp FROM gold.nem_prices_5min_dedup_synced "
+        "WHERE region_id = %s AND interval_datetime >= NOW() - INTERVAL '24 hours' "
+        "ORDER BY interval_datetime",
+        (region,),
+    )
+    if not rows:
+        rows = _query_gold(f"""
+            SELECT interval_datetime, rrp
+            FROM {_CATALOG}.gold.nem_prices_5min
+            WHERE region_id = '{region}'
+              AND interval_datetime >= current_timestamp() - INTERVAL 24 HOURS
+            ORDER BY interval_datetime
+        """)
     if rows and len(rows) > 10:
         return [{"timestamp": str(r["interval_datetime"]).replace(" ", "T"), "price": round(float(r["rrp"]), 2)} for r in rows]
 
@@ -116,12 +139,19 @@ async def market_summary_latest():
         }
 
     # Build a data-driven summary from prices and generation tables
-    price_rows = _query_gold(f"""
+    price_rows = _query_lakebase("""
         SELECT region_id, AVG(rrp) AS avg_rrp, MAX(rrp) AS max_rrp, MIN(rrp) AS min_rrp
-        FROM {_CATALOG}.gold.nem_prices_5min
-        WHERE interval_datetime >= current_timestamp() - INTERVAL 6 HOURS
+        FROM gold.nem_prices_5min_dedup_synced
+        WHERE interval_datetime >= NOW() - INTERVAL '6 hours'
         GROUP BY region_id
     """)
+    if not price_rows:
+        price_rows = _query_gold(f"""
+            SELECT region_id, AVG(rrp) AS avg_rrp, MAX(rrp) AS max_rrp, MIN(rrp) AS min_rrp
+            FROM {_CATALOG}.gold.nem_prices_5min
+            WHERE interval_datetime >= current_timestamp() - INTERVAL 6 HOURS
+            GROUP BY region_id
+        """)
     if price_rows:
         lines = []
         for pr in sorted(price_rows, key=lambda x: -float(x["avg_rrp"])):
@@ -238,12 +268,20 @@ async def interconnectors(intervals: int = Query(12)):
         "T-V-MNSP1":  {"from": "TAS1", "to": "VIC1", "limit": 594, "export_limit": 594, "import_limit": 478},
         "V-S-MNSP1":  {"from": "VIC1", "to": "SA1", "limit": 220, "export_limit": 220, "import_limit": 200},
     }
-    rows = _query_gold(f"""
+    # Try Lakebase first
+    rows = _query_lakebase("""
         SELECT interconnector_id, mw_flow, export_limit_mw, import_limit_mw, interval_datetime,
                from_region, to_region
-        FROM {_CATALOG}.gold.nem_interconnectors
-        WHERE interval_datetime = (SELECT MAX(interval_datetime) FROM {_CATALOG}.gold.nem_interconnectors)
+        FROM gold.nem_interconnectors_dedup_synced
+        WHERE interval_datetime = (SELECT MAX(interval_datetime) FROM gold.nem_interconnectors_dedup_synced)
     """)
+    if not rows:
+        rows = _query_gold(f"""
+            SELECT interconnector_id, mw_flow, export_limit_mw, import_limit_mw, interval_datetime,
+                   from_region, to_region
+            FROM {_CATALOG}.gold.nem_interconnectors
+            WHERE interval_datetime = (SELECT MAX(interval_datetime) FROM {_CATALOG}.gold.nem_interconnectors)
+        """)
     if rows:
         now = str(rows[0]["interval_datetime"])
         interconnectors_list = []
@@ -372,13 +410,20 @@ async def prices_compare(
     interval_minutes: int = Query(30),
 ):
     """Compare prices across all NEM regions over a time window."""
-    # Try real data — pivot regions into columns
-    rows = _query_gold(f"""
+    # Try Lakebase first
+    rows = _query_lakebase("""
         SELECT interval_datetime, region_id, rrp
-        FROM {_CATALOG}.gold.nem_prices_5min
-        WHERE interval_datetime >= current_timestamp() - INTERVAL 24 HOURS
+        FROM gold.nem_prices_5min_dedup_synced
+        WHERE interval_datetime >= NOW() - INTERVAL '24 hours'
         ORDER BY interval_datetime
     """)
+    if not rows:
+        rows = _query_gold(f"""
+            SELECT interval_datetime, region_id, rrp
+            FROM {_CATALOG}.gold.nem_prices_5min
+            WHERE interval_datetime >= current_timestamp() - INTERVAL 24 HOURS
+            ORDER BY interval_datetime
+        """)
     if rows and len(rows) > 20:
         by_ts = {}
         for r in rows:
@@ -496,25 +541,43 @@ async def prices_volatility():
             "most_volatile_region": most_volatile,
         }
 
-    rows = _query_gold(f"""
-        WITH stats AS (
-            SELECT region_id,
-                   AVG(rrp) AS avg_price,
-                   STDDEV(rrp) AS std_dev,
-                   MAX(rrp) AS max_price,
-                   MIN(rrp) AS min_price,
-                   PERCENTILE_APPROX(rrp, 0.05) AS p5_price,
-                   PERCENTILE_APPROX(rrp, 0.95) AS p95_price,
-                   SUM(CASE WHEN rrp > 300 THEN 1 ELSE 0 END) AS spike_count,
-                   SUM(CASE WHEN rrp < 0 THEN 1 ELSE 0 END) AS negative_count,
-                   SUM(CASE WHEN rrp > 15000 THEN 1 ELSE 0 END) AS voll_count,
-                   SUM(rrp) AS cumulative_price
-            FROM {_CATALOG}.gold.nem_prices_5min
-            WHERE interval_datetime >= current_timestamp() - INTERVAL 24 HOURS
-            GROUP BY region_id
-        )
-        SELECT * FROM stats
+    # Try Lakebase first (Postgres syntax)
+    rows = _query_lakebase("""
+        SELECT region_id,
+               AVG(rrp) AS avg_price,
+               STDDEV(rrp) AS std_dev,
+               MAX(rrp) AS max_price,
+               MIN(rrp) AS min_price,
+               PERCENTILE_CONT(0.05) WITHIN GROUP (ORDER BY rrp) AS p5_price,
+               PERCENTILE_CONT(0.95) WITHIN GROUP (ORDER BY rrp) AS p95_price,
+               SUM(CASE WHEN rrp > 300 THEN 1 ELSE 0 END) AS spike_count,
+               SUM(CASE WHEN rrp < 0 THEN 1 ELSE 0 END) AS negative_count,
+               SUM(CASE WHEN rrp > 15000 THEN 1 ELSE 0 END) AS voll_count,
+               SUM(rrp) AS cumulative_price
+        FROM gold.nem_prices_5min_dedup_synced
+        WHERE interval_datetime >= NOW() - INTERVAL '24 hours'
+        GROUP BY region_id
     """)
+    if not rows:
+        rows = _query_gold(f"""
+            WITH stats AS (
+                SELECT region_id,
+                       AVG(rrp) AS avg_price,
+                       STDDEV(rrp) AS std_dev,
+                       MAX(rrp) AS max_price,
+                       MIN(rrp) AS min_price,
+                       PERCENTILE_APPROX(rrp, 0.05) AS p5_price,
+                       PERCENTILE_APPROX(rrp, 0.95) AS p95_price,
+                       SUM(CASE WHEN rrp > 300 THEN 1 ELSE 0 END) AS spike_count,
+                       SUM(CASE WHEN rrp < 0 THEN 1 ELSE 0 END) AS negative_count,
+                       SUM(CASE WHEN rrp > 15000 THEN 1 ELSE 0 END) AS voll_count,
+                       SUM(rrp) AS cumulative_price
+                FROM {_CATALOG}.gold.nem_prices_5min
+                WHERE interval_datetime >= current_timestamp() - INTERVAL 24 HOURS
+                GROUP BY region_id
+            )
+            SELECT * FROM stats
+        """)
     if rows:
         regions_list = []
         for r in rows:

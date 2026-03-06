@@ -22,6 +22,8 @@ from routers.shared import (
     RATE_LIMIT_REQUESTS,
     RATE_LIMIT_WINDOW_SECONDS,
     _rate_limit_store,
+    _get_last_source,
+    _get_last_elapsed_ms,
     logger,
 )
 
@@ -58,6 +60,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Data-Source", "X-Query-Ms", "X-Request-ID"],
 )
 
 # ---------------------------------------------------------------------------
@@ -100,6 +103,11 @@ async def _logging_middleware(request: Request, call_next):
         },
     )
     response.headers["X-Request-ID"] = request_id
+    # Attach data source info so callers can see which backend served the request
+    source = _get_last_source()
+    if source != "unknown":
+        response.headers["X-Data-Source"] = source
+        response.headers["X-Query-Ms"] = str(round(_get_last_elapsed_ms(), 1))
     return response
 
 # ---------------------------------------------------------------------------

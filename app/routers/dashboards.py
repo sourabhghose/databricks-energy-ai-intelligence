@@ -906,6 +906,73 @@ class GasMarketDashboard(BaseModel):
 
 def _build_gas_dashboard() -> GasMarketDashboard:
     ts = datetime.now(timezone.utc).isoformat()
+    # Try real gas hub price data
+    try:
+        gas_rows = _query_gold(f"""
+            WITH latest AS (
+                SELECT hub, price_aud_gj, volume_tj, pipeline_flow_tj, trade_date,
+                       ROW_NUMBER() OVER (PARTITION BY hub ORDER BY trade_date DESC) AS rn
+                FROM {_CATALOG}.gold.gas_hub_prices
+            ), prev AS (
+                SELECT hub, price_aud_gj AS prev_price,
+                       ROW_NUMBER() OVER (PARTITION BY hub ORDER BY trade_date DESC) AS rn
+                FROM {_CATALOG}.gold.gas_hub_prices
+            )
+            SELECT l.hub, l.price_aud_gj, l.volume_tj, l.pipeline_flow_tj, l.trade_date,
+                   ROUND((l.price_aud_gj - p.prev_price) / NULLIF(p.prev_price, 0) * 100, 1) AS change_pct
+            FROM latest l LEFT JOIN prev p ON l.hub = p.hub AND p.rn = 2
+            WHERE l.rn = 1
+            ORDER BY l.hub
+        """)
+        if gas_rows and len(gas_rows) >= 3:
+            hub_prices = [GasHubPrice(
+                hub=r["hub"], price_aud_gj=float(r["price_aud_gj"] or 0),
+                change_1d_pct=float(r["change_pct"] or 0),
+                volume_tj=float(r["volume_tj"] or 0), timestamp=ts
+            ) for r in gas_rows]
+            hub_map = {r["hub"]: float(r["price_aud_gj"] or 0) for r in gas_rows}
+            pipeline_flows = [
+                GasPipelineFlow(pipeline_id="MSP", pipeline_name="Moomba Sydney Pipeline",
+                                from_location="Moomba", to_location="Sydney", capacity_tj_day=310.0,
+                                flow_tj_day=float(next((r["pipeline_flow_tj"] for r in gas_rows if r["hub"] == "Sydney"), 245)),
+                                utilisation_pct=round(float(next((r["pipeline_flow_tj"] for r in gas_rows if r["hub"] == "Sydney"), 245)) / 310 * 100, 1),
+                                pressure_kpa=10000.0, timestamp=ts),
+                GasPipelineFlow(pipeline_id="SWQP", pipeline_name="South West Queensland Pipeline",
+                                from_location="Wallumbilla", to_location="Moomba", capacity_tj_day=210.0,
+                                flow_tj_day=float(next((r["pipeline_flow_tj"] for r in gas_rows if r["hub"] == "Wallumbilla"), 163)),
+                                utilisation_pct=round(float(next((r["pipeline_flow_tj"] for r in gas_rows if r["hub"] == "Wallumbilla"), 163)) / 210 * 100, 1),
+                                pressure_kpa=11500.0, timestamp=ts),
+                GasPipelineFlow(pipeline_id="SEA", pipeline_name="SEA Gas Pipeline",
+                                from_location="Victoria", to_location="Adelaide", capacity_tj_day=90.0,
+                                flow_tj_day=float(next((r["pipeline_flow_tj"] for r in gas_rows if r["hub"] == "Adelaide"), 58)),
+                                utilisation_pct=round(float(next((r["pipeline_flow_tj"] for r in gas_rows if r["hub"] == "Adelaide"), 58)) / 90 * 100, 1),
+                                pressure_kpa=7400.0, timestamp=ts),
+            ]
+            lng_terminals = [
+                LngExportRecord(terminal="GLNG", state="QLD", capacity_mtpa=7.8, utilisation_pct=82.0,
+                                exports_today_tj=420.0, destination="Asia-Pacific", timestamp=ts),
+                LngExportRecord(terminal="APLNG", state="QLD", capacity_mtpa=9.0, utilisation_pct=88.5,
+                                exports_today_tj=510.0, destination="Asia-Pacific", timestamp=ts),
+                LngExportRecord(terminal="QCLNG", state="QLD", capacity_mtpa=8.5, utilisation_pct=85.0,
+                                exports_today_tj=480.0, destination="Asia-Pacific", timestamp=ts),
+            ]
+            total_pipeline = sum(p.flow_tj_day for p in pipeline_flows)
+            total_lng = sum(t.exports_today_tj for t in lng_terminals)
+            return GasMarketDashboard(
+                timestamp=ts,
+                wallumbilla_price=hub_map.get("Wallumbilla", 8.45),
+                moomba_price=hub_map.get("Moomba", 9.12),
+                longford_price=hub_map.get("Sydney", 10.80),
+                total_pipeline_flow_tj=total_pipeline,
+                lng_exports_today_tj=total_lng,
+                domestic_demand_tj=round(total_pipeline * 0.65, 0),
+                gas_power_generation_tj=round(total_pipeline * 0.2, 0),
+                hub_prices=hub_prices,
+                pipeline_flows=pipeline_flows,
+                lng_terminals=lng_terminals,
+            )
+    except Exception as e:
+        logger.warning(f"Gas dashboard real data failed: {e}")
     hub_prices = [
         GasHubPrice(hub="Wallumbilla", price_aud_gj=8.45, change_1d_pct=2.1, volume_tj=285.0, timestamp=ts),
         GasHubPrice(hub="Moomba", price_aud_gj=9.12, change_1d_pct=-0.8, volume_tj=310.0, timestamp=ts),
@@ -1120,20 +1187,45 @@ def _build_carbon_dashboard() -> CarbonDashboard:
                                   total_generation_mw=1600.0, net_emissions_t_co2_hr=80.0),
         ]
 
-    fuel_factors = [
-        FuelEmissionsFactor(fuel_type="Black Coal", scope="Scope 1", kg_co2_mwh=820.0,
-                            kg_co2_mwh_with_losses=902.0, notes="NSW/QLD bituminous coal"),
-        FuelEmissionsFactor(fuel_type="Brown Coal", scope="Scope 1", kg_co2_mwh=1100.0,
-                            kg_co2_mwh_with_losses=1210.0, notes="VIC Latrobe Valley lignite"),
-        FuelEmissionsFactor(fuel_type="Natural Gas (CCGT)", scope="Scope 1", kg_co2_mwh=370.0,
-                            kg_co2_mwh_with_losses=407.0, notes="Combined cycle gas turbine"),
-        FuelEmissionsFactor(fuel_type="Natural Gas (OCGT)", scope="Scope 1", kg_co2_mwh=550.0,
-                            kg_co2_mwh_with_losses=605.0, notes="Open cycle peaker — lower efficiency"),
-        FuelEmissionsFactor(fuel_type="Solar PV", scope="Scope 1", kg_co2_mwh=0.0,
-                            kg_co2_mwh_with_losses=0.0, notes="Zero operational emissions"),
-        FuelEmissionsFactor(fuel_type="Wind", scope="Scope 1", kg_co2_mwh=0.0,
-                            kg_co2_mwh_with_losses=0.0, notes="Zero operational emissions"),
-    ]
+    # Try real emissions factors from gold table
+    fuel_factors = []
+    try:
+        ef_rows = _query_gold(f"""
+            SELECT fuel_type, scope2_kg_co2_mwh, scope1_kg_co2_mwh, total_kg_co2_mwh, source
+            FROM {_CATALOG}.gold.emissions_factors
+            WHERE fuel_type NOT LIKE '%Grid%'
+            ORDER BY total_kg_co2_mwh DESC
+        """)
+        if ef_rows and len(ef_rows) >= 5:
+            for r in ef_rows:
+                scope2 = float(r["scope2_kg_co2_mwh"] or 0)
+                fuel_factors.append(FuelEmissionsFactor(
+                    fuel_type=r["fuel_type"], scope="Scope 1+2",
+                    kg_co2_mwh=scope2,
+                    kg_co2_mwh_with_losses=round(scope2 * 1.1, 1),
+                    notes=f"Source: {r['source']}"
+                ))
+            # Also update the hardcoded emission factors used in region calcs
+            for r in ef_rows:
+                ft = str(r["fuel_type"]).lower().replace(" ", "_").replace("(", "").replace(")", "")
+                _EMISSION_FACTORS[ft] = float(r["scope2_kg_co2_mwh"] or 0)
+    except Exception:
+        pass
+    if not fuel_factors:
+        fuel_factors = [
+            FuelEmissionsFactor(fuel_type="Black Coal", scope="Scope 1", kg_co2_mwh=820.0,
+                                kg_co2_mwh_with_losses=902.0, notes="NSW/QLD bituminous coal"),
+            FuelEmissionsFactor(fuel_type="Brown Coal", scope="Scope 1", kg_co2_mwh=1100.0,
+                                kg_co2_mwh_with_losses=1210.0, notes="VIC Latrobe Valley lignite"),
+            FuelEmissionsFactor(fuel_type="Natural Gas (CCGT)", scope="Scope 1", kg_co2_mwh=370.0,
+                                kg_co2_mwh_with_losses=407.0, notes="Combined cycle gas turbine"),
+            FuelEmissionsFactor(fuel_type="Natural Gas (OCGT)", scope="Scope 1", kg_co2_mwh=550.0,
+                                kg_co2_mwh_with_losses=605.0, notes="Open cycle peaker — lower efficiency"),
+            FuelEmissionsFactor(fuel_type="Solar PV", scope="Scope 1", kg_co2_mwh=0.0,
+                                kg_co2_mwh_with_losses=0.0, notes="Zero operational emissions"),
+            FuelEmissionsFactor(fuel_type="Wind", scope="Scope 1", kg_co2_mwh=0.0,
+                                kg_co2_mwh_with_losses=0.0, notes="Zero operational emissions"),
+        ]
     trajectory = [
         EmissionsTrajectory(year=2020, emissions_mt_co2=165.0, renewable_share_pct=24.0, coal_capacity_gw=23.0, target_met=True),
         EmissionsTrajectory(year=2022, emissions_mt_co2=155.0, renewable_share_pct=32.0, coal_capacity_gw=21.0, target_met=True),
@@ -1147,13 +1239,17 @@ def _build_carbon_dashboard() -> CarbonDashboard:
     weighted_intensity = sum(r.emissions_intensity_kg_co2_mwh * r.total_generation_mw for r in regions) / total_gen
     weighted_renewable = sum(r.renewable_pct * r.total_generation_mw for r in regions) / total_gen
 
+    sorted_by_intensity = sorted(regions, key=lambda r: r.emissions_intensity_kg_co2_mwh)
+    lowest = sorted_by_intensity[0] if sorted_by_intensity else None
+    highest = sorted_by_intensity[-1] if sorted_by_intensity else None
+
     return CarbonDashboard(
         timestamp=ts,
         nem_emissions_intensity_now=round(weighted_intensity, 1),
-        lowest_region="TAS1",
-        lowest_intensity=50.0,
-        highest_region="QLD1",
-        highest_intensity=520.0,
+        lowest_region=lowest.region if lowest else "TAS1",
+        lowest_intensity=lowest.emissions_intensity_kg_co2_mwh if lowest else 50.0,
+        highest_region=highest.region if highest else "QLD1",
+        highest_intensity=highest.emissions_intensity_kg_co2_mwh if highest else 520.0,
         renewable_share_now_pct=round(weighted_renewable, 1),
         vs_same_time_last_year_pct=-8.2,
         annual_trajectory=trajectory,
