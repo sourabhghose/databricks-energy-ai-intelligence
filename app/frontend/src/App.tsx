@@ -2005,6 +2005,7 @@ export default function App() {
               <Route path="/nem-events"   element={<NemEvents />}          />
               <Route path="/fcas-market"  element={<FcasMarket />}         />
               <Route path="/battery-econ" element={<BatteryEconomics />}  />
+              <Route path="/battery-economics" element={<BatteryEconomics />}  />
               <Route path="/settlement"   element={<NemSettlement />}      />
               <Route path="/carbon"       element={<CarbonAnalytics />}   />
               <Route path="/hedging"      element={<HedgingAnalytics />}  />
