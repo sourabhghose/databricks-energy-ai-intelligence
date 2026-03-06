@@ -137,6 +137,84 @@ def _get_sql_connection():
         return None
 
 
+# ---------------------------------------------------------------------------
+# Lakebase (Postgres) query helper — sub-10ms reads when provisioned
+# ---------------------------------------------------------------------------
+_lakebase_pool = None
+
+
+def _get_lakebase_pool():
+    """Lazily create a psycopg2 connection pool for Lakebase."""
+    global _lakebase_pool
+    if _lakebase_pool is not None:
+        return _lakebase_pool
+
+    host = os.environ.get("LAKEBASE_HOST")
+    if not host:
+        return None
+
+    try:
+        import psycopg2
+        import psycopg2.pool
+
+        _lakebase_pool = psycopg2.pool.SimpleConnectionPool(
+            minconn=1,
+            maxconn=5,
+            host=host,
+            port=int(os.environ.get("LAKEBASE_PORT", "5432")),
+            dbname=os.environ.get("LAKEBASE_DATABASE", "energy_copilot"),
+            user=os.environ.get("LAKEBASE_USER", "energy_copilot_app"),
+            password=os.environ.get("LAKEBASE_PASSWORD", ""),
+            connect_timeout=5,
+        )
+        logger.info("Lakebase pool created: %s", host)
+        return _lakebase_pool
+    except Exception as exc:
+        logger.warning("Lakebase pool creation failed: %s", exc)
+        return None
+
+
+def _query_lakebase(sql: str, params: Optional[tuple] = None) -> Optional[List[Dict[str, Any]]]:
+    """Run a query against Lakebase (Postgres) and return list of dicts."""
+    cache_key = f"lb:{hash(sql)}:{params}"
+    cached = _cache_get(cache_key)
+    if cached is not None:
+        return cached
+
+    pool = _get_lakebase_pool()
+    if pool is None:
+        return None
+
+    conn = None
+    try:
+        conn = pool.getconn()
+        with conn.cursor() as cur:
+            cur.execute(sql, params)
+            columns = [desc[0] for desc in cur.description]
+            rows = cur.fetchall()
+            result = [dict(zip(columns, row)) for row in rows]
+            if result:
+                _cache_set(cache_key, result, ttl_seconds=10)
+            return result
+    except Exception as exc:
+        logger.warning("Lakebase query failed: %s — %s", exc, sql[:120])
+        return None
+    finally:
+        if conn:
+            try:
+                pool.putconn(conn)
+            except Exception:
+                pass
+
+
+def _query_with_fallback(sql_lb: str, sql_wh: str, params_lb=None, params_wh=None) -> Optional[List[Dict[str, Any]]]:
+    """Try Lakebase first, fall back to SQL Warehouse."""
+    result = _query_lakebase(sql_lb, params_lb)
+    if result is not None:
+        return result
+    return _query_gold(sql_wh, params_wh)
+
+
 def _query_gold(sql: str, params: Optional[dict] = None) -> Optional[List[Dict[str, Any]]]:
     """Run a SQL query and return list of dicts, or None on failure."""
     cache_key = f"sql:{hash(sql)}:{params}"

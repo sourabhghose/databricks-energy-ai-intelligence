@@ -17,6 +17,12 @@ env:
     value: energy_copilot
   - name: LAKEBASE_USER
     value: energy_copilot_app
+  - name: LAKEBASE_HOST
+    value: ""
+  - name: LAKEBASE_PASSWORD
+    value: ""
+  - name: LAKEBASE_PORT
+    value: "5432"
   - name: LOG_LEVEL
     value: INFO
   - name: PYTHONPATH
