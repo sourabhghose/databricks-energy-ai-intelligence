@@ -785,65 +785,95 @@ async def mlf_analytics_dashboard():
 async def settlement_dashboard():
     ts = datetime.now(timezone.utc).isoformat()
 
-    # Try real price × demand for settlement approximation
+    # Query real FCAS settlement and SRA residue data
     try:
-        settle_rows = _query_gold(f"""
+        fcas_rows = _query_gold(f"""
+            SELECT region_id, fcas_service,
+                   SUM(total_recovery_aud) AS total_recovery_aud,
+                   SUM(total_ace_mwh) AS total_ace_mwh,
+                   SUM(period_count) AS total_periods,
+                   AVG(avg_recovery_per_period_aud) AS avg_per_period
+            FROM {_CATALOG}.gold.nem_settlement_summary
+            GROUP BY region_id, fcas_service
+        """)
+        fcas_by_region = _query_gold(f"""
+            SELECT region_id,
+                   SUM(total_recovery_aud) AS total_fcas_aud,
+                   SUM(period_count) AS total_periods
+            FROM {_CATALOG}.gold.nem_settlement_summary
+            GROUP BY region_id
+        """)
+        sra_rows = _query_gold(f"""
+            SELECT interconnector_id, region_id,
+                   SUM(total_irsr_aud) AS total_irsr_aud,
+                   SUM(total_unadjusted_irsr_aud) AS total_unadjusted_aud,
+                   AVG(avg_mw_flow) AS avg_mw_flow,
+                   SUM(period_count) AS total_periods
+            FROM {_CATALOG}.gold.nem_sra_residues
+            GROUP BY interconnector_id, region_id
+        """)
+        energy_rows = _query_gold(f"""
             SELECT region_id,
                    SUM(rrp * total_demand_mw * 5 / 60) AS energy_settlement_aud,
-                   COUNT(*) AS intervals,
-                   AVG(rrp) AS avg_price,
                    SUM(total_demand_mw * 5 / 60) AS total_energy_mwh
             FROM {_CATALOG}.gold.nem_prices_5min
             WHERE interval_datetime >= current_timestamp() - INTERVAL 30 DAYS
             GROUP BY region_id
         """)
-        ic_residue_rows = _query_gold(f"""
-            SELECT interconnector_id, from_region, to_region,
-                   AVG(mw_flow) AS avg_flow_mw,
-                   COUNT(*) AS intervals
-            FROM {_CATALOG}.gold.nem_interconnectors
-            WHERE interval_datetime >= current_timestamp() - INTERVAL 7 DAYS
-            GROUP BY interconnector_id, from_region, to_region
-        """)
     except Exception:
-        settle_rows = None
-        ic_residue_rows = None
+        fcas_rows = None
+        fcas_by_region = None
+        sra_rows = None
+        energy_rows = None
 
-    if settle_rows and len(settle_rows) >= 3:
-        total_energy = sum(float(r.get("energy_settlement_aud") or 0) for r in settle_rows)
-        total_mwh = sum(float(r.get("total_energy_mwh") or 0) for r in settle_rows)
+    if fcas_by_region and len(fcas_by_region) >= 3:
+        total_fcas = sum(abs(float(r.get("total_fcas_aud") or 0)) for r in fcas_by_region)
+        total_energy = sum(float(r.get("energy_settlement_aud") or 0) for r in (energy_rows or [])) if energy_rows else total_fcas * 12
+        total_mwh = sum(float(r.get("total_energy_mwh") or 0) for r in (energy_rows or [])) if energy_rows else 0
 
         runs = [{"run_id": f"SR-{i}", "run_type": rt, "trading_date": ts[:10],
                   "run_datetime": ts, "status": "COMPLETE",
-                  "records_processed": round(total_mwh / 3),
-                  "total_settlement_aud": round(total_energy / 3, 2),
-                  "largest_payment_aud": round(total_energy / 15, 2),
-                  "largest_receipt_aud": round(total_energy / 18, 2),
+                  "records_processed": round((total_mwh or total_fcas) / 3),
+                  "total_settlement_aud": round((total_energy + total_fcas) / 3, 2),
+                  "largest_payment_aud": round((total_energy + total_fcas) / 15, 2),
+                  "largest_receipt_aud": round((total_energy + total_fcas) / 18, 2),
                   "runtime_seconds": random.randint(120, 600)}
                  for i, rt in enumerate(["PRELIMINARY", "FINAL", "REVISION_1"])]
 
         residues = []
-        if ic_residue_rows:
-            for ic in ic_residue_rows:
-                flow = float(ic.get("avg_flow_mw") or 0)
-                price_diff = round(random.uniform(-20, 40), 2)
-                residues.append({
-                    "interval_id": f"INT-{ic['interconnector_id']}",
-                    "interconnector_id": ic["interconnector_id"],
-                    "flow_mw": round(flow, 1),
-                    "price_differential": price_diff,
-                    "settlement_residue_aud": round(flow * price_diff * 24, 2),
-                    "direction": "EXPORT" if flow >= 0 else "IMPORT",
-                    "allocation_pool": "SRA_POOL",
-                })
+        if sra_rows:
+            seen_ic = {}
+            for r in sra_rows:
+                ic_id = r["interconnector_id"]
+                irsr = float(r.get("total_irsr_aud") or 0)
+                flow = float(r.get("avg_mw_flow") or 0)
+                if ic_id in seen_ic:
+                    seen_ic[ic_id]["settlement_residue_aud"] += irsr
+                    seen_ic[ic_id]["flow_mw"] = (seen_ic[ic_id]["flow_mw"] + flow) / 2
+                else:
+                    seen_ic[ic_id] = {
+                        "interval_id": f"INT-{ic_id}",
+                        "interconnector_id": ic_id,
+                        "flow_mw": round(flow, 1),
+                        "price_differential": 0,
+                        "settlement_residue_aud": irsr,
+                        "direction": "EXPORT" if flow >= 0 else "IMPORT",
+                        "allocation_pool": "SRA_POOL",
+                    }
+            for v in seen_ic.values():
+                v["flow_mw"] = round(v["flow_mw"], 1)
+                v["settlement_residue_aud"] = round(v["settlement_residue_aud"], 2)
+                if v["flow_mw"] != 0:
+                    v["price_differential"] = round(v["settlement_residue_aud"] / (v["flow_mw"] * 24 * 30), 2)
+            residues = list(seen_ic.values())
 
         total_residues = sum(abs(r["settlement_residue_aud"]) for r in residues)
 
         prudential = [{"participant_id": f"P{i}", "participant_name": n, "participant_type": pt,
-                        "credit_limit_aud": round(total_energy / 5 * random.uniform(0.8, 1.5), 2),
-                        "current_exposure_aud": round(total_energy / 8 * random.uniform(0.3, 0.9), 2),
+                        "credit_limit_aud": round((total_energy + total_fcas) / 5 * random.uniform(0.8, 1.5), 2),
+                        "current_exposure_aud": round((total_energy + total_fcas) / 8 * random.uniform(0.3, 0.9), 2),
                         "utilisation_pct": round(random.uniform(20, 85), 1),
-                        "outstanding_amount_aud": round(random.uniform(0, total_energy / 50), 2),
+                        "outstanding_amount_aud": round(random.uniform(0, (total_energy + total_fcas) / 50), 2),
                         "days_since_review": random.randint(10, 90),
                         "status": random.choice(["GREEN", "AMBER", "GREEN"]),
                         "default_notice_issued": False}
@@ -858,10 +888,10 @@ async def settlement_dashboard():
                  "mlf_before": 0.98, "mlf_after": 0.98}]
         return {"timestamp": ts, "settlement_period": ts[:7],
                 "total_energy_settlement_aud": round(total_energy),
-                "total_fcas_settlement_aud": round(total_energy * 0.075),
+                "total_fcas_settlement_aud": round(total_fcas),
                 "total_residues_aud": round(total_residues),
                 "prudential_exceedances": 0, "pending_settlement_runs": 1,
-                "largest_residue_interconnector": residues[0]["interconnector_id"] if residues else "VIC1-NSW1",
+                "largest_residue_interconnector": max(residues, key=lambda r: abs(r["settlement_residue_aud"]))["interconnector_id"] if residues else "VIC1-NSW1",
                 "settlement_runs": runs, "residues": residues,
                 "prudential_records": prudential, "tec_adjustments": tec}
 
@@ -874,22 +904,29 @@ async def settlement_dashboard():
 
 @router.get("/api/market-participant-financial/dashboard", summary="Participant financial", tags=["Market Data"])
 async def market_participant_financial_dashboard():
-    # Derive settlement exposure from real price × demand data
+    # Derive settlement exposure from real FCAS settlement + energy price data
     try:
-        settle_rows = _query_gold(f"""
-            SELECT region_id,
-                   SUM(rrp * total_demand_mw * 5 / 60) / 1e6 AS energy_settle_m,
-                   AVG(rrp) AS avg_price, COUNT(*) AS intervals
+        fcas_settle = _query_gold(f"""
+            SELECT SUM(ABS(total_recovery_aud)) / 1e6 AS fcas_settle_m
+            FROM {_CATALOG}.gold.nem_settlement_summary
+        """)
+        energy_settle = _query_gold(f"""
+            SELECT SUM(rrp * total_demand_mw * 5 / 60) / 1e6 AS energy_settle_m,
+                   AVG(rrp) AS avg_price
             FROM {_CATALOG}.gold.nem_prices_5min
             WHERE interval_datetime >= current_timestamp() - INTERVAL 30 DAYS
-            GROUP BY region_id
         """)
+        settle_rows = fcas_settle  # used as gate
     except Exception:
         settle_rows = None
+        fcas_settle = None
+        energy_settle = None
 
-    if settle_rows and len(settle_rows) >= 3:
-        total_settle_m = sum(float(r["energy_settle_m"] or 0) for r in settle_rows)
-        avg_price = sum(float(r["avg_price"] or 0) for r in settle_rows) / len(settle_rows)
+    if settle_rows and len(settle_rows) >= 1:
+        fcas_m = float((fcas_settle[0] if fcas_settle else {}).get("fcas_settle_m") or 0)
+        energy_m = float((energy_settle[0] if energy_settle else {}).get("energy_settle_m") or 0)
+        total_settle_m = energy_m + fcas_m if energy_m > 0 else fcas_m * 13
+        avg_price = float((energy_settle[0] if energy_settle else {}).get("avg_price") or 80)
 
         _parts = [("Origin Energy","Generator/Retailer","BBB+",0.22),
                   ("AGL Energy","Generator/Retailer","BBB",0.20),
@@ -2126,10 +2163,24 @@ async def aemo_market_operations_dashboard():
             WHERE interval_datetime >= current_timestamp() - INTERVAL 30 DAYS
             GROUP BY from_region, to_region
         """)
+        aemo_fcas_settle = _query_gold(f"""
+            SELECT region_id,
+                   SUM(ABS(total_recovery_aud)) / 1e6 AS fcas_payments_m
+            FROM {_CATALOG}.gold.nem_settlement_summary
+            GROUP BY region_id
+        """)
+        aemo_sra_settle = _query_gold(f"""
+            SELECT region_id,
+                   SUM(ABS(total_irsr_aud)) / 1e6 AS settlement_residue_m
+            FROM {_CATALOG}.gold.nem_sra_residues
+            GROUP BY region_id
+        """)
     except Exception:
         dispatch_rows = None
         gen_rows = None
         ic_congestion = None
+        aemo_fcas_settle = None
+        aemo_sra_settle = None
 
     if dispatch_rows and len(dispatch_rows) >= 3:
         # Build gen lookup
@@ -2178,13 +2229,24 @@ async def aemo_market_operations_dashboard():
                     "total_unserved_energy_mwh": 0,
                 })
 
-        settlement = [{"quarter": f"2025-Q{q}", "region": r,
-                        "total_energy_payments_m": round(random.uniform(500, 2000), 1),
-                        "fcas_payments_m": round(random.uniform(20, 100), 1),
-                        "settlement_residue_m": round(random.uniform(5, 50), 1),
-                        "prudential_requirement_m": round(random.uniform(50, 200), 1),
-                        "credit_support_m": round(random.uniform(60, 250), 1),
-                        "default_events": 0} for q in range(1, 5) for r in regions[:3]]
+        # Build settlement from real FCAS + SRA data
+        fcas_map = {r["region_id"]: float(r.get("fcas_payments_m") or 0) for r in (aemo_fcas_settle or [])} if aemo_fcas_settle else {}
+        sra_map = {r["region_id"]: float(r.get("settlement_residue_m") or 0) for r in (aemo_sra_settle or [])} if aemo_sra_settle else {}
+        settlement = []
+        for q in range(1, 5):
+            for r in regions[:3]:
+                fcas_m = fcas_map.get(r, random.uniform(20, 100))
+                sra_m = sra_map.get(r, random.uniform(5, 50))
+                # Energy payments from dispatch_rows (approx: gwh × avg_price)
+                reg_dispatch = [d for d in dispatch if d["region"] == r]
+                energy_m = sum(d["total_dispatched_gwh"] * d["avg_dispatch_price"] / 1000 for d in reg_dispatch) / max(len(reg_dispatch), 1) * 3
+                settlement.append({"quarter": f"2026-Q{q}", "region": r,
+                    "total_energy_payments_m": round(energy_m, 1),
+                    "fcas_payments_m": round(fcas_m / 4, 1),
+                    "settlement_residue_m": round(sra_m / 4, 1),
+                    "prudential_requirement_m": round((energy_m + fcas_m / 4) * 0.08, 1),
+                    "credit_support_m": round((energy_m + fcas_m / 4) * 0.10, 1),
+                    "default_events": 0})
         predispatch = [{"region": r, "month": dispatch_rows[0]["month"] if dispatch_rows else "2026-03",
                          "predispatch_mae_pct": round(random.uniform(5, 15), 1),
                          "st_predispatch_mae_pct": round(random.uniform(3, 10), 1),
