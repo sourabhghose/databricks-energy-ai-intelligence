@@ -468,7 +468,7 @@ export default function BatteryEconomics() {
           />
         </div>
         <div className="lg:col-span-2">
-          <DispatchChart schedule={dashboard.dispatch_schedule} />
+          <DispatchChart schedule={dashboard.dispatch_schedule ?? []} />
         </div>
       </div>
 

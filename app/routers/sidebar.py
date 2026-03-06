@@ -620,86 +620,259 @@ async def trading_spreads():
 # --- 10. Alerts ---
 @router.get("/api/alerts", summary="Active alerts", tags=["Alerts"])
 async def alerts_list():
-    """Return Alert[] matching frontend interface."""
+    """Return Alert[] matching frontend interface — real NEMWEB data with mock fallback."""
     now = datetime.now(timezone.utc)
-    alerts = []
+    alerts: list[dict] = []
+    real_data = False
 
-    # Try to derive price alerts from real data
-    price_rows = _query_gold(f"""
-        SELECT region_id, rrp, interval_datetime
-        FROM {_CATALOG}.gold.nem_prices_5min
-        WHERE interval_datetime >= current_timestamp() - INTERVAL 24 HOURS
-          AND (rrp > 300 OR rrp < 0)
-        ORDER BY interval_datetime DESC
-        LIMIT 10
-    """)
-    if price_rows:
-        for i, r in enumerate(price_rows):
-            price = float(r["rrp"])
-            region = r["region_id"]
-            if price < 0:
-                metric = "price"
-                threshold = 0
-                status = "triggered"
-            elif price > 1000:
-                metric = "price"
-                threshold = 1000
-                status = "triggered"
-            else:
-                metric = "price"
-                threshold = 300
-                status = "triggered"
-            alerts.append({
-                "id": f"ALT-{str(i + 1).zfill(3)}",
-                "region": region,
-                "metric": metric,
-                "threshold": threshold,
-                "status": status,
-                "triggeredAt": str(r["interval_datetime"]).replace(" ", "T"),
-                "isActive": True,
-                "notificationChannel": "SLACK",
-            })
+    try:
+        # 1. Price anomaly alerts (last 2 hours)
+        price_rows = _query_gold(f"""
+            SELECT region_id, rrp, total_demand_mw, available_gen_mw, interval_datetime
+            FROM {_CATALOG}.gold.nem_prices_5min
+            WHERE interval_datetime >= current_timestamp() - INTERVAL 2 HOURS
+            ORDER BY interval_datetime DESC
+        """)
+        if price_rows:
+            real_data = True
+            alert_idx = 0
+            for r in price_rows:
+                price = float(r["rrp"])
+                region = r["region_id"]
+                ts = str(r["interval_datetime"]).replace(" ", "T")
+                demand = float(r["total_demand_mw"]) if r.get("total_demand_mw") else None
+                avail = float(r["available_gen_mw"]) if r.get("available_gen_mw") else None
 
-    # Always include the full set of alert definitions (some armed, some from real triggers)
+                # CRITICAL: rrp > 1000
+                if price > 1000:
+                    alert_idx += 1
+                    alerts.append({
+                        "id": f"ALT-{alert_idx:03d}",
+                        "type": "EXTREME_PRICE",
+                        "severity": "CRITICAL",
+                        "region": region,
+                        "metric": "price",
+                        "threshold": 1000,
+                        "value": price,
+                        "status": "triggered",
+                        "triggeredAt": ts,
+                        "message": f"Extreme price ${price:,.0f}/MWh in {region}",
+                        "isActive": True,
+                        "acknowledged": False,
+                        "notificationChannel": "SLACK",
+                    })
+                # HIGH: rrp > 300
+                elif price > 300:
+                    alert_idx += 1
+                    alerts.append({
+                        "id": f"ALT-{alert_idx:03d}",
+                        "type": "PRICE_SPIKE",
+                        "severity": "HIGH",
+                        "region": region,
+                        "metric": "price",
+                        "threshold": 300,
+                        "value": price,
+                        "status": "triggered",
+                        "triggeredAt": ts,
+                        "message": f"Price spike ${price:,.0f}/MWh in {region}",
+                        "isActive": True,
+                        "acknowledged": False,
+                        "notificationChannel": "SLACK",
+                    })
+                # MEDIUM: rrp < 0
+                elif price < 0:
+                    alert_idx += 1
+                    alerts.append({
+                        "id": f"ALT-{alert_idx:03d}",
+                        "type": "NEGATIVE_PRICE",
+                        "severity": "MEDIUM",
+                        "region": region,
+                        "metric": "price",
+                        "threshold": 0,
+                        "value": price,
+                        "status": "triggered",
+                        "triggeredAt": ts,
+                        "message": f"Negative price ${price:,.2f}/MWh in {region}",
+                        "isActive": True,
+                        "acknowledged": False,
+                        "notificationChannel": "EMAIL",
+                    })
+
+                # LOW_RESERVE: demand > 90% of available generation
+                if demand and avail and avail > 0 and demand > 0.9 * avail:
+                    alert_idx += 1
+                    reserve_pct = round((1 - demand / avail) * 100, 1)
+                    alerts.append({
+                        "id": f"ALT-{alert_idx:03d}",
+                        "type": "LOW_RESERVE",
+                        "severity": "HIGH",
+                        "region": region,
+                        "metric": "demand",
+                        "threshold": round(0.9 * avail, 0),
+                        "value": demand,
+                        "status": "triggered",
+                        "triggeredAt": ts,
+                        "message": f"Low reserve margin {reserve_pct}% in {region} — demand {demand:,.0f} MW vs available {avail:,.0f} MW",
+                        "isActive": True,
+                        "acknowledged": False,
+                        "notificationChannel": "SLACK",
+                    })
+
+        # 2. Congestion alerts from interconnectors (last 2 hours)
+        congestion_rows = _query_gold(f"""
+            SELECT interconnector_id, from_region, to_region, mw_flow,
+                   utilization_pct, interval_datetime
+            FROM {_CATALOG}.gold.nem_interconnectors
+            WHERE interval_datetime >= current_timestamp() - INTERVAL 2 HOURS
+              AND is_congested = true
+            ORDER BY interval_datetime DESC
+        """)
+        if congestion_rows:
+            real_data = True
+            for r in congestion_rows:
+                alert_idx += 1
+                ic = r["interconnector_id"]
+                fr = r["from_region"]
+                to = r["to_region"]
+                flow = float(r["mw_flow"])
+                util = float(r["utilization_pct"]) if r.get("utilization_pct") else None
+                ts = str(r["interval_datetime"]).replace(" ", "T")
+                alerts.append({
+                    "id": f"ALT-{alert_idx:03d}",
+                    "type": "CONGESTION",
+                    "severity": "MEDIUM",
+                    "region": fr,
+                    "metric": "interconnector",
+                    "threshold": 95,
+                    "value": util if util else flow,
+                    "status": "triggered",
+                    "triggeredAt": ts,
+                    "message": f"Congestion on {ic} ({fr}→{to}): {flow:,.0f} MW, {util:.0f}% utilised" if util else f"Congestion on {ic} ({fr}→{to}): {flow:,.0f} MW",
+                    "isActive": True,
+                    "acknowledged": False,
+                    "notificationChannel": "EMAIL",
+                })
+
+        # Deduplicate: keep only most recent alert per (type, region) combo
+        if alerts:
+            seen: set[tuple] = set()
+            deduped: list[dict] = []
+            for a in alerts:
+                key = (a["type"], a["region"])
+                if key not in seen:
+                    seen.add(key)
+                    deduped.append(a)
+            alerts = deduped[:20]  # Cap at 20 alerts
+            # Re-number IDs
+            for i, a in enumerate(alerts):
+                a["id"] = f"ALT-{i + 1:03d}"
+
+        if real_data:
+            logger.info(f"alerts_list: {len(alerts)} real alerts from NEMWEB")
+            return alerts
+    except Exception as exc:
+        logger.warning(f"alerts_list real-data failed: {exc}")
+
+    # --- Mock fallback ---
     rng = random.Random(int(time.time() // 30))
     alert_defs = [
-        {"region": "NSW1", "metric": "price", "threshold": 300},
-        {"region": "SA1", "metric": "frequency", "threshold": 49.85},
-        {"region": "QLD1", "metric": "demand", "threshold": 9000},
-        {"region": "VIC1", "metric": "generation", "threshold": 200},
-        {"region": "NSW1", "metric": "interconnector", "threshold": 95},
-        {"region": "SA1", "metric": "battery_soc", "threshold": 15},
-        {"region": "VIC1", "metric": "carbon_intensity", "threshold": 0.9},
-        {"region": "QLD1", "metric": "price", "threshold": 500},
-        {"region": "TAS1", "metric": "demand", "threshold": 1500},
-        {"region": "SA1", "metric": "price", "threshold": 1000},
-        {"region": "NSW1", "metric": "demand", "threshold": 12000},
-        {"region": "VIC1", "metric": "price", "threshold": 300},
+        {"region": "NSW1", "metric": "price", "threshold": 300, "type": "PRICE_SPIKE", "severity": "HIGH"},
+        {"region": "SA1", "metric": "frequency", "threshold": 49.85, "type": "PRICE_SPIKE", "severity": "MEDIUM"},
+        {"region": "QLD1", "metric": "demand", "threshold": 9000, "type": "LOW_RESERVE", "severity": "HIGH"},
+        {"region": "VIC1", "metric": "generation", "threshold": 200, "type": "PRICE_SPIKE", "severity": "MEDIUM"},
+        {"region": "NSW1", "metric": "interconnector", "threshold": 95, "type": "CONGESTION", "severity": "MEDIUM"},
+        {"region": "SA1", "metric": "battery_soc", "threshold": 15, "type": "LOW_RESERVE", "severity": "LOW"},
+        {"region": "VIC1", "metric": "carbon_intensity", "threshold": 0.9, "type": "PRICE_SPIKE", "severity": "LOW"},
+        {"region": "QLD1", "metric": "price", "threshold": 500, "type": "PRICE_SPIKE", "severity": "HIGH"},
+        {"region": "TAS1", "metric": "demand", "threshold": 1500, "type": "LOW_RESERVE", "severity": "MEDIUM"},
+        {"region": "SA1", "metric": "price", "threshold": 1000, "type": "EXTREME_PRICE", "severity": "CRITICAL"},
+        {"region": "NSW1", "metric": "demand", "threshold": 12000, "type": "LOW_RESERVE", "severity": "HIGH"},
+        {"region": "VIC1", "metric": "price", "threshold": 300, "type": "PRICE_SPIKE", "severity": "HIGH"},
     ]
     channels = ["SLACK", "EMAIL"]
-    existing_count = len(alerts)
+    mock_alerts = []
     for i, a in enumerate(alert_defs):
-        alerts.append({
-            "id": f"ALT-{str(existing_count + i + 1).zfill(3)}",
+        triggered = rng.random() > 0.6
+        mock_alerts.append({
+            "id": f"ALT-{i + 1:03d}",
+            "type": a["type"],
+            "severity": a["severity"],
             "region": a["region"],
             "metric": a["metric"],
             "threshold": a["threshold"],
-            "status": "armed",
-            "triggeredAt": None,
+            "value": round(a["threshold"] * rng.uniform(1.01, 1.4), 2) if triggered else None,
+            "status": "triggered" if triggered else "armed",
+            "triggeredAt": (now - timedelta(hours=rng.uniform(0, 2))).isoformat() if triggered else None,
+            "message": f"{a['type']} alert in {a['region']}" if triggered else None,
             "isActive": True,
+            "acknowledged": False,
             "notificationChannel": rng.choice(channels),
         })
-    return alerts
+    return mock_alerts
 
 
 # --- 11. Alert Stats ---
 @router.get("/api/alerts/stats", summary="Alert statistics", tags=["Alerts"])
 async def alerts_stats():
-    """Return AlertStats matching frontend interface."""
+    """Return AlertStats matching frontend interface — derived from real NEMWEB data."""
+    try:
+        # Count price anomalies in last 24h
+        price_stats = _query_gold(f"""
+            SELECT
+                COUNT(*) AS total_events,
+                COUNT(CASE WHEN rrp > 300 THEN 1 END) AS spikes,
+                COUNT(CASE WHEN rrp > 1000 THEN 1 END) AS extreme,
+                COUNT(CASE WHEN rrp < 0 THEN 1 END) AS negative
+            FROM {_CATALOG}.gold.nem_prices_5min
+            WHERE interval_datetime >= current_timestamp() - INTERVAL 24 HOURS
+              AND (rrp > 300 OR rrp < 0)
+        """)
+        # Count congestion events in last 24h
+        congestion_stats = _query_gold(f"""
+            SELECT COUNT(*) AS congestion_events
+            FROM {_CATALOG}.gold.nem_interconnectors
+            WHERE interval_datetime >= current_timestamp() - INTERVAL 24 HOURS
+              AND is_congested = true
+        """)
+        # Find region with most price alerts
+        region_stats = _query_gold(f"""
+            SELECT region_id, COUNT(*) AS cnt
+            FROM {_CATALOG}.gold.nem_prices_5min
+            WHERE interval_datetime >= current_timestamp() - INTERVAL 24 HOURS
+              AND (rrp > 300 OR rrp < 0)
+            GROUP BY region_id
+            ORDER BY cnt DESC
+            LIMIT 1
+        """)
+
+        if price_stats:
+            ps = price_stats[0]
+            triggered = int(ps["spikes"]) + int(ps["extreme"]) + int(ps["negative"])
+            congestion = int(congestion_stats[0]["congestion_events"]) if congestion_stats else 0
+            total = triggered + congestion
+            most_region = region_stats[0]["region_id"] if region_stats else "NSW1"
+            logger.info(f"alerts_stats: {total} real events (price={triggered}, congestion={congestion})")
+            return {
+                "total_alerts": total,
+                "triggered_last_24h": triggered,
+                "critical_count": int(ps["extreme"]),
+                "high_count": int(ps["spikes"]),
+                "medium_count": int(ps["negative"]) + congestion,
+                "notifications_sent": max(1, triggered),
+                "channels": ["SLACK", "EMAIL"],
+                "most_triggered_region": most_region,
+            }
+    except Exception as exc:
+        logger.warning(f"alerts_stats real-data failed: {exc}")
+
+    # --- Mock fallback ---
     rng = random.Random(int(time.time() // 30))
     return {
         "total_alerts": rng.randint(10, 20),
         "triggered_last_24h": rng.randint(1, 6),
+        "critical_count": rng.randint(0, 2),
+        "high_count": rng.randint(2, 5),
+        "medium_count": rng.randint(3, 8),
         "notifications_sent": rng.randint(3, 12),
         "channels": ["SLACK", "EMAIL"],
         "most_triggered_region": rng.choice(_NEM_REGIONS),
@@ -1232,10 +1405,88 @@ async def settlement_summary():
 # --- Alert History ---
 @router.get("/api/alerts/history", summary="Alert trigger history", tags=["Alerts"])
 async def alert_history(region: str = Query(None), hours_back: int = Query(24)):
-    """Return AlertTriggerEvent[] matching frontend interface."""
+    """Return AlertTriggerEvent[] matching frontend interface — real NEMWEB data with mock fallback."""
+    try:
+        region_filter = f"AND region_id = '{region}'" if region else ""
+        # Price anomaly history
+        price_events = _query_gold(f"""
+            SELECT region_id, rrp, interval_datetime
+            FROM {_CATALOG}.gold.nem_prices_5min
+            WHERE interval_datetime >= current_timestamp() - INTERVAL {hours_back} HOURS
+              AND (rrp > 300 OR rrp < 0)
+              {region_filter}
+            ORDER BY interval_datetime DESC
+            LIMIT 30
+        """)
+        # Congestion history
+        ic_filter = f"AND from_region = '{region}'" if region else ""
+        congestion_events = _query_gold(f"""
+            SELECT interconnector_id, from_region, to_region, mw_flow,
+                   utilization_pct, interval_datetime
+            FROM {_CATALOG}.gold.nem_interconnectors
+            WHERE interval_datetime >= current_timestamp() - INTERVAL {hours_back} HOURS
+              AND is_congested = true
+              {ic_filter}
+            ORDER BY interval_datetime DESC
+            LIMIT 15
+        """)
+
+        events = []
+        idx = 0
+        if price_events:
+            for r in price_events:
+                idx += 1
+                price = float(r["rrp"])
+                if price > 1000:
+                    atype = "EXTREME_PRICE"
+                    threshold = 1000.0
+                elif price > 300:
+                    atype = "PRICE_SPIKE"
+                    threshold = 300.0
+                else:
+                    atype = "NEGATIVE_PRICE"
+                    threshold = 0.0
+                events.append({
+                    "event_id": f"ATE-{idx:04d}",
+                    "alert_id": f"ALT-{idx:03d}",
+                    "triggered_at": str(r["interval_datetime"]).replace(" ", "T"),
+                    "resolved_at": str(r["interval_datetime"]).replace(" ", "T"),
+                    "region": r["region_id"],
+                    "alert_type": atype,
+                    "threshold": threshold,
+                    "actual_value": price,
+                    "notification_sent": True,
+                    "channel": "SLACK",
+                })
+        if congestion_events:
+            for r in congestion_events:
+                idx += 1
+                flow = float(r["mw_flow"])
+                util = float(r["utilization_pct"]) if r.get("utilization_pct") else None
+                events.append({
+                    "event_id": f"ATE-{idx:04d}",
+                    "alert_id": f"ALT-{idx:03d}",
+                    "triggered_at": str(r["interval_datetime"]).replace(" ", "T"),
+                    "resolved_at": str(r["interval_datetime"]).replace(" ", "T"),
+                    "region": r["from_region"],
+                    "alert_type": "CONGESTION",
+                    "threshold": 95.0,
+                    "actual_value": util if util else flow,
+                    "notification_sent": True,
+                    "channel": "EMAIL",
+                })
+
+        if events:
+            events.sort(key=lambda x: x["triggered_at"], reverse=True)
+            logger.info(f"alert_history: {len(events)} real events (hours_back={hours_back}, region={region})")
+            return events
+    except Exception as exc:
+        logger.warning(f"alert_history real-data failed: {exc}")
+
+    # --- Mock fallback ---
     rng = random.Random(int(time.time() // 30))
     now = datetime.now(timezone.utc)
-    alert_types = ["PRICE_THRESHOLD", "DEMAND_SURGE", "FCAS_PRICE", "FORECAST_SPIKE"]
+    alert_types = ["PRICE_SPIKE", "EXTREME_PRICE", "NEGATIVE_PRICE", "LOW_RESERVE", "CONGESTION"]
     events = []
     for i in range(rng.randint(5, 15)):
         r = region if region else rng.choice(_NEM_REGIONS)
@@ -1245,6 +1496,7 @@ async def alert_history(region: str = Query(None), hours_back: int = Query(24)):
             "event_id": f"ATE-{i + 1:04d}",
             "alert_id": f"ALT-{rng.randint(1, 12):03d}",
             "triggered_at": (now - timedelta(hours=rng.uniform(0, hours_back))).isoformat(),
+            "resolved_at": (now - timedelta(hours=rng.uniform(0, hours_back * 0.8))).isoformat(),
             "region": r,
             "alert_type": at,
             "threshold": threshold,

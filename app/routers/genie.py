@@ -206,6 +206,69 @@ _GENIE_SPACES = [
             },
         ],
     },
+    {
+        "space_id": "01f118f175a21101aba69ab5d26358b6",
+        "title": "NEM Bidding & Trading",
+        "description": "Generator bidding behaviour, bid stacks, market concentration, and trading analytics.",
+        "icon": "bar-chart-2",
+        "tables": ["nem_facilities", "nem_generation_by_fuel", "nem_prices_5min"],
+        "question_categories": [
+            {
+                "label": "Generator Fleet",
+                "questions": [
+                    "What is the total generation capacity by fuel type across all NEM regions?",
+                    "Which generators have the largest capacity in Queensland?",
+                    "Show me the top 10 largest generators in the NEM by capacity",
+                    "What percentage of generation capacity is renewable vs fossil fuel?",
+                    "Which region has the highest battery storage capacity?",
+                ],
+            },
+            {
+                "label": "Market Concentration",
+                "questions": [
+                    "How does spot price correlate with total demand in NSW?",
+                    "What are the average spot prices by region for the last 30 days?",
+                    "When did SA experience the highest spot prices this month?",
+                    "Compare coal vs gas generation output across all regions",
+                    "What is the capacity factor by fuel type in Victoria?",
+                ],
+            },
+        ],
+    },
+    {
+        "space_id": "01f118f1805f17b5b215919bcc795eeb",
+        "title": "NEM Storage & Battery Analytics",
+        "description": "Battery storage fleet analytics, arbitrage opportunities, and grid integration.",
+        "icon": "battery-charging",
+        "tables": ["nem_facilities", "nem_generation_by_fuel", "nem_interconnectors", "nem_prices_5min"],
+        "question_categories": [
+            {
+                "label": "Battery Fleet",
+                "questions": [
+                    "How many battery storage units are registered in each NEM region?",
+                    "What is the total battery charging and discharging capacity by region?",
+                    "Which region has the largest battery fleet by MW capacity?",
+                    "List all battery storage facilities with their capacity and region",
+                ],
+            },
+            {
+                "label": "Arbitrage & Dispatch",
+                "questions": [
+                    "What is the daily price spread (max-min) by region for battery arbitrage?",
+                    "Show me battery generation output over the last 7 days",
+                    "What hours have the highest price volatility for battery arbitrage?",
+                    "What is the average price during peak vs off-peak hours by region?",
+                ],
+            },
+            {
+                "label": "Grid Integration",
+                "questions": [
+                    "Compare battery output to wind and solar generation by region",
+                    "Which interconnectors are most congested and affect battery dispatch?",
+                ],
+            },
+        ],
+    },
 ]
 
 

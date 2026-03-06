@@ -170,15 +170,29 @@ async def generation_timeseries(
         ORDER BY interval_datetime, fuel_type
     """)
     if rows and len(rows) > 10:
-        from itertools import groupby
-        # Pivot: group by interval, fuel_type columns
+        # Normalize NEMWEB fuel_type names to frontend GenerationDataPoint keys
+        _fuel_map = {
+            "coal_black": "coal", "coal_brown": "coal",
+            "gas_ccgt": "gas", "gas_ocgt": "gas", "gas_steam": "gas",
+            "gas_recip": "gas", "gas_wcmg": "gas",
+            "solar_utility": "solar", "solar_rooftop": "solar",
+            "battery_discharging": "battery", "battery_charging": "battery",
+            "wind": "wind", "hydro": "hydro",
+        }
+        # Pivot: group by interval, aggregate by normalised fuel category
         by_interval = {}
         for r in rows:
             ts = str(r["interval_datetime"]).replace(" ", "T")
             if ts not in by_interval:
-                by_interval[ts] = {"timestamp": ts}
-            fuel = str(r["fuel_type"]).lower()
-            by_interval[ts][fuel] = round(float(r["total_mw"]), 1)
+                by_interval[ts] = {"timestamp": ts, "coal": 0.0, "gas": 0.0,
+                                   "hydro": 0.0, "wind": 0.0, "solar": 0.0, "battery": 0.0}
+            raw_fuel = str(r["fuel_type"]).lower()
+            fuel = _fuel_map.get(raw_fuel, raw_fuel)
+            mw = float(r["total_mw"])
+            if fuel in by_interval[ts]:
+                by_interval[ts][fuel] = round(by_interval[ts][fuel] + mw, 1)
+            else:
+                by_interval[ts][fuel] = round(mw, 1)
         return list(by_interval.values())
 
     # Fallback to mock
