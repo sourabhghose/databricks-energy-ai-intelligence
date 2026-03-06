@@ -310,9 +310,46 @@ def _query_lakebase(sql: str, params: Optional[tuple] = None) -> Optional[List[D
         return None
 
 
+_lakebase_freshness: Optional[float] = None  # monotonic time of last freshness check
+_lakebase_fresh: bool = False
+
+
+def _is_lakebase_fresh(max_lag_minutes: float = 30.0) -> bool:
+    """Check if Lakebase synced data is fresh enough (cached for 60s)."""
+    global _lakebase_freshness, _lakebase_fresh
+    now = time.monotonic()
+    if _lakebase_freshness is not None and now - _lakebase_freshness < 60:
+        return _lakebase_fresh
+    _lakebase_freshness = now
+    row = _query_lakebase(
+        "SELECT MAX(interval_datetime) AS latest FROM gold.nem_prices_5min_dedup_synced"
+    )
+    if not row or not row[0].get("latest"):
+        _lakebase_fresh = False
+        return False
+    latest = row[0]["latest"]
+    if hasattr(latest, "timestamp"):
+        from datetime import timezone as _tz
+        age_min = (datetime.now(_tz.utc) - latest.replace(tzinfo=_tz.utc)).total_seconds() / 60
+    else:
+        _lakebase_fresh = False
+        return False
+    _lakebase_fresh = age_min <= max_lag_minutes
+    if not _lakebase_fresh:
+        logger.info("Lakebase stale: latest=%s age=%.0fmin (max=%s)", latest, age_min, max_lag_minutes)
+    return _lakebase_fresh
+
+
+def _query_lakebase_fresh(sql: str, params=None, max_lag_minutes: float = 30.0) -> Optional[List[Dict[str, Any]]]:
+    """Query Lakebase only if synced data is fresh enough, else return None."""
+    if not _is_lakebase_fresh(max_lag_minutes):
+        return None
+    return _query_lakebase(sql, params)
+
+
 def _query_with_fallback(sql_lb: str, sql_wh: str, params_lb=None, params_wh=None) -> Optional[List[Dict[str, Any]]]:
-    """Try Lakebase first, fall back to SQL Warehouse."""
-    result = _query_lakebase(sql_lb, params_lb)
+    """Try Lakebase first (if fresh), fall back to SQL Warehouse."""
+    result = _query_lakebase_fresh(sql_lb, params_lb)
     if result is not None:
         return result
     return _query_gold(sql_wh, params_wh)

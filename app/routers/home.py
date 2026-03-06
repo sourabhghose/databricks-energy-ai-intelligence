@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timezone, timedelta, date
 from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Query, Response
-from .shared import _NEM_REGIONS, _REGION_BASE_PRICES, _AEST, _CATALOG, _query_gold, _query_lakebase, _get_last_source, _get_last_elapsed_ms, _cache_get, _cache_set, logger
+from .shared import _NEM_REGIONS, _REGION_BASE_PRICES, _AEST, _CATALOG, _query_gold, _query_lakebase, _query_lakebase_fresh, _get_last_source, _get_last_elapsed_ms, _cache_get, _cache_set, logger
 
 router = APIRouter()
 
@@ -14,7 +14,7 @@ router = APIRouter()
 async def prices_latest():
     """Current spot prices for all 5 NEM regions with trend indicators."""
     # Try Lakebase (Postgres) first — wide window to handle sync lag
-    rows = _query_lakebase("""
+    rows = _query_lakebase_fresh("""
         WITH ranked AS (
             SELECT region_id, rrp, interval_datetime,
                    ROW_NUMBER() OVER (PARTITION BY region_id ORDER BY interval_datetime DESC) AS rn
@@ -83,7 +83,7 @@ async def prices_history(
 ):
     """Return 24 hours of 5-minute price points for a region."""
     # Try Lakebase first
-    rows = _query_lakebase(
+    rows = _query_lakebase_fresh(
         "SELECT interval_datetime, rrp FROM gold.nem_prices_5min_dedup_synced "
         "WHERE region_id = %s AND interval_datetime >= NOW() - INTERVAL '24 hours' "
         "ORDER BY interval_datetime",
@@ -139,7 +139,7 @@ async def market_summary_latest():
         }
 
     # Build a data-driven summary from prices and generation tables
-    price_rows = _query_lakebase("""
+    price_rows = _query_lakebase_fresh("""
         SELECT region_id, AVG(rrp) AS avg_rrp, MAX(rrp) AS max_rrp, MIN(rrp) AS min_rrp
         FROM gold.nem_prices_5min_dedup_synced
         WHERE interval_datetime >= NOW() - INTERVAL '6 hours'
@@ -269,7 +269,7 @@ async def interconnectors(intervals: int = Query(12)):
         "V-S-MNSP1":  {"from": "VIC1", "to": "SA1", "limit": 220, "export_limit": 220, "import_limit": 200},
     }
     # Try Lakebase first
-    rows = _query_lakebase("""
+    rows = _query_lakebase_fresh("""
         SELECT interconnector_id, mw_flow, export_limit_mw, import_limit_mw, interval_datetime,
                from_region, to_region
         FROM gold.nem_interconnectors_dedup_synced
@@ -411,7 +411,7 @@ async def prices_compare(
 ):
     """Compare prices across all NEM regions over a time window."""
     # Try Lakebase first
-    rows = _query_lakebase("""
+    rows = _query_lakebase_fresh("""
         SELECT interval_datetime, region_id, rrp
         FROM gold.nem_prices_5min_dedup_synced
         WHERE interval_datetime >= NOW() - INTERVAL '24 hours'
@@ -542,7 +542,7 @@ async def prices_volatility():
         }
 
     # Try Lakebase first (Postgres syntax)
-    rows = _query_lakebase("""
+    rows = _query_lakebase_fresh("""
         SELECT region_id,
                AVG(rrp) AS avg_price,
                STDDEV(rrp) AS std_dev,
