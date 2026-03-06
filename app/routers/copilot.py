@@ -131,6 +131,42 @@ _FMAPI_TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_trade",
+            "description": "Create a new trade in the deal capture system. Parse natural language trade descriptions into structured trade parameters. Example: '50MW peak swap VIC Q3 2026 at $85' → trade_type=SWAP, region=VIC1, volume_mw=50, price=85, profile=PEAK, start_date=2026-07-01, end_date=2026-09-30.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "trade_type": {"type": "string", "enum": ["SPOT", "FORWARD", "SWAP", "FUTURE", "OPTION", "PPA", "REC"], "description": "Contract type"},
+                    "region": {"type": "string", "enum": ["NSW1", "QLD1", "VIC1", "SA1", "TAS1"], "description": "NEM region"},
+                    "buy_sell": {"type": "string", "enum": ["BUY", "SELL"], "description": "Trade direction"},
+                    "volume_mw": {"type": "number", "description": "Volume in MW"},
+                    "price": {"type": "number", "description": "Price in $/MWh"},
+                    "start_date": {"type": "string", "description": "Start date YYYY-MM-DD"},
+                    "end_date": {"type": "string", "description": "End date YYYY-MM-DD"},
+                    "profile": {"type": "string", "enum": ["FLAT", "PEAK", "OFF_PEAK", "SUPER_PEAK"], "description": "Load profile"},
+                },
+                "required": ["trade_type", "region", "buy_sell", "volume_mw", "price", "start_date", "end_date"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_portfolio_position",
+            "description": "Get portfolio position summary showing net MW by region and quarter. Shows long/short positions and trade counts.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "portfolio_name": {"type": "string", "description": "Portfolio name to look up. Omit to list all portfolios."},
+                    "region": {"type": "string", "description": "Filter by NEM region", "enum": ["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]},
+                },
+                "required": [],
+            },
+        },
+    },
 ]
 
 # ---------------------------------------------------------------------------
@@ -281,6 +317,78 @@ def _dispatch_tool(name: str, arguments: dict) -> str:
                     {"topic": "Administered Price Cap", "summary": f"Cumulative Price Threshold triggers $300/MWh cap"},
                 ],
             })
+
+        elif name == "create_trade":
+            from .shared import _insert_gold, _invalidate_cache
+            trade_id = str(uuid.uuid4())
+            now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
+            trade_data = {
+                "trade_id": trade_id,
+                "trade_type": arguments.get("trade_type", "SWAP"),
+                "region": arguments.get("region", "NSW1"),
+                "buy_sell": arguments.get("buy_sell", "BUY"),
+                "volume_mw": arguments.get("volume_mw", 50),
+                "price": arguments.get("price", 75),
+                "start_date": arguments.get("start_date", "2026-07-01"),
+                "end_date": arguments.get("end_date", "2026-09-30"),
+                "profile": arguments.get("profile", "FLAT"),
+                "status": "DRAFT",
+                "counterparty_id": "",
+                "portfolio_id": "",
+                "notes": "Created via Copilot AI",
+                "created_by": "copilot",
+                "created_at": now,
+                "updated_at": now,
+            }
+            ok = _insert_gold(f"{_CATALOG}.gold.trades", trade_data)
+            if ok:
+                _invalidate_cache("sql:")
+                return json.dumps({
+                    "status": "created",
+                    "trade_id": trade_id,
+                    "summary": (
+                        f"{trade_data['buy_sell']} {trade_data['volume_mw']}MW "
+                        f"{trade_data['profile']} {trade_data['trade_type']} "
+                        f"{trade_data['region']} at ${trade_data['price']}/MWh "
+                        f"({trade_data['start_date']} to {trade_data['end_date']})"
+                    ),
+                })
+            return json.dumps({"error": "Failed to insert trade into database"})
+
+        elif name == "get_portfolio_position":
+            portfolio_name = arguments.get("portfolio_name")
+            region = arguments.get("region")
+            if portfolio_name:
+                portfolios = _query_gold(
+                    f"SELECT portfolio_id, name FROM {_CATALOG}.gold.portfolios "
+                    f"WHERE LOWER(name) LIKE '%{portfolio_name.lower()}%' LIMIT 5"
+                )
+            else:
+                portfolios = _query_gold(
+                    f"SELECT portfolio_id, name FROM {_CATALOG}.gold.portfolios ORDER BY name LIMIT 10"
+                )
+            if not portfolios:
+                return json.dumps({"error": "No portfolios found", "suggestion": "Create portfolios via Deal Capture first"})
+            results = []
+            for p in portfolios:
+                pid = p["portfolio_id"]
+                where = f"AND t.region = '{region}'" if region else ""
+                rows = _query_gold(
+                    f"SELECT t.region, "
+                    f"CONCAT('Q', QUARTER(t.start_date), ' ', YEAR(t.start_date)) as quarter, "
+                    f"SUM(CASE WHEN t.buy_sell = 'BUY' THEN t.volume_mw ELSE -t.volume_mw END) as net_mw, "
+                    f"COUNT(*) as trade_count "
+                    f"FROM {_CATALOG}.gold.trades t "
+                    f"INNER JOIN {_CATALOG}.gold.portfolio_trades pt ON t.trade_id = pt.trade_id "
+                    f"WHERE pt.portfolio_id = '{pid}' AND t.status != 'CANCELLED' {where} "
+                    f"GROUP BY t.region, QUARTER(t.start_date), YEAR(t.start_date) "
+                    f"ORDER BY t.region, YEAR(t.start_date), QUARTER(t.start_date)"
+                )
+                results.append({
+                    "portfolio": p["name"],
+                    "positions": rows or [],
+                })
+            return json.dumps(results, default=str)
 
         else:
             return json.dumps({"error": f"Unknown tool: {name}"})

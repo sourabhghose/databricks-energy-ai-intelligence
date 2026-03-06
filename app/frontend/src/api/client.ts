@@ -3186,6 +3186,22 @@ async function post<TBody, TResponse>(path: string, body: TBody): Promise<TRespo
   return res.json() as Promise<TResponse>
 }
 
+async function put<TBody, TResponse>(path: string, body: TBody): Promise<TResponse> {
+  const res = await fetch(path, {
+    method: 'PUT',
+    headers: {
+      Accept: 'application/json',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(`API error ${res.status} ${res.statusText}: ${text}`)
+  }
+  return res.json() as Promise<TResponse>
+}
+
 async function del(path: string): Promise<void> {
   const res = await fetch(path, {
     method: 'DELETE',
@@ -33548,4 +33564,206 @@ export async function getWMRADashboard(): Promise<WMRADashboard> {
   const r = await fetch(`${BASE_URL}/api/wholesale-market-reform/dashboard`, { headers: getHeaders() })
   if (!r.ok) throw new Error(await r.text())
   return r.json()
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2 — Deal Capture & Portfolio Management (PRD 15.1)
+// ---------------------------------------------------------------------------
+
+export interface Trade {
+  trade_id: string
+  trade_type: string
+  region: string
+  buy_sell: string
+  volume_mw: number
+  price: number
+  start_date: string
+  end_date: string
+  profile: string
+  status: string
+  counterparty_id: string
+  portfolio_id: string
+  notes: string
+  created_by: string
+  created_at: string
+  updated_at: string
+  counterparty_name?: string
+}
+
+export interface TradeLeg {
+  leg_id: string
+  trade_id: string
+  settlement_date: string
+  interval_start: string
+  interval_end: string
+  volume_mw: number
+  price: number
+  profile_factor: number
+}
+
+export interface TradeAmendment {
+  amendment_id: string
+  trade_id: string
+  field_changed: string
+  old_value: string
+  new_value: string
+  amended_by: string
+  amended_at: string
+}
+
+export interface Counterparty {
+  counterparty_id: string
+  name: string
+  credit_rating: string
+  credit_limit_aud: number
+  status: string
+  created_at: string
+}
+
+export interface Portfolio {
+  portfolio_id: string
+  name: string
+  owner: string
+  description: string
+  created_at: string
+  trade_count?: number
+}
+
+export interface PortfolioPosition {
+  region: string
+  quarter: string
+  net_mw: number
+  gross_mw: number
+  trade_count: number
+}
+
+export interface PnLEntry {
+  region: string
+  realized: number
+  unrealized: number
+  total: number
+  net_mw: number
+}
+
+export interface ExposureCell {
+  region: string
+  month: string
+  net_mw: number
+}
+
+export interface TradeCreateRequest {
+  trade_type: string
+  region: string
+  buy_sell: string
+  volume_mw: number
+  price: number
+  start_date: string
+  end_date: string
+  profile: string
+  status?: string
+  counterparty_id?: string
+  portfolio_id?: string
+  notes?: string
+  created_by?: string
+}
+
+export interface TradeUpdateRequest {
+  volume_mw?: number
+  price?: number
+  status?: string
+  counterparty_id?: string
+  portfolio_id?: string
+  notes?: string
+  amended_by?: string
+}
+
+export const dealApi = {
+  getTrades(params?: {
+    region?: string
+    status?: string
+    trade_type?: string
+    portfolio_id?: string
+    start_date?: string
+    end_date?: string
+    limit?: number
+    offset?: number
+  }): Promise<{ trades: Trade[]; total: number; limit: number; offset: number }> {
+    const qs = new URLSearchParams()
+    if (params) {
+      Object.entries(params).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '') qs.set(k, String(v))
+      })
+    }
+    const q = qs.toString()
+    return get(`/api/deals/trades${q ? '?' + q : ''}`)
+  },
+
+  getTrade(tradeId: string): Promise<Trade & { legs: TradeLeg[] }> {
+    return get(`/api/deals/trades/${tradeId}`)
+  },
+
+  createTrade(body: TradeCreateRequest): Promise<{ trade_id: string; legs_created: number; status: string }> {
+    return post(`/api/deals/trades`, body)
+  },
+
+  updateTrade(tradeId: string, body: TradeUpdateRequest): Promise<{ trade_id: string; amendments: number; status: string }> {
+    return put(`/api/deals/trades/${tradeId}`, body)
+  },
+
+  async deleteTrade(tradeId: string): Promise<{ trade_id: string; status: string }> {
+    const res = await fetch(`/api/deals/trades/${tradeId}`, { method: 'DELETE', headers: getHeaders() })
+    if (!res.ok) throw new Error(await res.text())
+    return res.json()
+  },
+
+  async bulkImportTrades(file: File): Promise<{ imported: number; errors: number; error_details: Array<{ row: number; error: string }> }> {
+    const formData = new FormData()
+    formData.append('file', file)
+    const res = await fetch('/api/deals/trades/bulk-import', {
+      method: 'POST',
+      body: formData,
+    })
+    if (!res.ok) throw new Error(await res.text())
+    return res.json()
+  },
+
+  getTradeLegs(tradeId: string): Promise<{ legs: TradeLeg[]; count: number }> {
+    return get(`/api/deals/trades/${tradeId}/legs`)
+  },
+
+  getTradeAmendments(tradeId: string): Promise<{ amendments: TradeAmendment[]; count: number }> {
+    return get(`/api/deals/trades/${tradeId}/amendments`)
+  },
+
+  getPortfolios(): Promise<{ portfolios: Portfolio[] }> {
+    return get('/api/deals/portfolios')
+  },
+
+  createPortfolio(body: { name: string; owner?: string; description?: string }): Promise<{ portfolio_id: string; status: string }> {
+    return post('/api/deals/portfolios', body)
+  },
+
+  getPortfolio(portfolioId: string): Promise<Portfolio & { trade_summary: any[] }> {
+    return get(`/api/deals/portfolios/${portfolioId}`)
+  },
+
+  getPortfolioPosition(portfolioId: string): Promise<{ positions: PortfolioPosition[]; portfolio_id: string }> {
+    return get(`/api/deals/portfolios/${portfolioId}/position`)
+  },
+
+  getPortfolioPnL(portfolioId: string): Promise<{ pnl: PnLEntry[]; portfolio_id: string }> {
+    return get(`/api/deals/portfolios/${portfolioId}/pnl`)
+  },
+
+  getExposureHeatmap(portfolioId: string): Promise<{ exposure: ExposureCell[]; portfolio_id: string }> {
+    return get(`/api/deals/portfolios/${portfolioId}/exposure`)
+  },
+
+  getCounterparties(): Promise<{ counterparties: Counterparty[] }> {
+    return get('/api/deals/counterparties')
+  },
+
+  createCounterparty(body: { name: string; credit_rating?: string; credit_limit_aud?: number }): Promise<{ counterparty_id: string; status: string }> {
+    return post('/api/deals/counterparties', body)
+  },
 }

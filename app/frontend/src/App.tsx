@@ -92,6 +92,7 @@ import {
   Gavel,
   Cloud,
   Briefcase,
+  Plus,
   Upload,
   Rocket,
   CloudRain,
@@ -573,6 +574,9 @@ import IntegratedSystemPlanAnalytics from './pages/IntegratedSystemPlanAnalytics
 import CommunityBatteryAnalytics from './pages/CommunityBatteryAnalytics'
 import EnergySectorCyberSecurityAnalytics from './pages/EnergySectorCyberSecurityAnalytics'
 import WholesaleMarketReformAnalytics from './pages/WholesaleMarketReformAnalytics'
+import DealCapture from './pages/DealCapture'
+import PortfolioPage from './pages/Portfolio'
+import TradeBlotter from './pages/TradeBlotter'
 
 const NAV_ITEMS = [
   { to: '/',             label: 'Home',         Icon: LayoutDashboard },
@@ -591,6 +595,9 @@ const NAV_ITEMS = [
   { to: '/weather-demand',   label: 'Weather & Demand', Icon: Thermometer    },
   { to: '/bess',             label: 'Battery Storage',  Icon: Battery        },
   { to: '/trading-desk',    label: 'Trading Desk',     Icon: DollarSign     },
+  { to: '/deal-capture',    label: 'Deal Capture',     Icon: Plus           },
+  { to: '/portfolio',       label: 'Portfolio',        Icon: Briefcase      },
+  { to: '/trade-blotter',   label: 'Trade Blotter',    Icon: Receipt        },
   { to: '/sustainability',  label: 'Sustainability',   Icon: Leaf            },
   { to: '/biomass-bioenergy', label: 'Biomass & Bioenergy', Icon: Leaf       },
   { to: '/merit-order',     label: 'Merit Order',      Icon: TrendingUp      },
@@ -1069,6 +1076,9 @@ const ROUTE_MAP: Record<string, React.ComponentType> = {
   '/weather-demand': WeatherDemand,
   '/bess': BessAnalytics,
   '/trading-desk': TradingDesk,
+  '/deal-capture': DealCapture,
+  '/portfolio': PortfolioPage,
+  '/trade-blotter': TradeBlotter,
   '/sustainability': Sustainability,
   '/merit-order': MeritOrder,
   '/ml-dashboard': MlDashboardPage,
@@ -1567,6 +1577,8 @@ function classifyNavItem(to: string, label: string): string {
     '/outages': 'generation', '/load-duration': 'demand',
     '/weather-demand': 'demand', '/sustainability': 'renewables',
     '/frequency': 'system', '/pasa': 'system',
+    '/deal-capture': 'prices', '/portfolio': 'prices',
+    '/trade-blotter': 'prices',
   }
   if (exact[to]) return exact[to]
 
@@ -1600,7 +1612,7 @@ const CATEGORY_SUBGROUPS: Record<string, { key: string; label: string; pattern: 
   prices: [
     { key: 'spot', label: 'Spot Prices', pattern: /spot|price.analy|price.set|price.cap|negative.price|price.index|seasonal|price.event|price.form|price.review|price.anchor/ },
     { key: 'futures', label: 'Futures & Forward', pattern: /future|forward|option|discover/ },
-    { key: 'trading', label: 'Trading', pattern: /trading|commodity|algo|merit|bidding|wholesale.*bidd|desk/ },
+    { key: 'trading', label: 'Trading', pattern: /trading|commodity|algo|merit|bidding|wholesale.*bidd|desk|deal|capture|blotter|portfolio/ },
     { key: 'hedging', label: 'Hedging & Risk', pattern: /hedg|otc|risk|stress|voll|credit|participant.*fin|market.power|concentration/ },
     { key: 'forecasting', label: 'Forecasting', pattern: /forecast|predict|spike.*analy|volatil|model.comp/ },
     { key: 'settlement', label: 'Settlement', pattern: /settl|sra|congestion.re[vn]/ },
@@ -2019,6 +2031,9 @@ export default function App() {
               <Route path="/weather-demand"   element={<WeatherDemand />}    />
               <Route path="/bess"             element={<BessAnalytics />}    />
               <Route path="/trading-desk"    element={<TradingDesk />}      />
+              <Route path="/deal-capture"    element={<DealCapture />}      />
+              <Route path="/portfolio"       element={<PortfolioPage />}    />
+              <Route path="/trade-blotter"   element={<TradeBlotter />}     />
               <Route path="/sustainability" element={<Sustainability />}  />
               <Route path="/merit-order"   element={<MeritOrder />}       />
               <Route path="/ml-dashboard" element={<MlDashboardPage />}  />

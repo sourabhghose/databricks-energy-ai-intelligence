@@ -88,6 +88,31 @@ tables = [
         "pk": ["endpoint_path", "region"],
         "pg_table": "gold.dashboard_snapshots_synced",
     },
+    # Phase 2: Deal Capture tables
+    {
+        "synced_name": f"{CATALOG}.gold.trades_synced",
+        "source": f"{CATALOG}.gold.trades",
+        "pk": ["trade_id"],
+        "pg_table": "gold.trades_synced",
+    },
+    {
+        "synced_name": f"{CATALOG}.gold.trade_legs_synced",
+        "source": f"{CATALOG}.gold.trade_legs",
+        "pk": ["leg_id"],
+        "pg_table": "gold.trade_legs_synced",
+    },
+    {
+        "synced_name": f"{CATALOG}.gold.counterparties_synced",
+        "source": f"{CATALOG}.gold.counterparties",
+        "pk": ["counterparty_id"],
+        "pg_table": "gold.counterparties_synced",
+    },
+    {
+        "synced_name": f"{CATALOG}.gold.portfolios_synced",
+        "source": f"{CATALOG}.gold.portfolios",
+        "pk": ["portfolio_id"],
+        "pg_table": "gold.portfolios_synced",
+    },
 ]
 
 # COMMAND ----------

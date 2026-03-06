@@ -436,3 +436,94 @@ def _query_gold(sql: str, params: Optional[dict] = None) -> Optional[List[Dict[s
                 cursor.close()
             except Exception:
                 pass
+
+
+# ---------------------------------------------------------------------------
+# SQL write helpers — INSERT / UPDATE / DELETE via SQL Warehouse
+# ---------------------------------------------------------------------------
+
+def _execute_gold(sql: str, params: Optional[dict] = None) -> bool:
+    """Execute an INSERT/UPDATE/DELETE via SQL Warehouse. Returns True on success."""
+    conn = _get_sql_connection()
+    if conn is None:
+        return False
+    t0 = time.monotonic()
+    cursor = None
+    try:
+        cursor = conn.cursor()
+        cursor.execute(sql, params)
+        elapsed = (time.monotonic() - t0) * 1000
+        logger.info("SQL write (%.1fms): %s", elapsed, sql[:120])
+        return True
+    except Exception as exc:
+        elapsed = (time.monotonic() - t0) * 1000
+        logger.warning("SQL write failed (%.1fms): %s — %s", elapsed, exc, sql[:120])
+        return False
+    finally:
+        if cursor:
+            try:
+                cursor.close()
+            except Exception:
+                pass
+
+
+def _insert_gold(table: str, data: dict) -> bool:
+    """INSERT a single row into a gold table from a dict."""
+    cols = ", ".join(data.keys())
+    vals = ", ".join(f"'{_sql_escape(v)}'" if isinstance(v, str)
+                     else "NULL" if v is None
+                     else str(v) for v in data.values())
+    sql = f"INSERT INTO {table} ({cols}) VALUES ({vals})"
+    return _execute_gold(sql)
+
+
+def _insert_gold_batch(table: str, rows: List[dict]) -> int:
+    """INSERT multiple rows in a single SQL statement. Returns count of rows inserted."""
+    if not rows:
+        return 0
+    cols = ", ".join(rows[0].keys())
+
+    def _fmt_val(v):
+        if isinstance(v, str):
+            return f"'{_sql_escape(v)}'"
+        if v is None:
+            return "NULL"
+        return str(v)
+
+    # Batch in chunks of 50 to stay within SQL statement size limits
+    inserted = 0
+    chunk_size = 50
+    for i in range(0, len(rows), chunk_size):
+        chunk = rows[i:i + chunk_size]
+        value_rows = ", ".join(
+            "(" + ", ".join(_fmt_val(v) for v in row.values()) + ")"
+            for row in chunk
+        )
+        sql = f"INSERT INTO {table} ({cols}) VALUES {value_rows}"
+        if _execute_gold(sql):
+            inserted += len(chunk)
+    return inserted
+
+
+def _update_gold(table: str, data: dict, where: str) -> bool:
+    """UPDATE rows in a gold table. `where` is a raw SQL WHERE clause."""
+    set_clause = ", ".join(
+        f"{k} = '{_sql_escape(v)}'" if isinstance(v, str)
+        else f"{k} = NULL" if v is None
+        else f"{k} = {v}"
+        for k, v in data.items()
+    )
+    sql = f"UPDATE {table} SET {set_clause} WHERE {where}"
+    return _execute_gold(sql)
+
+
+def _sql_escape(value: str) -> str:
+    """Minimal SQL string escape to prevent injection."""
+    return value.replace("'", "''").replace("\\", "\\\\")
+
+
+def _invalidate_cache(prefix: str) -> None:
+    """Remove all cache entries whose key starts with `prefix`."""
+    keys_to_remove = [k for k in _cache if k.startswith(prefix)]
+    for k in keys_to_remove:
+        del _cache[k]
