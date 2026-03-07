@@ -33767,3 +33767,79 @@ export const dealApi = {
     return post('/api/deals/counterparties', body)
   },
 }
+
+// ---------------------------------------------------------------------------
+// Forward Curve Construction (E1 Enhancement)
+// ---------------------------------------------------------------------------
+
+export interface ForwardCurvePoint {
+  month: string
+  price_mwh: number
+  source: string
+  quarter: string
+}
+
+export interface ForwardCurve {
+  region: string
+  profile: string
+  as_of: string
+  points: ForwardCurvePoint[]
+  data_source: string
+}
+
+export interface CurveComparison {
+  regions: string[]
+  profile: string
+  as_of: string
+  curves: Record<string, ForwardCurvePoint[]>
+}
+
+export interface CurveHistory {
+  region: string
+  profile: string
+  snapshots: Array<{ curve_date: string; points: ForwardCurvePoint[] }>
+}
+
+export interface CurveSnapshotResult {
+  status: string
+  curve_date: string
+  rows_inserted: number
+  regions: number
+  profiles: number
+}
+
+export interface CurveSnapshots {
+  snapshots: Array<{ curve_date: string; points: ForwardCurvePoint[] }>
+  region: string
+  profile: string
+}
+
+export const curvesApi = {
+  getTermStructure(region: string, profile: string, asOf?: string): Promise<ForwardCurve> {
+    const params = new URLSearchParams({ region, profile })
+    if (asOf) params.set('as_of', asOf)
+    return get<ForwardCurve>(`/api/curves/term-structure?${params}`)
+  },
+
+  getComparison(regions: string[], profile: string, asOf?: string): Promise<CurveComparison> {
+    const params = new URLSearchParams({ regions: regions.join(','), profile })
+    if (asOf) params.set('as_of', asOf)
+    return get<CurveComparison>(`/api/curves/compare?${params}`)
+  },
+
+  getHistory(region: string, profile: string, monthsBack?: number): Promise<CurveHistory> {
+    const params = new URLSearchParams({ region, profile })
+    if (monthsBack !== undefined) params.set('months_back', String(monthsBack))
+    return get<CurveHistory>(`/api/curves/history?${params}`)
+  },
+
+  createSnapshot(): Promise<CurveSnapshotResult> {
+    return post<Record<string, never>, CurveSnapshotResult>('/api/curves/snapshot', {})
+  },
+
+  getSnapshots(region: string, profile: string, curveDate?: string): Promise<CurveSnapshots> {
+    const params = new URLSearchParams({ region, profile })
+    if (curveDate) params.set('curve_date', curveDate)
+    return get<CurveSnapshots>(`/api/curves/snapshots?${params}`)
+  },
+}

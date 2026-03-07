@@ -167,6 +167,21 @@ _FMAPI_TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_forward_curve",
+            "description": "Get the forward electricity price curve for a NEM region. Returns monthly forward prices bootstrapped from ASX futures data with seasonal shaping. Useful for answering questions about future electricity prices, forward curves, and price outlooks.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "region": {"type": "string", "description": "NEM region", "enum": ["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]},
+                    "profile": {"type": "string", "description": "Load profile: FLAT (default), PEAK, or OFF_PEAK", "enum": ["FLAT", "PEAK", "OFF_PEAK"]},
+                },
+                "required": [],
+            },
+        },
+    },
 ]
 
 # ---------------------------------------------------------------------------
@@ -389,6 +404,20 @@ def _dispatch_tool(name: str, arguments: dict) -> str:
                     "positions": rows or [],
                 })
             return json.dumps(results, default=str)
+
+        elif name == "get_forward_curve":
+            from .curves import _build_forward_curve
+            region = arguments.get("region", "NSW1")
+            profile = arguments.get("profile", "FLAT")
+            points = _build_forward_curve(region=region, profile=profile)
+            if points:
+                lines = [f"Forward curve for {region} ({profile} profile):"]
+                lines.append(f"{'Month':<10} {'$/MWh':>8} {'Source':<15}")
+                lines.append("-" * 35)
+                for pt in points:
+                    lines.append(f"{pt['month']:<10} ${pt['price_mwh']:>7.2f} {pt['source']:<15}")
+                return json.dumps({"text": "\n".join(lines), "points": points}, default=str)
+            return json.dumps({"error": f"No forward curve data for {region}"})
 
         else:
             return json.dumps({"error": f"Unknown tool: {name}"})

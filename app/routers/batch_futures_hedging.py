@@ -3,6 +3,7 @@ import random as _r
 from datetime import datetime as _dt
 from fastapi import APIRouter, Query
 from .shared import _query_gold, _CATALOG, logger
+from .curves import _build_forward_curve
 
 router = APIRouter()
 
@@ -106,10 +107,20 @@ def futures_dashboard(region: str = "NSW1"):
         total_oi = sum(int(r["open_interest"] or 0) for r in fd)
         ps_r = ps.get(region, {"avg": avg_base, "vol": 20}) if ps else {"avg": avg_base, "vol": 20}
         impl_vol = min(ps_r["vol"] / max(ps_r["avg"], 1) * 100, 80) if ps else 30
-        fc = [{"date": f"2026-{m:02d}-01",
-            "base_price": round(avg_base * (1 + (m - 1) * 0.008), 2),
-            "peak_price": round(avg_peak * (1 + (m - 1) * 0.006), 2),
-            "implied_volatility": round(impl_vol + _r.uniform(-3, 3), 1)} for m in range(1, 13)]
+        # Use real curve engine for forward curve
+        try:
+            flat_pts = _build_forward_curve(region=region, profile="FLAT")
+            peak_pts = _build_forward_curve(region=region, profile="PEAK")
+            fc = [{"date": fp["month"] + "-01",
+                "base_price": fp["price_mwh"],
+                "peak_price": pp["price_mwh"],
+                "implied_volatility": round(impl_vol + _r.uniform(-3, 3), 1)}
+                for fp, pp in zip(flat_pts[:12], peak_pts[:12])]
+        except Exception:
+            fc = [{"date": f"2026-{m:02d}-01",
+                "base_price": round(avg_base * (1 + (m - 1) * 0.008), 2),
+                "peak_price": round(avg_peak * (1 + (m - 1) * 0.006), 2),
+                "implied_volatility": round(impl_vol + _r.uniform(-3, 3), 1)} for m in range(1, 13)]
         he = [{"hedge_type": ht, "region": region, "contract": contracts[0]["contract_code"] if contracts else f"BL-{region}-Q1-2026",
             "notional_mwh": _r.randint(10000, 100000),
             "hedge_price": round(avg_base * _r.uniform(0.9, 1.05), 2),

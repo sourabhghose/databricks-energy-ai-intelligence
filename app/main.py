@@ -137,6 +137,7 @@ from routers.batch_futures_hedging import router as batch_futures_hedging_router
 from routers.batch_bidding import router as batch_bidding_router  # noqa: E402
 from routers.auto_stubs import router as auto_stubs_router  # noqa: E402
 from routers.deals import router as deals_router  # noqa: E402
+from routers.curves import router as curves_router  # noqa: E402
 
 app.include_router(health_router)
 app.include_router(dashboards_router)
@@ -151,6 +152,7 @@ app.include_router(batch_forecasting_router)
 app.include_router(batch_futures_hedging_router)
 app.include_router(batch_bidding_router)
 app.include_router(deals_router)
+app.include_router(curves_router)
 app.include_router(auto_stubs_router)
 
 # ---------------------------------------------------------------------------

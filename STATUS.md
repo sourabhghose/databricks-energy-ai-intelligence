@@ -2258,3 +2258,75 @@ nem_facilities:         duid, station_name, region_id, fuel_type, is_renewable, 
 - Result: **all 16 Step 1b endpoints now returning real data** (0 mock fallbacks)
 
 **Deployed:** `cf20618` — ~56 endpoints wired to real NEMWEB data total, facility dimension fixed
+
+## E1 — Forward Curve Construction — 2026-03-07
+
+### Overview
+Phase 2 Enhancement E1: Forward curve construction engine that bootstraps NEM forward electricity curves from ASX futures data (`gold.asx_futures_eod` — 1800 rows), applies peak/off-peak shaping and seasonal adjustments. Exposes curves via 5 new API endpoints + frontend page + Copilot tool.
+
+### Backend — `app/routers/curves.py` (NEW, ~310 lines)
+- **Engine**: `_build_forward_curve(region, profile, curve_date, num_quarters)` — pure Python, no external deps
+  - Step 1: Fetch ASX futures for region, get latest settlement prices by quarter/year for Base contracts
+  - Step 2: Quarterly → monthly decomposition with NEM seasonal shape factors (summer premium Dec-Feb, winter shoulder Jun-Aug)
+  - Step 3: Peak/Off-Peak shaping — PEAK applies region-specific ratio (1.10-1.25x), OFF_PEAK derived as inverse
+  - Step 4: Extrapolation for quarters beyond available futures data (trend decay)
+- **Seasonal factors**: `{1:1.12, 2:1.08, 3:0.95, 4:0.88, 5:0.92, 6:1.02, 7:1.05, 8:1.00, 9:0.93, 10:0.90, 11:0.95, 12:1.10}`
+- **Peak ratios**: `{NSW1:1.22, QLD1:1.18, VIC1:1.20, SA1:1.25, TAS1:1.10}`
+- **Key fix**: ASX data has `quarter="Q1-2026"` format — initial code generated `Q1_2026_2026` (duplicated year). Fixed to parse and normalize correctly.
+
+### 5 New Endpoints
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/curves/term-structure` | Monthly prices for 8 quarters (region, profile, as_of params) |
+| GET | `/api/curves/compare` | Multi-region overlay (comma-sep regions param) |
+| GET | `/api/curves/history` | Historical curve snapshots from different trade dates |
+| POST | `/api/curves/snapshot` | Persist curves for all 5 regions × 3 profiles to `gold.forward_curves` |
+| GET | `/api/curves/snapshots` | Read saved curve snapshots |
+
+### Delta Table — `gold.forward_curves`
+- 10 columns: curve_id, curve_date, region, profile, quarter, month, price_mwh, source, model_version, created_at
+- CDF enabled, MODIFY granted to app SP (`67aaaa6b-...`)
+- Created via SQL Statements API (column defaults not supported — removed DEFAULT clauses)
+
+### Frontend — `ForwardCurves.tsx` (NEW, ~280 lines)
+- Route: `/forward-curves` (classified under `prices` category)
+- Controls: Region selector (5 NEM regions), Profile toggle (FLAT/PEAK/OFF_PEAK), Refresh, Save Snapshot
+- KPI cards: Avg/Max/Min forward price
+- 3 Recharts LineCharts: Term Structure (single line), Regional Comparison (5 lines), Curve History (dashed overlays)
+- Data table with month, price, quarter, source badges (SHAPED/EXTRAPOLATED/ILLUSTRATIVE)
+
+### Copilot Tool — `get_forward_curve`
+- 10th FMAPI tool added to `copilot.py`
+- Parameters: region (optional, default NSW1), profile (optional, default FLAT)
+- Dispatch: imports `_build_forward_curve` from curves.py, formats as text table
+- Tested: "What is the forward curve for VIC?" → returns 24-month table with seasonal analysis
+
+### Wiring
+- `batch_futures_hedging.py` futures dashboard `forward_curve` field now calls `_build_forward_curve()` with try/except fallback
+- `main.py` — curves_router included before auto_stubs_router
+- `client.ts` — `curvesApi` object with 5 methods + 6 TypeScript interfaces
+- `App.tsx` — route, nav item, route map entry, nav classification added
+
+### Test Results (all passing)
+- **Term Structure**: NSW1 FLAT 24 pts, $67-$99/MWh, avg $79.25, source=SHAPED
+- **Profiles**: PEAK avg $96.69, OFF_PEAK avg $64.98 (correct peak/off-peak spread)
+- **Regional**: NSW1 $79.25, VIC1 $76.06, QLD1 $56.95, SA1 $123.11, TAS1 $10.08
+- **History**: 3 snapshots from different ASX trade dates
+- **Snapshot POST**: 360 rows persisted (5 regions × 3 profiles × 24 months)
+- **Snapshots GET**: Read-back confirmed 24 points, avg $79.25
+- **Copilot**: Tool invoked correctly, returned formatted table with quarter averages and seasonal analysis
+- **Dashboard**: All 3 charts render, KPIs correct, data table shows SHAPED badges
+
+### Files Changed
+| File | Action |
+|------|--------|
+| `app/routers/curves.py` | **NEW** — Forward curve engine + 5 endpoints |
+| `app/frontend/src/pages/ForwardCurves.tsx` | **NEW** — Term structure, comparison, history charts |
+| `app/main.py` | Added curves_router import + include |
+| `app/routers/copilot.py` | Added get_forward_curve tool definition + dispatch |
+| `app/routers/batch_futures_hedging.py` | Wired forward_curve to real engine |
+| `app/frontend/src/api/client.ts` | Added curvesApi + 6 interfaces |
+| `app/frontend/src/App.tsx` | Added /forward-curves route, nav, classification |
+| `setup/02_create_tables.py` | Added forward_curves table DDL |
+
+**Deployed:** 2 deploys (initial + quarter key fix) — app running, all endpoints verified

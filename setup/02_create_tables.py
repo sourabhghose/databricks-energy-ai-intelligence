@@ -187,9 +187,40 @@ print(f"Created {SCHEMA}.portfolio_trades")
 
 # COMMAND ----------
 
+# COMMAND ----------
+
+# MAGIC %md
+# MAGIC ## 7. Forward Curves
+
+# COMMAND ----------
+
+spark.sql(f"""
+CREATE TABLE IF NOT EXISTS {SCHEMA}.forward_curves (
+    curve_id        STRING      NOT NULL,
+    curve_date      DATE        NOT NULL  COMMENT 'Date the curve was built',
+    region          STRING      NOT NULL  COMMENT 'NEM region: NSW1|QLD1|VIC1|SA1|TAS1',
+    profile         STRING      NOT NULL  COMMENT 'FLAT|PEAK|OFF_PEAK',
+    quarter         STRING      NOT NULL  COMMENT 'Q1_2026, Q2_2026, etc.',
+    month           STRING      NOT NULL  COMMENT '2026-01, 2026-02, etc.',
+    price_mwh       DOUBLE      NOT NULL  COMMENT '$/MWh',
+    source          STRING      NOT NULL  COMMENT 'ASX_BOOTSTRAP|SHAPED|EXTRAPOLATED',
+    model_version   STRING      DEFAULT '1.0',
+    created_at      TIMESTAMP   DEFAULT current_timestamp()
+)
+USING DELTA
+COMMENT 'Forward curve snapshots bootstrapped from ASX futures — E1 enhancement'
+TBLPROPERTIES (
+    'delta.enableChangeDataFeed' = 'true',
+    'delta.autoOptimize.optimizeWrite' = 'true'
+)
+""")
+print(f"Created {SCHEMA}.forward_curves")
+
+# COMMAND ----------
+
 # Verify all tables
-for t in ["trades", "trade_legs", "trade_amendments", "counterparties", "portfolios", "portfolio_trades"]:
+for t in ["trades", "trade_legs", "trade_amendments", "counterparties", "portfolios", "portfolio_trades", "forward_curves"]:
     count = spark.sql(f"SELECT COUNT(*) as cnt FROM {SCHEMA}.{t}").collect()[0].cnt
     print(f"  {SCHEMA}.{t}: {count} rows")
 
-print("\nAll 6 deal capture tables created successfully!")
+print("\nAll 7 tables created successfully!")

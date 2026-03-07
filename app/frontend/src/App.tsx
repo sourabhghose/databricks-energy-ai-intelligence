@@ -577,6 +577,7 @@ import WholesaleMarketReformAnalytics from './pages/WholesaleMarketReformAnalyti
 import DealCapture from './pages/DealCapture'
 import PortfolioPage from './pages/Portfolio'
 import TradeBlotter from './pages/TradeBlotter'
+import ForwardCurves from './pages/ForwardCurves'
 
 const NAV_ITEMS = [
   { to: '/',             label: 'Home',         Icon: LayoutDashboard },
@@ -598,6 +599,7 @@ const NAV_ITEMS = [
   { to: '/deal-capture',    label: 'Deal Capture',     Icon: Plus           },
   { to: '/portfolio',       label: 'Portfolio',        Icon: Briefcase      },
   { to: '/trade-blotter',   label: 'Trade Blotter',    Icon: Receipt        },
+  { to: '/forward-curves',  label: 'Forward Curves',   Icon: TrendingUp     },
   { to: '/sustainability',  label: 'Sustainability',   Icon: Leaf            },
   { to: '/biomass-bioenergy', label: 'Biomass & Bioenergy', Icon: Leaf       },
   { to: '/merit-order',     label: 'Merit Order',      Icon: TrendingUp      },
@@ -1079,6 +1081,7 @@ const ROUTE_MAP: Record<string, React.ComponentType> = {
   '/deal-capture': DealCapture,
   '/portfolio': PortfolioPage,
   '/trade-blotter': TradeBlotter,
+  '/forward-curves': ForwardCurves,
   '/sustainability': Sustainability,
   '/merit-order': MeritOrder,
   '/ml-dashboard': MlDashboardPage,
@@ -1578,7 +1581,7 @@ function classifyNavItem(to: string, label: string): string {
     '/weather-demand': 'demand', '/sustainability': 'renewables',
     '/frequency': 'system', '/pasa': 'system',
     '/deal-capture': 'prices', '/portfolio': 'prices',
-    '/trade-blotter': 'prices',
+    '/trade-blotter': 'prices', '/forward-curves': 'prices',
   }
   if (exact[to]) return exact[to]
 
@@ -2034,6 +2037,7 @@ export default function App() {
               <Route path="/deal-capture"    element={<DealCapture />}      />
               <Route path="/portfolio"       element={<PortfolioPage />}    />
               <Route path="/trade-blotter"   element={<TradeBlotter />}     />
+              <Route path="/forward-curves"  element={<ForwardCurves />}    />
               <Route path="/sustainability" element={<Sustainability />}  />
               <Route path="/merit-order"   element={<MeritOrder />}       />
               <Route path="/ml-dashboard" element={<MlDashboardPage />}  />

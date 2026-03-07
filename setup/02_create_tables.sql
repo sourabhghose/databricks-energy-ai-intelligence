@@ -1276,3 +1276,29 @@ TBLPROPERTIES (
 COMMENT 'Gold: detected anomaly and alert events from the anomaly detection model and rule-based monitors.
          Includes price spikes, demand surges, data quality issues and model drift signals.
          Used by the Alerts tab in the dashboard and by SQL alert queries.';
+
+-- -----------------------------------------------------------------------------
+-- gold.forward_curves
+-- E1 Enhancement: Forward curve snapshots bootstrapped from ASX futures
+-- Stores versioned curves for all NEM regions and profiles (FLAT/PEAK/OFF_PEAK)
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS energy_copilot.gold.forward_curves (
+  curve_id        STRING    NOT NULL COMMENT 'Unique identifier for this curve build',
+  curve_date      DATE      NOT NULL COMMENT 'Date the curve was built',
+  region          STRING    NOT NULL COMMENT 'NEM region: NSW1, QLD1, VIC1, SA1, TAS1',
+  profile         STRING    NOT NULL COMMENT 'Load profile: FLAT, PEAK, OFF_PEAK',
+  quarter         STRING    NOT NULL COMMENT 'Quarter label e.g. Q1_2026',
+  month           STRING    NOT NULL COMMENT 'Month label e.g. 2026-01',
+  price_mwh       DOUBLE    NOT NULL COMMENT 'Forward price in $/MWh',
+  source          STRING    NOT NULL COMMENT 'Data provenance: ASX_BOOTSTRAP, SHAPED, EXTRAPOLATED, ILLUSTRATIVE',
+  model_version   STRING             COMMENT 'Curve engine version',
+  created_at      TIMESTAMP          COMMENT 'UTC timestamp when this row was inserted'
+)
+USING DELTA
+TBLPROPERTIES (
+  'delta.autoOptimize.optimizeWrite' = 'true',
+  'delta.enableChangeDataFeed'       = 'true'
+)
+COMMENT 'Gold: forward electricity price curves bootstrapped from ASX futures data.
+         Quarterly prices decomposed to monthly with NEM seasonal shape factors and peak/off-peak shaping.
+         Used by /api/curves/* endpoints, ForwardCurves.tsx dashboard, and Copilot get_forward_curve tool.';

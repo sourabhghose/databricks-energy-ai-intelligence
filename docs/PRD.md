@@ -1131,12 +1131,17 @@ New tools added to the Mosaic AI agent:
 | 6 Delta tables with CDF | Done | trades, trade_legs, trade_amendments, counterparties, portfolios, portfolio_trades |
 | Seed data (50 trades, 5 counterparties) | Done | setup/13_seed_deal_data.py |
 | Batch leg generation | Done | `_insert_gold_batch()` — chunks of 50 rows per INSERT |
+| Forward curve engine (E1) | Done | `curves.py` — ASX bootstrap + seasonal shaping + peak/off-peak |
+| Forward curve API (5 endpoints) | Done | term-structure, compare, history, snapshot, snapshots |
+| Forward curve dashboard | Done | `ForwardCurves.tsx` — 3 charts + data table |
+| Forward curve Copilot tool | Done | `get_forward_curve` — 10th FMAPI tool |
+| `gold.forward_curves` Delta table | Done | 360 rows persisted (5 regions × 3 profiles × 24 months) |
 
 **Enhancement Backlog (Phase 2 remaining scope — PRD 15.2–15.6):**
 
 | ID | Feature | PRD Section | Priority | Complexity | Description |
 |----|---------|-------------|----------|------------|-------------|
-| E1 | **Forward Curve Construction** | 15.2 | High | Large | Bootstrap curves from ASX futures, shape to hourly with peak/off-peak ratios, seasonal adjustments, solar/wind cannibalization. Store versioned in `gold.forward_curves`. |
+| E1 | **Forward Curve Construction** | 15.2 | High | Large | **DONE** (2026-03-07). Curve engine bootstraps from ASX futures (`asx_futures_eod`), quarterly→monthly decomposition with NEM seasonal shape factors, peak/off-peak shaping per region. 5 API endpoints (`/api/curves/*`), ForwardCurves.tsx page, `get_forward_curve` Copilot tool, `gold.forward_curves` Delta table. Tested: NSW1 FLAT $67-$99/MWh across 24 months from real ASX data. |
 | E2 | **Mark-to-Market Valuation** | 15.2 | High | Large | Daily MtM batch job: value portfolio against forward curves. Forwards/swaps (DCF), Options (Black-76), PPAs (hourly cashflow × shaped curves), RECs (spot × volume). P&L attribution (price, volume, curve roll, time decay). |
 | E3 | **VaR & Portfolio Greeks** | 15.3 | High | Medium | Parametric VaR (95/99%), Delta/Gamma/Vega/Theta per region. Historical volatility from `nem_prices_5min`. |
 | E4 | **Stress Testing** | 15.3 | Medium | Medium | Pre-defined scenarios: SA heatwave (+300% price), wind drought (-80% wind), coal trip (2GW NSW), interconnector failure. Custom user-defined scenarios. |
@@ -1145,7 +1150,7 @@ New tools added to the Mosaic AI agent:
 | E7 | **FCAS Market Analytics** | 15.5 | Low | Large | Ingest 8 FCAS markets, price dashboard, bidstack analysis, co-optimization view, battery FCAS revenue tracker, FCAS price forecast models. |
 | E8 | **Settlement Reconciliation** | 15.6 | Low | Medium | Match AEMO preliminary/final settlement files against internal positions. Variance analysis (>$1K threshold). Copilot tool for explaining variances. |
 | E9 | **Synced Tables for Deal Data** | 15.1 | Medium | Small | Run `pipelines/12_recreate_synced_tables_continuous.py` to create 4 new synced tables (trades, trade_legs, counterparties, portfolios) for Lakebase reads. |
-| E10 | **Additional Copilot Tools** | 15.7 | Medium | Medium | `get_portfolio_pnl`, `get_portfolio_risk`, `get_forward_curve`, `explain_pnl_move`, `run_stress_test`, `value_ppa`, `get_fcas_forecast`, `get_settlement_variance` |
+| E10 | **Additional Copilot Tools** | 15.7 | Medium | Medium | ~~`get_forward_curve`~~ (done in E1), `get_portfolio_pnl`, `get_portfolio_risk`, `explain_pnl_move`, `run_stress_test`, `value_ppa`, `get_fcas_forecast`, `get_settlement_variance` |
 | E11 | **New Genie Spaces** | 15.10 | Low | Small | Trading & Portfolio space, Risk Analytics space (from PRD 15.10) |
 
 ---
