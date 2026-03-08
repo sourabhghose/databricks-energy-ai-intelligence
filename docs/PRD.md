@@ -117,6 +117,55 @@ Build an AI-first market intelligence platform that:
 - [x] Responsive web design (desktop + tablet)
 - [x] OAuth authentication via Databricks
 
+#### Competitive Gap Features (Phase 1 — Closing vs. ez2view/NemSight)
+
+##### Multi-Channel Alert Engine
+- [ ] Configurable alert rules: metric (price, demand, generation, interconnector flow), region, operator (>, <, crosses, % change), threshold
+- [ ] Alert channels: in-app notification, email (SES/SendGrid), Slack webhook, SMS (Twilio), mobile push (Firebase)
+- [ ] Alert states: triggered → acknowledged → resolved, with auto-resolve on threshold recovery
+- [ ] Alert bundling: suppress duplicate alerts within configurable cooldown window (default 5 min)
+- [ ] Alert history with linked market context (what happened when the alert fired)
+- [ ] Copilot integration: "Set an alert if SA price exceeds $300" → creates alert rule via NL
+- **Competitive note**: Closes gap vs. ez2view (audio, SMS, email, on-screen) and NemSight (desktop, email, mobile push). Exceeds both with Slack and Copilot NL alert creation.
+
+##### Market Replay / Time-Travel Mode
+- [ ] Replay slider on Live Market dashboard — scrub to any historical 5-minute dispatch interval
+- [ ] All dashboard widgets synchronize to the selected timestamp (prices, generation, interconnectors, demand, weather)
+- [ ] Playback mode: auto-advance through intervals at configurable speed (1×, 5×, 10×, 60×)
+- [ ] Bookmark notable moments for sharing with team (permalink with timestamp)
+- [ ] Side-by-side: live market left, historical replay right (split view)
+- [ ] Data source: existing gold tables (`nem_prices_5min`, `nem_generation_by_fuel`, `nem_interconnectors`) — no new ingestion required
+- **Competitive note**: Matches ez2view's "Time Travel" feature — their most-cited differentiator. Split-view mode goes beyond what ez2view offers.
+
+##### Constraint Binding Visualization
+- [ ] Constraint overlay on interconnector dashboard: active binding constraints with marginal values ($/MWh)
+- [ ] Constraint impact indicator: show which constraints are driving price separation between regions
+- [ ] Constraint history: heatmap of constraint binding frequency by time-of-day and day-of-week
+- [ ] Copilot tool: `get_active_constraints(region)` enhanced to return marginal values and affected generators
+- [ ] New gold table: `gold.nem_constraints_binding` — binding constraints with marginal values, RHS, LHS per dispatch interval
+- **Competitive note**: Closes gap vs. ez2view (50+ NEM constraint widgets) and NemSight (constraint binding alerts).
+
+##### AI Anomaly Auto-Explanation (Proactive Push)
+- [ ] Real-time anomaly detection on price, demand, and generation streams
+- [ ] On anomaly detection, Copilot auto-generates causal explanation by correlating:
+  - Generator trips/outages (generation drop > 100MW in single interval)
+  - Interconnector congestion (flow at or near limit)
+  - Weather extremes (temperature > 38°C or < 5°C, wind speed < 10km/h)
+  - Demand spikes (actual > forecast by > 5%)
+  - Constraint binding events
+- [ ] Push explanation to alert channels: "SA spiked to $14,200 at 17:35 — Torrens Island B3 tripped (420MW), Heywood at limit, demand 3.1GW (95th pctl for winter)"
+- [ ] Store explanations in `gold.anomaly_explanations` for historical analysis
+- **Competitive note**: **No incumbent offers this.** ez2view shows constraints; NemSight shows alerts. Neither auto-explains events. This is a unique AI differentiator.
+
+##### Scheduled Market Briefs
+- [ ] Daily morning brief auto-generated at 06:00 AEST by Copilot
+- [ ] Content: overnight price summary, key events (outages, trips, records), today's weather outlook, price/demand forecast highlights, portfolio impact (if Phase 2 active)
+- [ ] Delivery channels: in-app (Home tab), email digest, Slack channel post
+- [ ] Weekly market wrap-up: aggregated weekly summary with trend analysis
+- [ ] Copilot NL trigger: "Generate a market brief for yesterday" produces on-demand brief
+- [ ] Template customization: users configure which regions, metrics, and sections to include
+- **Competitive note**: **No incumbent offers AI-generated briefs.** Traders currently spend 30-60 min writing morning briefs manually. This saves 5+ hours/week per trading desk.
+
 ### 4.2 Out of Scope (Deferred to Phase 2)
 - Deal capture and portfolio management (ETRM)
 - Forward curve construction and mark-to-market
@@ -171,6 +220,12 @@ Build an AI-first market intelligence platform that:
 │  gold.generation_forecasts     - ML forecast outputs             │
 │  gold.market_events            - Detected anomalies & events     │
 │  gold.daily_market_summary     - AI-generated daily summaries    │
+│  gold.nem_constraints_binding  - Binding constraints + marginals │
+│  gold.constraint_forecasts     - ML predicted constraint binding │
+│  gold.anomaly_explanations     - AI auto-generated event explains│
+│  gold.alert_rules              - User-configured alert rules     │
+│  gold.alert_history            - Triggered alert log             │
+│  gold.market_briefs            - Scheduled AI market brief archive│
 ├──────────────────────────────────────────────────────────────────┤
 │                       SILVER LAYER                               │
 │  Cleaned, validated, joined, SCD Type 2 where applicable        │
@@ -664,6 +719,10 @@ User (Streamlit Chat UI)
 | **Comparative Analysis** | Compare metrics across regions or time periods | `compare_regions`, `get_price_history` |
 | **Rule/Regulation Lookup** | Answer questions about NEM rules, AEMO procedures | `search_market_rules` (RAG) |
 | **Proactive Alerts** | Surface predicted events before they happen | `get_price_forecast` + anomaly thresholds |
+| **Anomaly Auto-Explanation** | Auto-generate causal explanation when price/demand anomaly detected | `explain_price_event`, `get_active_constraints`, `get_generation_mix`, `get_weather_forecast` |
+| **Market Brief Generation** | Produce daily/weekly market summaries on schedule or demand | `get_market_summary`, `get_latest_prices`, `get_price_forecast`, `get_weather_forecast` |
+| **NL Alert Creation** | Create alert rules from natural language ("alert me if SA > $300") | `create_alert_rule` |
+| **Constraint Forecasting** | Predict which constraints will bind in next 4-48 hours | `get_constraint_forecast`, `get_weather_forecast`, `get_demand_forecast` |
 
 ### 7.3 Example Conversations
 
@@ -758,9 +817,18 @@ User (Streamlit Chat UI)
 
 #### Tab 6: Alerts
 - Active alerts table (triggered, acknowledged, resolved)
-- Alert configuration: metric, region, threshold, notification channel
-- Alert history with linked market events
+- Alert configuration: metric, region, threshold, notification channel (in-app, email, Slack, SMS, mobile push)
+- Alert history with linked market events and AI-generated explanations
 - Predicted alert section (AI-driven "likely to trigger in next 4 hours")
+- Alert rule builder: visual editor for metric × operator × threshold × channel × cooldown
+- NL alert creation: Copilot-powered "Set an alert when..." shortcut
+
+#### Tab 7: Market Replay
+- Time-travel slider: scrub to any historical 5-minute dispatch interval
+- Synchronized widgets: prices, generation, interconnectors, demand, weather all update together
+- Playback controls: play/pause, speed (1×, 5×, 10×, 60×), step forward/back
+- Split-view mode: live market (left) vs. historical replay (right)
+- Bookmark and share: save notable timestamps as team-visible bookmarks with annotation
 
 ---
 
@@ -847,6 +915,11 @@ User (Streamlit Chat UI)
 | Genie query accuracy | > 85% correct SQL generation | Genie benchmarks |
 | Dashboard load time | < 3 seconds | App performance monitoring |
 | Time to insight (price spike explanation) | < 30 seconds (vs 30-60 min manual) | User feedback |
+| Alert delivery latency (trigger to notification) | < 30 seconds across all channels | Alert pipeline monitoring |
+| Anomaly auto-explanation accuracy | > 85% correctly identify primary cause | Expert review of explanation samples |
+| Morning brief generation time | < 60 seconds, delivered by 06:15 AEST | Scheduled job monitoring |
+| Market replay widget sync latency | < 1 second per interval step | App performance monitoring |
+| Constraint binding prediction accuracy (4hr) | > 75% of binding events predicted | Backtest vs actual constraint data |
 
 ---
 
@@ -873,6 +946,91 @@ User (Streamlit Chat UI)
 | User adoption below target | Medium | Medium | Co-design with traders; iterative UX feedback; training |
 
 ---
+
+---
+
+## 13. Competitive Analysis & Differentiation
+
+### 13.1 Competitive Landscape
+
+AUS Energy Copilot competes across three market segments, each dominated by different incumbents:
+
+| Segment | Incumbents | Typical Cost | Energy Copilot Positioning |
+|---------|-----------|-------------|---------------------------|
+| **Market Intelligence** | ez2view (Global-Roam), NemSight (Energy One) | $20K–$80K/yr per seat | Parity on data + superior AI/ML layer |
+| **ETRM** | SimEnergy, EOT, enTrader (Energy One), Allegro (ION), PCI Energy Solutions | $50K–$500K+/yr | Lightweight-to-enterprise via phased rollout |
+| **Bidding & Dispatch** | EnergyOffer (Energy One) | $30K–$100K/yr | AI-optimized alternative (Phase 3) |
+
+### 13.2 Unique Differentiators (No Incumbent Offers These)
+
+| Differentiator | Description | Competitive Moat |
+|---------------|-------------|-----------------|
+| **AI Copilot (NL→insight)** | Claude Sonnet via FMAPI with 10+ tools — answers "why did SA spike?" by correlating prices, generation, weather, constraints in real-time | ez2view/NemSight show data; trader still does analysis manually |
+| **Genie NL→SQL** | 6 spaces turning plain English into governed SQL over gold tables | No incumbent has natural language data access |
+| **Predictive ML models** | Independent price spike and demand forecasts (XGBoost) — not just AEMO pre-dispatch relay | NemSight/ez2view are purely retrospective display tools |
+| **NL trade entry** | "Buy 50MW NSW Q3 flat at $85" creates a real trade via Copilot | No ETRM supports conversational deal capture |
+| **Unified lakehouse** | Single medallion architecture: market data → analytics → trading → risk → settlement | Incumbents are siloed products (NemSight + SimEnergy + EnergyOffer = 3 separate systems) |
+| **Open data / no lock-in** | Delta Lake + Unity Catalog — data accessible via SQL, Python, any BI tool | Incumbent vendors lock data in proprietary schemas |
+| **Forward curve engine** | Transparent bootstrap from ASX futures with seasonal shaping, stored as versioned Delta tables | SimEnergy "calibration" is a black box |
+| **Cost structure** | Runs on existing Databricks compute — no per-seat ETRM license | Allegro/EOT/SimEnergy charge $50K–$500K+/yr |
+
+### 13.3 Competitive Gap Features by Phase
+
+The following features close specific gaps identified against incumbents. Each is tagged with the vendor(s) that currently offer the capability.
+
+#### Phase 1 Competitive Gap Features
+
+| Feature | Gap vs. Incumbent | Priority |
+|---------|------------------|----------|
+| Multi-channel alert engine (SMS, email, Slack, mobile push) | ez2view (audio, SMS, email, on-screen), NemSight (desktop, email, push) | **P0** — table-stakes for trading desks |
+| Market replay / time-travel mode | ez2view ("Time Travel" — replay any historical dispatch as if live) | **P0** — ez2view's killer feature |
+| Constraint binding visualization | ez2view (50+ NEM widgets), NemSight (constraint binding alerts) | **P1** — critical for understanding price events |
+| AI anomaly auto-explanation (proactive push) | **Nobody** — unique differentiator | **P0** — double down on AI advantage |
+| Scheduled market briefs (email/Slack delivery) | **Nobody** — traders manually write morning briefs | **P0** — high visibility, low effort |
+
+#### Phase 2 Competitive Gap Features
+
+| Feature | Gap vs. Incumbent | Priority |
+|---------|------------------|----------|
+| Pre-trade credit checks | Allegro (real-time exposure), PCI (counterparty limits), SimEnergy (deal limits) | **P0** — blocker for production ETRM use |
+| Configurable deal approval workflows | SimEnergy (permission-based), Allegro (audit trails), PCI (guardrails) | **P1** — pulled forward from Phase 5 |
+| Portfolio NL what-if analysis | PCI (sensitivity module) — nobody does NL what-if | **P0** — unique differentiator |
+| Predictive constraint analytics | **Nobody** — ez2view shows current, nobody predicts | **P1** — ML model for next 4-48hr constraint binding |
+
+#### Phase 3 Competitive Gap Features
+
+| Feature | Gap vs. Incumbent | Priority |
+|---------|------------------|----------|
+| AEMO participant obligation reporting | enTrader (EMIR/REMIT), Allegro (regulatory), EOT (compliance) | **P2** — NEM less prescriptive than EU |
+| LGC + carbon certificate trading | EOT (elec, gas, carbon, oil), Allegro (power, gas, enviro) | **P1** — completes multi-commodity story |
+| Auto-generated management reports (PDF/HTML) | **Nobody** does AI-generated reports | **P0** — unique differentiator |
+
+### 13.4 Competitive Positioning Map
+
+```
+                        AI/ML Sophistication
+                              ▲
+                              │
+                              │               ★ Energy Copilot (Phase 3+)
+                              │                  AI bidding, NL what-if,
+                              │                  predictive constraints
+                              │
+                              │          ★ Energy Copilot (Today)
+                              │            Copilot, Genie, ML forecasts,
+                              │            NL trade entry
+                              │
+           ┌──────────────────┼──────────────────────────────────┐
+           │                  │                                   │
+           │                  │                      Allegro ●    │
+           │                  │                   PCI ●           │
+           │                  │             EOT ●                 │
+           │    NemSight ●    │          SimEnergy ●              │
+           │   ez2view ●      │                                   │
+           │                  │       EnergyOffer ●               │
+           └──────────────────┼──────────────────────────────────►
+                              │              Trading/ETRM Depth
+                        Display Only                    Book-of-Record
+```
 
 ---
 
@@ -1155,6 +1313,73 @@ New tools added to the Mosaic AI agent:
 | E9 | **Synced Tables for Deal Data** | 15.1 | Medium | Small | Run `pipelines/12_recreate_synced_tables_continuous.py` to create 4 new synced tables (trades, trade_legs, counterparties, portfolios) for Lakebase reads. |
 | E10 | **Additional Copilot Tools** | 15.7 | Medium | Medium | ~~`get_forward_curve`~~ (done in E1), `get_portfolio_pnl`, `get_portfolio_risk`, `explain_pnl_move`, `run_stress_test`, `value_ppa`, `get_fcas_forecast`, `get_settlement_variance` |
 | E11 | **New Genie Spaces** | 15.10 | Low | Small | Trading & Portfolio space, Risk Analytics space (from PRD 15.10) |
+| E12 | **Pre-Trade Credit Checks** | 13.3 | High | Medium | Real-time credit check on deal entry: block trades that breach counterparty limit. Pre-trade validation: current exposure (MTM + accrued) + proposed trade notional vs approved limit. Alert at 80/90/100% thresholds. Inline warning on DealCapture.tsx. Pulled forward from Phase 5 — blocker for production ETRM use. Closes gap vs. Allegro (real-time exposure), PCI (counterparty limits + ratings), SimEnergy (deal limits). |
+| E13 | **Configurable Deal Approval Workflows** | 13.3 | Medium | Medium | Approval chains by trade type, notional value, and counterparty. Rules engine: e.g., trades > $1M require senior trader + risk manager sign-off. Approval states: Pending → Approved / Rejected → Executed. Notification to approvers via email/Slack. Audit trail of all approval decisions. Pulled forward from Phase 5 maker-checker. Closes gap vs. SimEnergy (permission-based workflow), Allegro (audit trails), PCI (guardrails). |
+| E14 | **Portfolio NL What-If Analysis** | 13.3 | High | Medium | Copilot tool: `portfolio_what_if(description)` — "What if gas hits $15/GJ and SA has a 45°C day?" or "What if I add a 200MW wind PPA in VIC at $60?" Agent runs scenario through forward curves, weather correlations, and current position to estimate P&L impact. Returns structured impact summary with confidence range. Closes gap vs. PCI (sensitivity module) — exceeds with NL interface. |
+| E15 | **Predictive Constraint Analytics** | 13.3 | Medium | Large | ML model predicting which transmission constraints will bind in next 4-48 hours. Features: generation forecasts, demand forecasts, weather (wind/temp), interconnector scheduled flows, planned outages. Output: probability of binding per constraint per interval. New gold table: `gold.constraint_forecasts`. Copilot tool: `get_constraint_forecast(region, horizon)`. **No incumbent offers this** — ez2view shows current constraints only. |
+
+### 15.14 Phase 2 — Competitive Gap Feature Details
+
+#### Pre-Trade Credit Checks (E12)
+
+Pre-trade credit validation integrated into the deal capture workflow:
+
+- **Exposure calculation**: Current exposure = sum of MTM on open trades + accrued settlement receivables/payables, per counterparty
+- **Proposed trade impact**: Estimated exposure increment using notional × duration × historical volatility multiplier
+- **Check points**:
+  - On deal entry form submission: validate proposed trade won't breach limit
+  - Real-time: recalculate after each MtM refresh (EOD or intraday)
+- **Threshold alerts**:
+  - 80% utilization → amber warning (proceed with acknowledgment)
+  - 90% utilization → red warning (proceed requires risk manager override)
+  - 100% utilization → hard block (trade rejected, risk manager notified)
+- **API**: `GET /api/credit/check?counterparty_id=X&notional=Y&tenor=Z` — returns pass/warn/block with utilization %
+- **Frontend**: Inline credit status indicator on DealCapture.tsx deal form, color-coded gauge on Portfolio.tsx counterparty view
+
+#### Configurable Deal Approval Workflows (E13)
+
+Rule-based approval engine for trade lifecycle events:
+
+- **Approval rules table** (`gold.approval_rules`):
+  - Columns: rule_id, event_type (trade_create, trade_amend, trade_cancel, limit_change), condition_field, condition_operator, condition_value, required_approvers, escalation_timeout_hours
+  - Example: `event_type=trade_create AND notional_aud > 1000000 → require [senior_trader, risk_manager]`
+- **Workflow states**: Draft → Pending Approval → Approved / Rejected → Executed / Archived
+- **Notification**: Email + Slack to designated approvers with one-click approve/reject links
+- **Escalation**: Auto-escalate to next-level approver if no action within configurable timeout
+- **API**: `POST /api/approvals/submit`, `PUT /api/approvals/{id}/approve`, `PUT /api/approvals/{id}/reject`
+- **Frontend**: Approval queue panel on TradeBlotter.tsx, approval history on each trade detail view
+
+#### Portfolio NL What-If Analysis (E14)
+
+Natural language scenario analysis via Copilot:
+
+- **Copilot tool**: `portfolio_what_if(scenario_description: str, portfolio: str)` → structured impact assessment
+- **Scenario types supported**:
+  - Market moves: "What if NSW price increases 20% for Q3?"
+  - New trades: "What if I add a 100MW solar PPA in QLD at $50?"
+  - Weather events: "What if SA has a week of 40°C+ temperatures?"
+  - Infrastructure: "What if Heywood interconnector goes down for 3 days?"
+- **Analysis engine**:
+  1. Parse NL scenario into parameter adjustments (price shifts, volume changes, weather overrides)
+  2. Re-run forward curve with adjusted inputs
+  3. Re-value portfolio under adjusted curves
+  4. Calculate delta P&L, delta VaR, delta exposure vs. base case
+- **Output**: Impact summary table (P&L change, VaR change, worst-affected positions), confidence range, suggested hedging actions
+- **Example**: "What happens to my portfolio if gas hits $15/GJ and SA has a 45°C day?"
+  > "Under this scenario, your portfolio P&L would decrease by approximately $320K (±$80K). SA short positions would lose $450K, partially offset by QLD long gains of $130K. VaR increases from $1.2M to $1.8M. Consider adding 20MW of SA peak cover to reduce exposure."
+
+#### Predictive Constraint Analytics (E15)
+
+ML model forecasting transmission constraint binding:
+
+- **Model**: Gradient boosted classifier (XGBoost) per major constraint equation
+- **Features**: Regional demand forecasts, generation mix forecasts, wind/solar forecasts, interconnector scheduled flows, planned outage schedule, temperature forecasts, time-of-day/day-of-week
+- **Target**: Binary (binding/not binding) per constraint per dispatch interval, 4-48 hours ahead
+- **Training data**: Historical constraint binding data from `gold.nem_constraints_binding` (2+ years)
+- **Output**: Probability of binding per constraint per interval, stored in `gold.constraint_forecasts`
+- **Dashboard**: Constraint forecast panel on Live Market tab — show predicted binding constraints as overlay
+- **Copilot tool**: `get_constraint_forecast(region, horizon_hours)` — returns top constraints likely to bind with probability and expected price impact
+- **Alerts**: Push notification when high-probability binding event predicted (>80% confidence) for constraints known to cause price separation
 
 ---
 
@@ -1304,6 +1529,11 @@ Phase 3 completes the platform as a full-featured **energy trading and operation
 | `get_bid_compliance(duid, date_range)` | Generator, period | Compliance report | Bid compliance check |
 | `compare_bid_vs_optimal(duid, date)` | Generator, date | Revenue comparison | Post-dispatch bid quality analysis |
 | `get_wem_price(date_range)` | Date range | WEM balancing prices | WA market data |
+| `get_compliance_status(participant, period)` | Participant ID, period | Compliance obligation summary | NER/AEMO regulatory status |
+| `get_lgc_position(portfolio)` | Portfolio name | LGC balance, liability, exposure | Environmental certificate tracking |
+| `get_carbon_exposure(facility)` | Facility ID | ACCU liability, baseline gap | Safeguard Mechanism exposure |
+| `value_bundled_ppa(params)` | PPA + LGC terms | Combined NPV, certificate value | Energy + LGC bundled valuation |
+| `generate_report(type, period, portfolio)` | Report type, period, portfolio | Formatted report (HTML/PDF) | AI-generated management reports |
 
 #### Enhanced Agent Capabilities
 - **Multi-step reasoning**: Agent chains multiple tools for complex analysis (e.g., "Optimize tomorrow's bids for all SA generators considering the weather forecast and my current portfolio exposure")
@@ -1343,11 +1573,15 @@ Phase 3 completes the platform as a full-featured **energy trading and operation
 - **Gas tab**: Gas prices, gas-electric spreads, gas portfolio (if gas market enabled)
 - **WEM tab**: WA market dashboard (if WEM enabled)
 
+- **Compliance tab**: Regulatory obligation tracker, compliance calendar, exception reports, NER submission status
+- **Environmentals tab**: LGC/ACCU/STC portfolio, certificate balances, liability matching, surrender deadlines
+- **Reports tab**: AI-generated report library, schedule configuration, template editor, distribution management
+
 #### Enhanced Existing Tabs
 - **Risk tab**: Full VaR dashboard (historical, Monte Carlo, CVaR), vol surface, scenario library, reverse stress test
-- **Portfolio tab**: Combined NEM + WEM + Gas view, incremental VaR per trade
-- **Home tab**: Bidding deadlines, conformance alerts, battery optimization status
-- **Copilot Chat**: All Phase 3 tools available, report generation capability
+- **Portfolio tab**: Combined NEM + WEM + Gas + Environmentals view, incremental VaR per trade
+- **Home tab**: Bidding deadlines, conformance alerts, battery optimization status, compliance due dates
+- **Copilot Chat**: All Phase 3 tools available, report generation capability, compliance queries
 
 ### 17.9 Phase 3 — Data Architecture Extensions
 
@@ -1371,6 +1605,13 @@ Phase 3 completes the platform as a full-featured **energy trading and operation
 | `gold.wem_balancing_prices` | WEM balancing market prices |
 | `gold.wem_generation` | WEM facility generation data |
 | `gold.wem_demand` | WEM demand data |
+| `gold.lgc_trades` | LGC certificate trade records |
+| `gold.accu_trades` | Australian Carbon Credit Unit trade records |
+| `gold.environmental_portfolio` | Combined LGC + ACCU + STC portfolio positions |
+| `gold.certificate_balances` | Certificate balance tracking by vintage and type |
+| `gold.compliance_obligations` | NER/AEMO regulatory obligation status per participant |
+| `gold.compliance_events` | Compliance exceptions, late submissions, violations |
+| `gold.generated_reports` | AI-generated report archive (metadata + content) |
 
 #### New Lakebase Tables
 
@@ -1426,6 +1667,10 @@ Phase 3 completes the platform as a full-featured **energy trading and operation
 | WEM price forecast accuracy (1-hr MAE) | < $10/MWh | MLflow model metrics |
 | Multi-step copilot query resolution | > 70% | Agent evaluation |
 | Report generation time (weekly risk) | < 2 minutes | Agent evaluation |
+| NER compliance obligation tracking | 100% of obligations monitored | Compliance dashboard |
+| LGC portfolio reconciliation accuracy | > 99% vs CER registry | Certificate balance audit |
+| AI report factual accuracy | > 95% of data points correct | Expert review of generated reports |
+| Management report preparation time saved | > 80% reduction vs manual | User time tracking survey |
 
 ### 17.12 Phase 3 — Estimated Timeline
 
@@ -1442,6 +1687,57 @@ Phase 3 completes the platform as a full-featured **energy trading and operation
 | Sprint 20 | 2 weeks | New copilot tools, agent evaluation, report generation capability |
 | Sprint 21 | 2 weeks | Genie spaces (3 new), white-labeling, integration testing |
 | Sprint 22 | 2 weeks | End-to-end testing, performance tuning, documentation, production launch |
+
+### 17.13 Phase 3 — Competitive Gap Features
+
+#### AEMO Participant Obligation Reporting
+
+Regulatory compliance reporting for NEM participants (closes gap vs. enTrader EMIR/REMIT, Allegro regulatory, EOT compliance):
+
+- **NER compliance reports**: Automated generation of reports required under National Electricity Rules
+  - Bid/offer compliance: late submissions, missing rebid reasons, price band violations
+  - Generator performance standards: conformance history, PSFR (Performance Standard Frequency Response)
+  - Causer-pays FCAS: contribution factors and liability tracking
+- **AEMO data exchange validation**: Verify all required submissions are complete and on-time
+  - Bid/offer submissions, MTPASA availability, medium-term capacity adequacy
+  - Generate exception reports for missed or late submissions
+- **Regulatory calendar**: Upcoming AEMO deadlines, AER reporting dates, rule change submissions
+- **Copilot tool**: `get_compliance_status(participant_id, period)` — summary of compliance obligations and status
+- **Dashboard**: Compliance tab with traffic-light status per obligation, drill-down to individual items
+
+#### LGC & Carbon Certificate Trading
+
+Multi-commodity extension for environmental products (closes gap vs. EOT and Allegro multi-commodity support):
+
+- **LGC trading**: Deal capture for Large-scale Generation Certificate (LGC) trades
+  - Spot, forward, and bundled (energy + LGC) contracts
+  - LGC price curves from spot market + forward broker quotes
+  - LGC portfolio tracking: certificate balance, vintage tracking, liability matching
+  - Surrender deadline tracking (CER RPP annual surrender by 14 Feb)
+- **ACCU trading**: Australian Carbon Credit Unit deal capture
+  - ACCU spot and forward contracts
+  - Portfolio exposure to Safeguard Mechanism baselines
+  - Carbon liability forecasting per facility
+- **STC tracking**: Small-scale Technology Certificate balance and liability
+- **Integrated environmental P&L**: Combined electricity + LGC + ACCU + STC portfolio view
+- **New gold tables**: `gold.lgc_trades`, `gold.accu_trades`, `gold.environmental_portfolio`, `gold.certificate_balances`
+- **Copilot tools**: `get_lgc_position(portfolio)`, `get_carbon_exposure(facility)`, `value_bundled_ppa(params)` (energy + LGC combined valuation)
+
+#### AI-Generated Management Reports
+
+Automated report generation (unique differentiator — no incumbent offers AI-generated reports):
+
+- **Report types**:
+  - Daily risk report: P&L summary, VaR usage, limit utilization, exceptions, market commentary
+  - Weekly portfolio review: position changes, MtM movements, trade activity, counterparty exposure
+  - Monthly performance attribution: realized P&L by strategy, benchmark comparison, risk-adjusted returns
+  - Quarterly board pack: executive summary, market outlook, portfolio composition, risk profile, compliance status
+- **Generation engine**: Copilot assembles data from multiple tools, formats into structured report with charts and tables
+- **Output formats**: In-app HTML view, downloadable PDF, email distribution
+- **Scheduling**: Configurable schedule per report type (daily 7am, weekly Monday 8am, etc.)
+- **Customization**: Template editor for report sections, metrics, and distribution lists
+- **Copilot tool**: `generate_report(report_type, period, portfolio)` — returns formatted report
+- **Competitive note**: Traders currently spend 2-4 hours/week on manual reporting. This eliminates manual report writing entirely.
 
 ---
 
@@ -1729,38 +2025,280 @@ New tools added to the Mosaic AI agent:
 
 ---
 
-## 21. Full Product Roadmap Summary
+## 21. Phase 5 — Back-Office & Operational Excellence
 
-```
-Phase 1 (Wk 1-10)       Phase 2 (Wk 11-24)       Phase 3 (Wk 25-46)       Phase 4 (Wk 47-66)
-Market Intelligence      Lightweight ETRM          Full Trading Platform    Network Operations
-& AI Copilot             & Risk                    & Market Expansion       & Distribution Intel
-─────────────────        ──────────────────        ─────────────────────    ─────────────────────
-✦ Data pipelines         ✦ Deal capture            ✦ AI bid optimization   ✦ SCADA/GIS ingestion
-✦ Medallion lakehouse    ✦ Portfolio tracking       ✦ AEMO bid submission   ✦ Asset health & failure
-✦ NemSight-like dash     ✦ Forward curves          ✦ Advanced VaR/CVaR     ✦ Outage management
-✦ Price/demand fcst      ✦ Mark-to-market          ✦ Option Greeks & vol   ✦ DER & hosting capacity
-✦ AI copilot (13 tools)  ✦ Basic risk (VaR)        ✦ Battery optimization  ✦ Reliability (SAIDI)
-✦ Genie spaces (3)       ✦ PPA valuation           ✦ Gas markets           ✦ Demand forecasting
-✦ Alerting               ✦ FCAS analytics          ✦ WEM expansion         ✦ EV integration
-                         ✦ Settlement recon        ✦ Multi-tenancy         ✦ Network planning
-                         ✦ Copilot +10 tools       ✦ Copilot +10 tools     ✦ Copilot +10 tools
-                         ✦ Genie spaces +2         ✦ Genie spaces +3       ✦ Genie spaces +3
+### 21.1 Executive Summary
 
-         MVP                Trading-Ready             Enterprise-Grade         DNSP-Ready
-     (NemSight++)        (SimEnergy-level)           (EOT Alternative)     (Full Value Chain)
-```
+Phase 5 closes the gap between a front-office trading platform and a production-grade energy ETRM by adding settlement-grade back-office workflows, straight-through processing (STP), enterprise controls, credit/collateral management, deeper risk engine capabilities, and operational resilience. These features are prerequisites for any gentailer or merchant generator running the platform as their primary book-of-record.
 
-| Phase | Cumulative Copilot Tools | Cumulative Genie Spaces | Cumulative Gold Tables |
-|-------|-------------------------|------------------------|----------------------|
-| Phase 1 | 13 | 3 | 15 |
-| Phase 2 | 23 | 5 | 26 |
-| Phase 3 | 33 | 8 | 42 |
-| Phase 4 | 43 | 11 | 62 |
+**Target users:** Settlement analysts, trade operations, credit/risk controllers, finance teams, IT operations.
+
+**Key outcome:** The platform can serve as the system-of-record for trade lifecycle management — from deal capture through settlement, with full auditability, credit controls, and regulatory-grade reporting.
+
+### 21.2 Settlement-Grade Back Office
+
+#### 21.2.1 AEMO Settlement Ingestion
+- Ingest AEMO preliminary, final, and revision settlement runs (BILLINGRUNNO cycle)
+- Parse all charge codes: energy, FCAS, ancillary fees, participant fees, reallocations, intervention pricing
+- Map settlement line items to internal trades for automated reconciliation
+
+#### 21.2.2 True-Up & Rebill Processing
+- Track settlement run versions (prelim → final → R1 → R2 → R3) with variance analysis
+- Automated rebill detection when AEMO revisions materially change position
+- Configurable materiality thresholds for escalation vs auto-accept
+
+#### 21.2.3 Dispute Management
+- Raise, track, and resolve settlement disputes against AEMO or counterparties
+- Attach evidence (meter data, bid logs, outage notices) to dispute records
+- Workflow states: Draft → Submitted → Under Review → Accepted/Rejected → Closed
+
+#### 21.2.4 Finance-Ready Outputs
+- Generate settlement statements, remittance advice, and GL journal entries
+- Configurable chart-of-accounts mapping per entity/portfolio
+- Month-end accrual calculations for open positions
+
+### 21.3 Straight-Through Processing (STP)
+
+#### 21.3.1 Trade Confirmation
+- Auto-generate confirmation documents from executed trades
+- Match incoming counterparty confirmations against internal records
+- Escalate unmatched or disputed confirmations
+
+#### 21.3.2 Invoice Generation & Matching
+- Generate invoices for physical delivery contracts and PPA settlements
+- Three-way match: trade → delivery/meter data → invoice
+- Automated tolerance checks with exception routing
+
+#### 21.3.3 GL/ERP Integration
+- Post trade economics, MTM movements, and settlement cashflows to GL
+- Configurable posting rules by trade type, entity, and accounting standard (AASB 9/IFRS 9)
+- Reversal and adjustment journal support
+
+#### 21.3.4 Reference Data Synchronization
+- Master data feeds for counterparties, DUIDs, connection points, meter IDs
+- Bi-directional sync with AEMO participant registers
+- Change detection and approval workflow for material updates
+
+### 21.4 Controls & Auditability
+
+#### 21.4.1 Immutable Audit Trail
+- Every state change (trade, amendment, approval, settlement) writes to an append-only audit log
+- Cryptographic hash chain linking sequential audit entries
+- Queryable via Copilot: "show all changes to trade T-2026-001"
+
+#### 21.4.2 Maker-Checker Approvals
+- Configurable approval workflows by trade value, type, and counterparty
+- Dual-authorization for: trade entry, amendments, cancellations, limit changes, manual journal entries
+- Escalation paths with time-based auto-routing
+
+#### 21.4.3 Segregation of Duties
+- Role-based access control (RBAC) enforcing separation between front-office, middle-office, and back-office
+- Prevent traders from approving their own trades or modifying settlement records
+- Periodic access certification reviews
+
+#### 21.4.4 Valuation Snapshots
+- End-of-day (EOD) valuation snapshots capturing full position, mark-to-market, and risk metrics
+- Immutable once finalized — amendments create new snapshot versions
+- Regulatory and audit retrieval: reproduce any historical valuation state
+
+### 21.5 Credit & Collateral Workflows
+
+#### 21.5.1 Counterparty Credit Limits
+- Define and maintain credit limits per counterparty (approved amount, tenor, rating triggers)
+- Real-time utilization tracking against current exposure (MTM + potential future exposure)
+- Pre-trade credit checks blocking deals that would breach limits
+
+#### 21.5.2 Breach Alerts & Escalation
+- Automated alerts at configurable thresholds (80%, 90%, 100% of limit)
+- Escalation to credit officer with one-click temporary limit increase or trade rejection
+- Historical breach log for counterparty risk review
+
+#### 21.5.3 Collateral & Margin Management
+- Track initial margin, variation margin, and AEMO prudential requirements
+- Collateral call generation and tracking (issued and received)
+- Netting set management for bilateral ISDA/CSA agreements
+
+#### 21.5.4 Exposure Aging & Reporting
+- Aging buckets for receivables and payables by counterparty
+- Expected credit loss (ECL) calculations per AASB 9
+- Credit committee reporting pack generation
+
+### 21.6 Risk Engine Depth
+
+#### 21.6.1 Scenario Governance
+- Formal scenario library with version control and approval workflow
+- Standard scenarios: base, bull, bear, stress (1-in-10, 1-in-20 year events)
+- Custom scenario builder with parameter audit trail
+
+#### 21.6.2 Model Validation Framework
+- Back-testing suite comparing VaR predictions to actual P&L outcomes
+- Kupiec POF test, Christoffersen independence test, Basel traffic-light classification
+- Model risk tiering and independent validation scheduling
+
+#### 21.6.3 Limit Frameworks
+- Hierarchical limit structure: desk → portfolio → trader → individual trade
+- Limit types: VaR, notional, tenor, concentration, Greeks (delta, gamma, vega)
+- Real-time limit monitoring with pre-trade and post-trade checks
+
+#### 21.6.4 Daily Risk Control Reporting
+- Automated daily risk report: P&L attribution, VaR usage, limit utilization, exceptions
+- Distribution to risk committee, trading desk heads, and compliance
+- Configurable report templates with drill-down capability
+
+### 21.7 Operational Resilience
+
+#### 21.7.1 Data Quality SLAs
+- Define and monitor SLAs for each data feed (AEMO dispatch, BOM weather, ASX futures)
+- Freshness checks: alert if data older than expected refresh interval
+- Completeness checks: detect missing intervals, regions, or DUIDs
+
+#### 21.7.2 Late & Corrected File Handling
+- Graceful ingestion of late-arriving AEMO files (re-run affected aggregations)
+- Corrected file detection and reprocessing with downstream impact tracking
+- Backfill orchestration for historical data gaps
+
+#### 21.7.3 Disaster Recovery & Business Continuity
+- RPO < 1 hour, RTO < 4 hours for all critical trading functions
+- Cross-region Delta table replication for lakehouse DR
+- Documented failover procedures and quarterly DR testing
+
+#### 21.7.4 RBAC & Entitlements
+- Fine-grained permissions: view-only, trade-entry, trade-approval, settlement, admin
+- Unity Catalog row-level and column-level security for sensitive data (counterparty details, credit limits)
+- Integration with enterprise identity providers (Entra ID, Okta)
+
+### 21.8 Phase 5 — New Delta Tables
+
+| Table | Key Columns | Purpose |
+|-------|-------------|---------|
+| `settlement_runs` | run_id, billing_period, run_type, version, status | AEMO settlement run tracking |
+| `settlement_charges` | charge_id, run_id, charge_code, region, amount_aud | Individual settlement line items |
+| `settlement_disputes` | dispute_id, run_id, status, raised_at, resolved_at | Dispute lifecycle tracking |
+| `collateral_records` | record_id, counterparty_id, type, amount, direction | Margin calls and collateral movements |
+| `credit_events` | event_id, counterparty_id, event_type, limit, exposure | Limit breaches and credit actions |
+| `approval_queue` | approval_id, entity_type, entity_id, status, approver | Maker-checker workflow items |
+| `valuation_snapshots` | snapshot_id, snapshot_date, portfolio_id, mtm_total | EOD immutable valuation records |
+| `risk_limits` | limit_id, scope, limit_type, limit_value, utilization | Hierarchical risk limit definitions |
+
+### 21.9 Phase 5 — New Endpoints
+
+**backoffice.py** (~26 endpoints):
+- `/api/settlement/runs` — list settlement runs by period
+- `/api/settlement/runs/{run_id}/charges` — charges for a run
+- `/api/settlement/reconciliation` — trade vs settlement variance
+- `/api/settlement/disputes` — CRUD for disputes
+- `/api/settlement/finance/journals` — GL journal entries
+- `/api/stp/confirmations` — trade confirmation queue
+- `/api/stp/invoices` — invoice generation and matching
+- `/api/stp/gl-postings` — GL posting status and history
+- `/api/stp/reference-data` — master data sync status
+- `/api/controls/audit-log` — queryable audit trail
+- `/api/controls/approvals` — pending/completed approvals
+- `/api/controls/approvals/{id}/approve` — approve action
+- `/api/controls/approvals/{id}/reject` — reject action
+- `/api/controls/roles` — RBAC role definitions
+- `/api/controls/valuations` — EOD valuation snapshots
+- `/api/controls/valuations/{date}/finalize` — lock snapshot
+- `/api/credit/limits` — counterparty credit limits CRUD
+- `/api/credit/utilization` — real-time credit utilization
+- `/api/credit/breaches` — breach history and actions
+- `/api/credit/collateral` — collateral records and calls
+- `/api/credit/exposure-aging` — aging buckets by counterparty
+- `/api/credit/ecl` — expected credit loss calculations
+
+**risk.py** extensions (~20 endpoints):
+- `/api/risk/scenarios` — scenario library CRUD
+- `/api/risk/scenarios/{id}/run` — execute scenario
+- `/api/risk/backtest` — VaR backtesting results
+- `/api/risk/backtest/traffic-light` — Basel classification
+- `/api/risk/limits` — limit framework CRUD
+- `/api/risk/limits/utilization` — real-time limit usage
+- `/api/risk/limits/breaches` — limit breach history
+- `/api/risk/daily-report` — automated daily risk report
+- `/api/risk/daily-report/{date}` — historical report retrieval
+- `/api/risk/pnl-attribution` — P&L explain by factor
+- `/api/ops/data-quality` — SLA monitoring dashboard
+- `/api/ops/data-quality/alerts` — active data quality alerts
+- `/api/ops/backfill` — backfill job status and triggers
+- `/api/ops/late-files` — late/corrected file tracking
+- `/api/ops/dr-status` — DR readiness dashboard
+- `/api/ops/rbac/users` — user entitlement management
+- `/api/ops/rbac/audit` — access certification log
+
+### 21.10 Phase 5 — Frontend Extensions
+
+**New pages (3):**
+
+| Page | Route | Description |
+|------|-------|-------------|
+| BackOfficeControls | `/backoffice-controls` | Approval queue, audit trail viewer, valuation snapshots, role management |
+| BackOfficeSTP | `/backoffice-stp` | Confirmation matching, invoice queue, GL posting status, reference data sync |
+| BackOfficeOps | `/backoffice-ops` | Data quality SLAs, late file tracker, backfill management, DR status |
+
+**Modified pages:**
+- `NemSettlement.tsx` — add settlement run browser, charge code drill-down, dispute management tabs
+- `RiskDashboard.tsx` — add scenario library, backtesting panel, limit framework, daily risk report
+
+### 21.11 Phase 5 — Success Metrics
+
+| Metric | Target | Measurement |
+|--------|--------|-------------|
+| Settlement reconciliation auto-match rate | > 95% | Matched charges / total charges |
+| Trade confirmation STP rate | > 90% | Auto-confirmed / total confirmations |
+| Credit limit breach detection latency | < 5 minutes | Time from exposure change to alert |
+| Audit trail query response time | < 2 seconds | P95 latency for audit log searches |
+| EOD valuation snapshot completion | Before 7:00 AM AEST | Job monitoring |
+| Data quality SLA compliance | > 99.5% | Feeds meeting freshness/completeness targets |
+| DR failover RTO | < 4 hours | Quarterly DR test results |
+
+### 21.12 Phase 5 — Estimated Timeline
+
+| Sprint | Duration | Focus |
+|--------|----------|-------|
+| Sprint 33 | 2 weeks | Settlement data model, AEMO settlement file ingestion, charge code parsing |
+| Sprint 34 | 2 weeks | Settlement reconciliation engine, dispute workflow, finance journal generation |
+| Sprint 35 | 2 weeks | STP pipeline (confirmations, invoicing, GL posting), reference data sync |
+| Sprint 36 | 2 weeks | Controls framework (audit trail, maker-checker, RBAC), valuation snapshots |
+| Sprint 37 | 2 weeks | Credit/collateral management, limit monitoring, exposure aging, ECL |
+| Sprint 38 | 2 weeks | Risk engine extensions (scenario governance, backtesting, limit frameworks) |
+| Sprint 39 | 2 weeks | Operational resilience (data quality SLAs, late file handling, DR/BCP) |
+| Sprint 40 | 2 weeks | Frontend pages (3 new + 2 modified), Copilot tool extensions, integration testing |
 
 ---
 
-## 22. Glossary
+## 22. Full Product Roadmap Summary
+
+```
+Phase 1 (Wk 1-10)       Phase 2 (Wk 11-24)       Phase 3 (Wk 25-46)       Phase 4 (Wk 47-66)       Phase 5 (Wk 67-82)
+Market Intelligence      Lightweight ETRM          Full Trading Platform    Network Operations       Back-Office &
+& AI Copilot             & Risk                    & Market Expansion       & Distribution Intel     Operational Excellence
+─────────────────        ──────────────────        ─────────────────────    ─────────────────────    ─────────────────────
+✦ Data pipelines         ✦ Deal capture            ✦ AI bid optimization   ✦ SCADA/GIS ingestion    ✦ Settlement ingestion
+✦ Medallion lakehouse    ✦ Portfolio tracking       ✦ AEMO bid submission   ✦ Asset health & failure ✦ STP pipeline
+✦ NemSight-like dash     ✦ Forward curves          ✦ Advanced VaR/CVaR     ✦ Outage management      ✦ Maker-checker controls
+✦ Price/demand fcst      ✦ Mark-to-market          ✦ Option Greeks & vol   ✦ DER & hosting capacity ✦ Credit & collateral
+✦ AI copilot (13 tools)  ✦ Basic risk (VaR)        ✦ Battery optimization  ✦ Reliability (SAIDI)    ✦ Risk engine depth
+✦ Genie spaces (3)       ✦ PPA valuation           ✦ Gas markets           ✦ Demand forecasting     ✦ Audit trail & RBAC
+✦ Alerting               ✦ FCAS analytics          ✦ WEM expansion         ✦ EV integration         ✦ Data quality SLAs
+                         ✦ Settlement recon        ✦ Multi-tenancy         ✦ Network planning       ✦ DR/BCP
+                         ✦ Copilot +10 tools       ✦ Copilot +10 tools     ✦ Copilot +10 tools      ✦ Copilot +5 tools
+                         ✦ Genie spaces +2         ✦ Genie spaces +3       ✦ Genie spaces +3        ✦ Genie spaces +1
+
+         MVP                Trading-Ready             Enterprise-Grade         DNSP-Ready              Production-Grade
+     (NemSight++)        (SimEnergy-level)           (EOT Alternative)     (Full Value Chain)     (Book-of-Record Ready)
+```
+
+| Phase | Cumulative Copilot Tools | Cumulative Genie Spaces | Cumulative Gold Tables | Competitive Gap Features |
+|-------|-------------------------|------------------------|----------------------|------------------------|
+| Phase 1 | 17 (+4 gap) | 3 | 21 (+6 gap) | Multi-channel alerts, market replay, constraint viz, anomaly auto-explain, scheduled briefs |
+| Phase 2 | 28 (+1 gap) | 5 | 33 (+2 gap) | Pre-trade credit checks, deal approvals, NL what-if, predictive constraints |
+| Phase 3 | 43 (+5 gap) | 8 | 57 (+8 gap) | AEMO compliance reporting, LGC/carbon trading, AI management reports |
+| Phase 4 | 53 | 11 | 77 | — |
+| Phase 5 | 58 | 12 | 85 | Settlement STP, maker-checker controls, credit/collateral, risk engine depth |
+
+---
+
+## 23. Glossary
 
 | Term | Definition | Phase |
 |------|-----------|-------|
@@ -1812,3 +2350,21 @@ Market Intelligence      Lightweight ETRM          Full Trading Platform    Netw
 | **ADMS** | Advanced Distribution Management System — software platform for managing distribution network operations | 4 |
 | **THD** | Total Harmonic Distortion — measure of power quality (waveform distortion from harmonics) | 4 |
 | **N-1 Contingency** | Network planning criterion: system must remain secure after loss of any single element | 4 |
+| **STP** | Straight-Through Processing — automated end-to-end trade lifecycle without manual intervention | 5 |
+| **Maker-Checker** | Dual-authorization control requiring one person to initiate and a different person to approve a transaction | 5 |
+| **ECL** | Expected Credit Loss — forward-looking estimate of credit losses per AASB 9/IFRS 9 | 5 |
+| **CSA** | Credit Support Annex — ISDA agreement governing collateral exchange between counterparties | 5 |
+| **BILLINGRUNNO** | AEMO settlement run number — identifies the version of a billing period's settlement calculation | 5 |
+| **RPO** | Recovery Point Objective — maximum acceptable data loss measured in time | 5 |
+| **RTO** | Recovery Time Objective — maximum acceptable downtime before systems must be restored | 5 |
+| **POF Test** | Proportion of Failures test (Kupiec) — statistical test for VaR model accuracy | 5 |
+| **AASB 9** | Australian Accounting Standard for financial instruments — governs hedge accounting and ECL | 5 |
+| **ACCU** | Australian Carbon Credit Unit — tradeable certificate from emissions reduction projects under the ERF | 3 |
+| **CER** | Clean Energy Regulator — administers the RET, ERF, and NGER schemes | 3 |
+| **RPP** | Renewable Power Percentage — annual LGC surrender obligation set by CER | 3 |
+| **Safeguard Mechanism** | Regulatory baseline for large facility emissions — exceedances require ACCU surrender | 3 |
+| **PSFR** | Performance Standard Frequency Response — generator obligation to maintain frequency response capability | 3 |
+| **Causer-Pays** | FCAS cost allocation methodology: generators/loads causing frequency deviations pay more | 3 |
+| **Market Replay** | Ability to replay historical market intervals as if viewing them live, synchronizing all dashboard widgets | 1 |
+| **Time Travel** | Historical data navigation feature allowing users to view any past dispatch interval with full market context | 1 |
+| **NL What-If** | Natural language scenario analysis via AI Copilot — describe a hypothetical scenario and receive portfolio impact assessment | 2 |
