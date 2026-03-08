@@ -1839,6 +1839,7 @@ def _build_fcas_dashboard(region: str = "NSW1") -> Dict:
         services.append({
             **svc,
             "clearing_price_aud_mw": clearing,
+            "volume_mw": enabled_mw,
             "requirement_mw": req_mw,
             "enabled_mw": enabled_mw,
             "utilisation_pct": round(enabled_mw / max(req_mw, 1) * 100, 1),
@@ -1847,7 +1848,7 @@ def _build_fcas_dashboard(region: str = "NSW1") -> Dict:
             "main_provider": main_prov,
         })
 
-    # Build provider list from facilities
+    # Build provider list from facilities (match FcasProvider interface)
     providers = []
     if facility_rows:
         gen_by_fuel = {}
@@ -1855,19 +1856,21 @@ def _build_fcas_dashboard(region: str = "NSW1") -> Dict:
             for g in gen_rows:
                 gen_by_fuel[g["fuel_type"].lower()] = float(g["total_mw"] or 0)
 
+        avg_svc_price = sum(s["clearing_price_aud_mw"] for s in services) / max(len(services), 1)
         for f in facility_rows[:20]:
             cap = float(f.get("capacity_mw") or 0)
             ft = str(f.get("fuel_type", "")).lower()
-            # Battery + hydro → all services; gas → contingency only
             if ft in ("battery", "hydro"):
                 svc_enabled = ["RAISE6SEC", "RAISE60SEC", "RAISE5MIN", "RAISEREG",
                                "LOWER6SEC", "LOWER60SEC", "LOWER5MIN", "LOWERREG"]
             else:
                 svc_enabled = ["RAISE6SEC", "RAISE60SEC", "RAISE5MIN", "LOWER6SEC", "LOWER60SEC", "LOWER5MIN"]
 
-            # Revenue estimate
-            avg_svc_price = sum(s["clearing_price_aud_mw"] for s in services) / 8
-            rev_est = round(cap * avg_svc_price * 0.4 * 365 / 1000, 0)  # $K/year
+            raise_mw = round(cap * rng.uniform(0.3, 0.6), 0)
+            lower_mw = round(cap * rng.uniform(0.2, 0.5), 0)
+            reg_mw = round(cap * rng.uniform(0.1, 0.3), 0) if ft in ("battery", "hydro") else 0
+            cont_mw = round(raise_mw + lower_mw - reg_mw, 0)
+            rev_today = round((raise_mw + lower_mw) * avg_svc_price * rng.uniform(0.3, 0.7), 0)
 
             providers.append({
                 "duid": f["duid"],
@@ -1875,27 +1878,29 @@ def _build_fcas_dashboard(region: str = "NSW1") -> Dict:
                 "fuel_type": f.get("fuel_type", "unknown"),
                 "region": f.get("region", region),
                 "services_enabled": svc_enabled,
-                "total_enabled_mw": round(cap * rng.uniform(0.5, 0.9), 0),
-                "avg_clearing_price": round(avg_svc_price * rng.uniform(0.8, 1.3), 2),
-                "total_revenue_est_aud": rev_est * 1000,
-                "availability_pct": round(rng.uniform(85, 99), 1),
-                "response_time_ms": rng.randint(50, 500) if ft == "battery" else rng.randint(200, 2000),
+                "raise_mw": raise_mw,
+                "lower_mw": lower_mw,
+                "regulation_mw": reg_mw,
+                "contingency_mw": cont_mw,
+                "revenue_today_aud": rev_today,
+                "cost_per_mw": round(avg_svc_price * rng.uniform(0.8, 1.3), 2),
             })
 
-    # Trap records (FCAS non-conformance)
+    # Trap records (match FcasTrapRecord interface)
     trap_records = []
+    _trap_types = ["CAUSER_PAYS", "NON_CONFORMANCE", "SHORTFALL"]
     for i in range(rng.randint(1, 4)):
         prov = rng.choice(providers) if providers else None
         trap_records.append({
-            "event_id": f"TRAP-{i+1:03d}",
-            "timestamp": (now - timedelta(hours=rng.uniform(0, 48))).isoformat(),
             "duid": prov["duid"] if prov else f"GEN-{i}",
             "station_name": prov["station_name"] if prov else "Unknown",
+            "region": prov["region"] if prov else region,
             "service": rng.choice(["RAISE6SEC", "RAISEREG", "LOWER6SEC"]),
-            "expected_mw": round(rng.uniform(20, 100), 0),
-            "actual_mw": round(rng.uniform(5, 80), 0),
-            "shortfall_mw": round(rng.uniform(5, 40), 0),
-            "penalty_aud": round(rng.uniform(500, 10000), 0),
+            "trap_type": rng.choice(_trap_types),
+            "constraint_id": f"F_T_{region}_{rng.randint(1000, 9999)}",
+            "mw_limited": round(rng.uniform(5, 40), 0),
+            "revenue_foregone_est": round(rng.uniform(500, 10000), 0),
+            "period": (now - timedelta(hours=rng.uniform(0, 48))).strftime("%Y-%m-%d %H:%M"),
         })
 
     # Regional requirements

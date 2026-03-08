@@ -127,29 +127,28 @@ def _predict_constraint_binding(
     weather_forecasts = {}
     for r in regions:
         df = _query_gold(f"""
-            SELECT forecast_datetime, forecast_demand_mw
+            SELECT interval_datetime, predicted_demand_mw
             FROM {_CATALOG}.gold.demand_forecasts
             WHERE region_id = '{r}'
-              AND forecast_datetime >= current_timestamp()
-              AND forecast_datetime <= current_timestamp() + INTERVAL {horizon_hours} HOURS
-            ORDER BY forecast_datetime
+              AND interval_datetime >= current_timestamp() - INTERVAL 24 HOURS
+            ORDER BY interval_datetime DESC
             LIMIT {horizon_hours * 12}
         """)
         if df:
             demand_forecasts[r] = {
-                "avg": sum(float(d.get("forecast_demand_mw") or 0) for d in df) / len(df),
-                "max": max(float(d.get("forecast_demand_mw") or 0) for d in df),
+                "avg": sum(float(d.get("predicted_demand_mw") or 0) for d in df) / len(df),
+                "max": max(float(d.get("predicted_demand_mw") or 0) for d in df),
             }
 
         wf = _query_gold(f"""
-            SELECT wind_speed_kmh, solar_radiation_wm2, temperature_c
+            SELECT wind_speed_100m_kmh, solar_radiation_wm2, temperature_c
             FROM {_CATALOG}.gold.weather_nem_regions
-            WHERE region_id = '{r}'
-            ORDER BY interval_datetime DESC LIMIT 1
+            WHERE nem_region = '{r}'
+            ORDER BY forecast_datetime DESC LIMIT 1
         """)
         if wf:
             weather_forecasts[r] = {
-                "wind_speed": float(wf[0].get("wind_speed_kmh") or 15),
+                "wind_speed": float(wf[0].get("wind_speed_100m_kmh") or 15),
                 "solar_radiation": float(wf[0].get("solar_radiation_wm2") or 400),
                 "temperature": float(wf[0].get("temperature_c") or 22),
             }

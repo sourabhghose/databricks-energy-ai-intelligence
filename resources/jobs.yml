@@ -70,6 +70,30 @@ resources:
             base_parameters:
               catalog: ${var.catalog}
           environment_key: default
+        - task_key: create_competitive_gap_tables
+          depends_on:
+            - task_key: create_tables
+          notebook_task:
+            notebook_path: ../setup/14_create_competitive_gap_tables.py
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: default
+        - task_key: create_approval_tables
+          depends_on:
+            - task_key: create_tables
+          notebook_task:
+            notebook_path: ../setup/15_create_approval_tables.py
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: default
+        - task_key: create_constraint_forecast_tables
+          depends_on:
+            - task_key: create_tables
+          notebook_task:
+            notebook_path: ../setup/16_create_constraint_forecast_tables.py
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: default
         - task_key: backfill
           depends_on:
             - task_key: create_tables
