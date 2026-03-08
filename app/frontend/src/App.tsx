@@ -2035,6 +2035,8 @@ export default function App() {
               <Route path="/copilot"   element={<Copilot />}    />
               <Route path="/genie"     element={<Genie />}      />
               <Route path="/alerts" element={<PageErrorBoundary pageName="/alerts"><Alerts /></PageErrorBoundary>} />
+              <Route path="/market-replay" element={<PageErrorBoundary pageName="/market-replay"><MarketReplay /></PageErrorBoundary>} />
+              <Route path="/market-briefs" element={<PageErrorBoundary pageName="/market-briefs"><MarketBriefs /></PageErrorBoundary>} />
               <Route path="/monitoring" element={<PageErrorBoundary pageName="/monitoring"><Monitoring /></PageErrorBoundary>} />
               <Route path="/market-depth" element={<PageErrorBoundary pageName="/market-depth"><MarketDepth /></PageErrorBoundary>} />
               <Route path="/price-analysis" element={<PageErrorBoundary pageName="/price-analysis"><PriceAnalysis /></PageErrorBoundary>} />

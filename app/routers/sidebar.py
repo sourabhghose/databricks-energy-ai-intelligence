@@ -2130,7 +2130,8 @@ async def evaluate_alerts():
             threshold = float(rule["threshold_value"])
 
             actual_value = None
-            if alert_type == "PRICE_THRESHOLD":
+            at_lower = alert_type.lower()
+            if at_lower in ("price_threshold", "price_spike", "price"):
                 price_row = _query_gold(
                     f"SELECT rrp FROM {_CATALOG}.gold.nem_prices_5min "
                     f"WHERE region_id = '{_sql_escape(region)}' "
@@ -2138,7 +2139,7 @@ async def evaluate_alerts():
                 )
                 if price_row:
                     actual_value = float(price_row[0]["rrp"])
-            elif alert_type == "DEMAND_SURGE":
+            elif at_lower in ("demand_surge", "demand"):
                 demand_row = _query_gold(
                     f"SELECT total_demand_mw FROM {_CATALOG}.gold.nem_prices_5min "
                     f"WHERE region_id = '{_sql_escape(region)}' "
@@ -2146,6 +2147,16 @@ async def evaluate_alerts():
                 )
                 if demand_row:
                     actual_value = float(demand_row[0]["total_demand_mw"])
+            elif at_lower in ("negative_price", "negative"):
+                price_row = _query_gold(
+                    f"SELECT rrp FROM {_CATALOG}.gold.nem_prices_5min "
+                    f"WHERE region_id = '{_sql_escape(region)}' "
+                    f"ORDER BY interval_datetime DESC LIMIT 1"
+                )
+                if price_row:
+                    val = float(price_row[0]["rrp"])
+                    if val < threshold:
+                        actual_value = abs(val)  # trigger when price below threshold
 
             if actual_value is not None and actual_value > threshold:
                 event_id = str(uuid.uuid4())

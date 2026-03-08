@@ -97,8 +97,9 @@ def _explain_anomaly_core(
                 root_causes.append("PRICE_VOLATILITY_SPIKE")
 
     # 2b. Generation changes
+    _RENEWABLE_FUELS = {"wind", "solar_utility", "solar_rooftop", "hydro", "battery"}
     gen_rows = _query_gold(
-        f"SELECT fuel_type, total_mw, is_renewable FROM {_CATALOG}.gold.nem_generation_by_fuel "
+        f"SELECT fuel_type, total_mw FROM {_CATALOG}.gold.nem_generation_by_fuel "
         f"WHERE region_id = '{_sql_escape(region)}' "
         f"AND interval_datetime BETWEEN TIMESTAMP('{ts}') - INTERVAL {window_minutes} MINUTES "
         f"AND TIMESTAMP('{ts}') + INTERVAL {window_minutes} MINUTES "
@@ -107,7 +108,8 @@ def _explain_anomaly_core(
     if gen_rows:
         # Check for sudden generation drops
         total_gen = sum(float(r.get("total_mw", 0)) for r in gen_rows[:5])
-        renewable_mw = sum(float(r.get("total_mw", 0)) for r in gen_rows[:5] if r.get("is_renewable"))
+        renewable_mw = sum(float(r.get("total_mw", 0)) for r in gen_rows[:5]
+                          if r.get("fuel_type", "").lower() in _RENEWABLE_FUELS)
         fossil_mw = total_gen - renewable_mw
         gen_context = f"Total gen ~{total_gen:.0f}MW (renewable {renewable_mw:.0f}MW, fossil {fossil_mw:.0f}MW)"
 

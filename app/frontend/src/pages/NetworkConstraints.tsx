@@ -540,7 +540,8 @@ export default function NetworkConstraints() {
                   <tr key={hour}>
                     <td className="px-1 py-0.5 text-gray-500 font-mono text-right">{String(hour).padStart(2, '0')}</td>
                     {Array.from({ length: 7 }, (_, dayIdx) => {
-                      const day = dayIdx + 2 > 7 ? dayIdx - 5 : dayIdx + 2 // Mon=2...Sun=1
+                      // Spark DAYOFWEEK: 1=Sun,2=Mon,...,7=Sat. dayIdx: 0=Mon,...,6=Sun
+                      const day = dayIdx === 6 ? 1 : dayIdx + 2
                       const cell = heatmapData.find(c => c.hour === hour && c.day === day)
                       const pct = cell?.binding_pct ?? 0
                       const bg = pct > 30 ? 'bg-red-500' : pct > 15 ? 'bg-orange-400' : pct > 5 ? 'bg-yellow-300' : 'bg-green-100 dark:bg-green-900/30'

@@ -45,8 +45,9 @@ def _build_snapshot(timestamp_str: str, region: str) -> Dict[str, Any]:
         snapshot["prices"] = {}
 
     # 2. Generation by fuel (for the selected region)
+    _RENEWABLE_FUELS = {"wind", "solar_utility", "solar_rooftop", "hydro", "battery"}
     gen_rows = _query_gold(
-        f"SELECT fuel_type, total_mw, is_renewable "
+        f"SELECT fuel_type, total_mw "
         f"FROM {_CATALOG}.gold.nem_generation_by_fuel "
         f"WHERE region_id = '{_sql_escape(region)}' "
         f"AND interval_datetime BETWEEN TIMESTAMP('{ts}') - INTERVAL 3 MINUTES "
@@ -54,13 +55,21 @@ def _build_snapshot(timestamp_str: str, region: str) -> Dict[str, Any]:
         f"ORDER BY total_mw DESC"
     )
     if gen_rows:
+        # Deduplicate by fuel_type (take first = highest mw due to ORDER BY)
+        seen_fuels = set()
+        deduped = []
+        for r in gen_rows:
+            ft = r.get("fuel_type", "")
+            if ft not in seen_fuels:
+                seen_fuels.add(ft)
+                deduped.append(r)
         snapshot["generation"] = [
             {
                 "fuel_type": r.get("fuel_type", ""),
                 "mw": float(r.get("total_mw", 0)),
-                "is_renewable": bool(r.get("is_renewable")),
+                "is_renewable": r.get("fuel_type", "").lower() in _RENEWABLE_FUELS,
             }
-            for r in gen_rows
+            for r in deduped
         ]
     else:
         snapshot["generation"] = []
@@ -209,7 +218,8 @@ async def replay_range(
     if total_minutes / step > max_snapshots:
         step = int(total_minutes / max_snapshots) + 1
 
-    # Try real data first — query batch of prices
+    # Try real data first — query batch of prices + generation + interconnectors
+    _RENEWABLE_FUELS = {"wind", "solar_utility", "solar_rooftop", "hydro", "battery"}
     try:
         ts_start = start_dt.strftime("%Y-%m-%d %H:%M:%S")
         ts_end = end_dt.strftime("%Y-%m-%d %H:%M:%S")
@@ -220,18 +230,72 @@ async def replay_range(
             f"ORDER BY interval_datetime"
         )
         if price_rows and len(price_rows) > 10:
-            # Group by rounded timestamp
+            # Group prices by rounded timestamp
             by_ts: Dict[str, Dict] = {}
             for r in price_rows:
                 ts_key = str(r["interval_datetime"])[:16]
                 if ts_key not in by_ts:
-                    by_ts[ts_key] = {"timestamp": str(r["interval_datetime"]), "region": region, "prices": {}}
+                    by_ts[ts_key] = {"timestamp": str(r["interval_datetime"]), "region": region, "prices": {}, "generation": [], "interconnectors": []}
                 by_ts[ts_key]["prices"][r["region_id"]] = {
                     "region": r["region_id"],
                     "rrp": float(r.get("rrp", 0)),
                     "demand_mw": float(r.get("total_demand_mw", 0)),
                     "available_gen_mw": float(r.get("available_gen_mw", 0)),
                 }
+
+            # Batch-query generation for the focus region
+            try:
+                gen_rows = _query_gold(
+                    f"SELECT fuel_type, total_mw, interval_datetime "
+                    f"FROM {_CATALOG}.gold.nem_generation_by_fuel "
+                    f"WHERE region_id = '{_sql_escape(region)}' "
+                    f"AND interval_datetime BETWEEN '{ts_start}' AND '{ts_end}' "
+                    f"ORDER BY interval_datetime, total_mw DESC"
+                )
+                if gen_rows:
+                    for r in gen_rows:
+                        ts_key = str(r["interval_datetime"])[:16]
+                        if ts_key in by_ts:
+                            by_ts[ts_key]["generation"].append({
+                                "fuel_type": r.get("fuel_type", ""),
+                                "mw": float(r.get("total_mw", 0)),
+                                "is_renewable": r.get("fuel_type", "").lower() in _RENEWABLE_FUELS,
+                            })
+            except Exception:
+                pass
+
+            # Batch-query interconnectors
+            try:
+                ic_rows = _query_gold(
+                    f"SELECT interconnector_id, from_region, to_region, mw_flow, export_limit_mw, is_congested, interval_datetime "
+                    f"FROM {_CATALOG}.gold.nem_interconnectors "
+                    f"WHERE interval_datetime BETWEEN '{ts_start}' AND '{ts_end}' "
+                    f"ORDER BY interval_datetime, interconnector_id"
+                )
+                if ic_rows:
+                    for r in ic_rows:
+                        ts_key = str(r["interval_datetime"])[:16]
+                        if ts_key in by_ts:
+                            by_ts[ts_key]["interconnectors"].append({
+                                "id": r.get("interconnector_id", ""),
+                                "from_region": r.get("from_region", ""),
+                                "to_region": r.get("to_region", ""),
+                                "flow_mw": float(r.get("mw_flow", 0)),
+                                "limit_mw": float(r.get("export_limit_mw", 0)),
+                                "congested": bool(r.get("is_congested")),
+                            })
+            except Exception:
+                pass
+
+            # Deduplicate interconnectors per snapshot (keep first per ID)
+            for snap in by_ts.values():
+                seen_ids = set()
+                deduped_ics = []
+                for ic in snap["interconnectors"]:
+                    if ic["id"] not in seen_ids:
+                        seen_ids.add(ic["id"])
+                        deduped_ics.append(ic)
+                snap["interconnectors"] = deduped_ics
 
             snapshots = list(by_ts.values())
             # Thin to step interval
