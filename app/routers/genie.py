@@ -363,6 +363,53 @@ _GENIE_SPACES = [
         ],
     },
     {
+        "space_id": "01f11acf42701ae38c6c58a01612ed73",
+        "title": "NEM FCAS & Ancillary Services",
+        "description": "FCAS market pricing, providers, regulation vs contingency services, and battery FCAS revenue analytics.",
+        "icon": "shield",
+        "tables": ["nem_facilities", "nem_generation_by_fuel", "nem_prices_5min"],
+        "question_categories": [
+            {
+                "label": "FCAS Pricing",
+                "questions": [
+                    "What is the average FCAS price by service type?",
+                    "Which FCAS service is most expensive right now?",
+                    "Show the relationship between spot price volatility and FCAS costs",
+                    "What is the total FCAS cost as a percentage of energy market cost?",
+                    "How do FCAS prices vary by time of day?",
+                ],
+            },
+            {
+                "label": "FCAS Providers",
+                "questions": [
+                    "Which generators provide the most FCAS capacity?",
+                    "Show all battery storage units that provide FCAS by region",
+                    "What is the total FCAS-capable capacity by fuel type?",
+                    "Which region has the most FCAS providers?",
+                    "What is the average capacity of FCAS providers by technology?",
+                ],
+            },
+            {
+                "label": "Regulation vs Contingency",
+                "questions": [
+                    "What percentage of FCAS cost is regulation vs contingency?",
+                    "Which service type has the highest price volatility?",
+                    "How does raise regulation compare to lower regulation in price?",
+                    "Show the 6-second vs 60-second vs 5-minute contingency price comparison",
+                ],
+            },
+            {
+                "label": "Battery FCAS Revenue",
+                "questions": [
+                    "What is the estimated annual FCAS revenue for a 100MW battery?",
+                    "Which region offers the best FCAS revenue opportunity for batteries?",
+                    "How does battery FCAS revenue compare to energy arbitrage revenue?",
+                    "Show battery capacity registered for FCAS by region",
+                ],
+            },
+        ],
+    },
+    {
         "space_id": "01f11acf42701ae38c6c58a01612ed72",
         "title": "Portfolio & P&L",
         "description": "Trade portfolio positions, mark-to-market valuations, P&L attribution, credit exposure, and risk metrics across all NEM regions.",

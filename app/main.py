@@ -141,7 +141,8 @@ from routers.replay import router as replay_router  # noqa: E402
 from routers.auto_stubs import router as auto_stubs_router  # noqa: E402
 from routers.deals import router as deals_router  # noqa: E402
 from routers.curves import router as curves_router  # noqa: E402
-from routers.risk import router as risk_router  # noqa: E402
+from routers.risk import router as risk_router
+from routers.constraints import router as constraints_router  # noqa: E402  # noqa: E402
 
 app.include_router(health_router)
 app.include_router(dashboards_router)
@@ -161,6 +162,7 @@ app.include_router(replay_router)
 app.include_router(deals_router)
 app.include_router(curves_router)
 app.include_router(risk_router)
+app.include_router(constraints_router)
 app.include_router(auto_stubs_router)
 
 # ---------------------------------------------------------------------------

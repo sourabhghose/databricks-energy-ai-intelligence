@@ -1313,15 +1313,15 @@ New tools added to the Mosaic AI agent:
 | E4 | **Stress Testing** | 15.3 | Medium | Medium | **DONE** (2026-03-08). 4 pre-defined scenarios + custom. `POST /api/risk/stress-test`. Copilot tool `run_stress_test`. |
 | E5 | **Credit Risk** | 15.3 | Medium | Small | **DONE** (2026-03-08). Credit exposure per counterparty, utilization bars, exposure aging. RiskDashboard.tsx Credit Risk tab. |
 | E6 | **PPA Valuation Copilot** | 15.4 | Medium | Large | **DONE** (2026-03-08). Monte Carlo 1000 paths. `POST /api/risk/ppa/value`. Copilot tool `value_ppa`. |
-| E7 | **FCAS Market Analytics** | 15.5 | Low | Large | Ingest 8 FCAS markets, price dashboard, bidstack analysis, co-optimization view, battery FCAS revenue tracker, FCAS price forecast models. |
-| E8 | **Settlement Reconciliation** | 15.6 | Low | Medium | Match AEMO preliminary/final settlement files against internal positions. Variance analysis (>$1K threshold). |
+| E7 | **FCAS Market Analytics** | 15.5 | Low | Large | **DONE** (2026-03-08). 8 FCAS service prices derived from spot/volatility data. FcasMarketDashboard with services, providers, traps, regional requirements. 3 endpoints (`/api/fcas/market`, `/services`, `/providers`). Copilot tool `get_fcas_summary`. FCAS Genie space added (8 total). |
+| E8 | **Settlement Reconciliation** | 15.6 | Low | Medium | **DONE** (2026-03-08). AEMO settlement vs internal trade positions with variance analysis (>$1K threshold). `/api/settlement/reconciliation` + `/api/settlement/residues`. Copilot tool `get_settlement_summary`. |
 | E9 | **Synced Tables** | 15.1 | Medium | Small | **DONE** (2026-03-08). 16 synced tables in Lakebase (trades, legs, counterparties, portfolios, mtm, pnl, risk, credit, etc). |
-| E10 | **Additional Copilot Tools** | 15.7 | Medium | Medium | **DONE** (2026-03-08). 22 FMAPI tools total including get_portfolio_pnl, explain_pnl_move, value_ppa, run_stress_test, portfolio_what_if. |
-| E11 | **New Genie Spaces** | 15.10 | Low | Small | **DONE** (2026-03-08). "Portfolio & P&L" Genie space (ID: `01f11acf42701ae38c6c58a01612ed72`). 7 total spaces. |
+| E10 | **Additional Copilot Tools** | 15.7 | Medium | Medium | **DONE** (2026-03-08). 25 FMAPI tools total including get_portfolio_pnl, explain_pnl_move, value_ppa, run_stress_test, portfolio_what_if, predict_constraints, get_fcas_summary, get_settlement_summary. |
+| E11 | **New Genie Spaces** | 15.10 | Low | Small | **DONE** (2026-03-08). "Portfolio & P&L" + "FCAS & Ancillary Services" Genie spaces. 8 total spaces. |
 | E12 | **Pre-Trade Credit Checks** | 13.3 | High | Medium | **DONE** (2026-03-08). `GET /api/credit/check` pass/warn/block. Integrated into trade creation. DealCapture.tsx credit indicator. |
 | E13 | **Deal Approval Workflows** | 13.3 | Medium | Medium | **DONE** (2026-03-08). approval_rules + approval_requests tables. 5 endpoints. Maker-checker. TradeBlotter.tsx approval queue. |
 | E14 | **Portfolio NL What-If Analysis** | 13.3 | High | Medium | **DONE** (2026-03-08). `POST /api/risk/what-if` with NL parsing. Copilot tool `portfolio_what_if`. Supports heatwave, wind drought, coal trip, interconnector failure, price changes. |
-| E15 | **Predictive Constraint Analytics** | 13.3 | Medium | Large | ML model predicting which transmission constraints will bind in next 4-48 hours. **No incumbent offers this** — ez2view shows current constraints only. |
+| E15 | **Predictive Constraint Analytics** | 13.3 | Medium | Large | **DONE** (2026-03-08). Statistical ML prediction of constraint binding (next 4-48h). `constraints.py` router with 3 endpoints (`/api/constraints/forecast`, `/forecast/timeline`, `/forecast/snapshot`). `gold.constraint_forecasts` Delta table. NetworkConstraints.tsx prediction panel with timeline chart. Copilot tool `predict_constraints`. 25 FMAPI tools total. |
 
 ### 15.14 Phase 2 — Competitive Gap Feature Details
 

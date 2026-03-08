@@ -367,6 +367,49 @@ _FMAPI_TOOLS = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "predict_constraints",
+            "description": "Predict which transmission constraints will bind in the next 4-48 hours using ML. Returns probability of binding, expected marginal value, and price impact for each constraint.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "region": {"type": "string", "description": "NEM region", "enum": ["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]},
+                    "horizon_hours": {"type": "integer", "description": "Forecast horizon (4-48 hours)", "default": 24},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_fcas_summary",
+            "description": "Get FCAS (Frequency Control Ancillary Services) market summary — 8 service prices, total cost, top providers, and regional requirements.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "region": {"type": "string", "description": "NEM region", "enum": ["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]},
+                },
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_settlement_summary",
+            "description": "Get settlement reconciliation summary — AEMO settlement totals vs internal trade positions, variance analysis, FCAS settlement, and inter-regional residues.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "days_back": {"type": "integer", "description": "Lookback days (default 7)", "default": 7},
+                },
+                "required": [],
+            },
+        },
+    },
 ]
 
 # ---------------------------------------------------------------------------
@@ -833,6 +876,73 @@ def _dispatch_tool(name: str, arguments: dict) -> str:
                 for ti in result["top_trade_impacts"][:5]:
                     lines.append(f"  {ti['trade_id']} {ti['direction']} {ti['volume_mw']}MW {ti['region']} → ${ti['impact']:,.0f}")
             return json.dumps({"text": "\n".join(lines), "what_if": result}, default=str)
+
+        elif name == "predict_constraints":
+            from .constraints import _predict_constraint_binding
+            region = arguments.get("region")
+            horizon = arguments.get("horizon_hours", 24)
+            result = _predict_constraint_binding(region, horizon, min_probability=0.3)
+            forecasts = result.get("forecasts", [])[:10]
+            lines = [f"Constraint Binding Forecast ({result.get('horizon_hours', 24)}h horizon):"]
+            lines.append(f"  Model: {result.get('model_info', {}).get('version', 'unknown')}")
+            lines.append(f"  Constraints analysed: {result.get('constraints_analysed', 0)}")
+            if forecasts:
+                lines.append(f"\n{'Constraint':<25} {'Region':<6} {'Hour':<18} {'Prob':>6} {'MV':>8} {'Impact':>8} {'Conf':<7}")
+                lines.append("-" * 80)
+                for f in forecasts:
+                    lines.append(
+                        f"{f['constraint_id'][:24]:<25} {f['region']:<6} {f['target_hour']:<18} "
+                        f"{f['binding_probability']:>5.1%} ${f['expected_marginal_value']:>7.1f} "
+                        f"${f['price_impact_estimate']:>7.2f} {f['confidence']:<7}"
+                    )
+            else:
+                lines.append("\nNo constraints predicted to bind above threshold.")
+            return json.dumps({"text": "\n".join(lines), "forecasts": forecasts}, default=str)
+
+        elif name == "get_fcas_summary":
+            from .sidebar import _build_fcas_dashboard
+            region = arguments.get("region", "NSW1")
+            result = _build_fcas_dashboard(region)
+            lines = [f"FCAS Market Summary for {region}:"]
+            lines.append(f"  Total FCAS Cost: ${result['total_fcas_cost_today_aud']:,.0f}")
+            lines.append(f"  Regulation: ${result['regulation_cost_aud']:,.0f} | Contingency: ${result['contingency_cost_aud']:,.0f}")
+            lines.append(f"  Enabled MW: {result['total_enabled_mw']:,.0f} | Shortfall Risk: {result['shortfall_risk']}")
+            lines.append(f"\n{'Service':<12} {'Price $/MW':>10} {'Req MW':>8} {'Enabled':>8} {'Util%':>6} {'Provider':<20}")
+            lines.append("-" * 70)
+            for s in result["services"]:
+                lines.append(
+                    f"{s['service']:<12} ${s['clearing_price_aud_mw']:>9.2f} "
+                    f"{s['requirement_mw']:>7.0f} {s['enabled_mw']:>7.0f} "
+                    f"{s['utilisation_pct']:>5.1f} {s['main_provider'][:19]:<20}"
+                )
+            if result.get("providers"):
+                lines.append(f"\nTop Providers ({len(result['providers'])}):")
+                for p in result["providers"][:5]:
+                    lines.append(f"  {p['station_name']} ({p['fuel_type']}) — {p['total_enabled_mw']}MW, ${p['total_revenue_est_aud']:,.0f}/yr")
+            return json.dumps({"text": "\n".join(lines), "dashboard": result}, default=str)
+
+        elif name == "get_settlement_summary":
+            from .sidebar import _build_settlement_reconciliation
+            days = arguments.get("days_back", 7)
+            result = _build_settlement_reconciliation(days)
+            lines = [f"Settlement Reconciliation (last {days} days):"]
+            lines.append(f"  AEMO Settlement:    ${result['total_aemo_settlement']:>14,.2f}")
+            lines.append(f"  Internal Settlement: ${result['total_internal_settlement']:>14,.2f}")
+            lines.append(f"  Variance:           ${result['variance']:>14,.2f} ({result['variance_pct']:+.2f}%)")
+            lines.append(f"  Threshold Breaches: {result['threshold_breaches']}")
+            if result.get("variances_by_region"):
+                lines.append(f"\n{'Region':<8} {'AEMO':>14} {'Internal':>14} {'Variance':>14} {'Status':<8}")
+                lines.append("-" * 62)
+                for v in result["variances_by_region"]:
+                    lines.append(
+                        f"{v['region']:<8} ${v['aemo_aud']:>13,.2f} ${v['internal_aud']:>13,.2f} "
+                        f"${v['variance_aud']:>13,.2f} {v['status']:<8}"
+                    )
+            if result.get("residues"):
+                lines.append(f"\nInter-Regional Residues:")
+                for r in result["residues"]:
+                    lines.append(f"  {r['interconnector_id']}: ${r['settlement_residue_aud']:,.2f} ({r['direction']}, {r['flow_mw']}MW avg)")
+            return json.dumps({"text": "\n".join(lines), "reconciliation": result}, default=str)
 
         else:
             return json.dumps({"error": f"Unknown tool: {name}"})

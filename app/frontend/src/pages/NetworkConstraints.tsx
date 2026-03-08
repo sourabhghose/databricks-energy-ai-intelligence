@@ -11,7 +11,7 @@ import {
 } from 'recharts'
 import { GitBranch, AlertTriangle, RefreshCw, Zap, DollarSign, MapPin, Activity } from 'lucide-react'
 import { api, constraintsApi } from '../api/client'
-import type { ConstraintDashboard, ConstraintEquation, ConstraintViolationRecord, BindingHeatmapCell, PriceSeparation } from '../api/client'
+import type { ConstraintDashboard, ConstraintEquation, ConstraintViolationRecord, BindingHeatmapCell, PriceSeparation, ConstraintForecast, ConstraintTimelineEntry } from '../api/client'
 
 // ---------------------------------------------------------------------------
 // Types & helpers
@@ -122,6 +122,12 @@ export default function NetworkConstraints() {
   const [separationData, setSeparationData] = useState<PriceSeparation[]>([])
   const [heatmapRegion, setHeatmapRegion] = useState('NSW1')
 
+  // E15 — Predictive constraint analytics
+  const [forecastData, setForecastData] = useState<ConstraintForecast[]>([])
+  const [timelineData, setTimelineData] = useState<ConstraintTimelineEntry[]>([])
+  const [forecastRegion, setForecastRegion] = useState('NSW1')
+  const [forecastModelInfo, setForecastModelInfo] = useState<{ version: string; accuracy_pct: number } | null>(null)
+
   const fetchData = useCallback(async () => {
     try {
       const data = await api.getConstraintDashboard()
@@ -146,6 +152,17 @@ export default function NetworkConstraints() {
     constraintsApi.bindingHeatmap(heatmapRegion, 7).then(d => setHeatmapData(d.grid || [])).catch(() => {})
     constraintsApi.priceSeparation(24).then(d => setSeparationData(d.spreads || [])).catch(() => {})
   }, [heatmapRegion])
+
+  // E15 — Load constraint forecasts
+  useEffect(() => {
+    constraintsApi.forecast(forecastRegion, 24, 0.2).then(d => {
+      setForecastData(d.forecasts || [])
+      if (d.model_info) setForecastModelInfo({ version: d.model_info.version, accuracy_pct: d.model_info.accuracy_pct })
+    }).catch(() => {})
+    constraintsApi.forecastTimeline(forecastRegion, 48).then(d => {
+      setTimelineData(d.timeline || [])
+    }).catch(() => {})
+  }, [forecastRegion])
 
   // ---------------------------------------------------------------------------
   // Derived data
@@ -257,6 +274,163 @@ export default function NetworkConstraints() {
           alert={dashboard.violations_today > 0}
           sub="dispatch interval breaches"
         />
+      </div>
+
+      {/* E15 — Constraint Forecast Panel */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Activity className="text-blue-600 dark:text-blue-400" size={18} />
+            <div>
+              <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200">Constraint Binding Forecast</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                ML-predicted binding events for the next 24-48 hours
+                {forecastModelInfo && <span className="ml-2 text-blue-500">({forecastModelInfo.version}, {forecastModelInfo.accuracy_pct}% accuracy)</span>}
+              </p>
+            </div>
+          </div>
+          <select
+            value={forecastRegion}
+            onChange={e => setForecastRegion(e.target.value)}
+            className="px-2 py-1 text-xs rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800"
+          >
+            {REGIONS.filter(r => r !== 'All').map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </div>
+
+        {/* Forecast summary banner */}
+        {forecastData.length > 0 && (
+          <div className="px-5 py-3 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 flex items-center gap-3">
+            <AlertTriangle className="text-amber-600 dark:text-amber-400" size={16} />
+            <span className="text-sm font-medium text-amber-800 dark:text-amber-200">
+              Next 24h: {forecastData.length} constraint{forecastData.length !== 1 ? 's' : ''} predicted to bind
+            </span>
+            <span className={`ml-2 px-2 py-0.5 rounded text-xs font-semibold ${
+              forecastData.some(f => f.confidence === 'HIGH') ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' :
+              forecastData.some(f => f.confidence === 'MEDIUM') ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' :
+              'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+            }`}>
+              {forecastData.some(f => f.confidence === 'HIGH') ? 'HIGH RISK' : forecastData.some(f => f.confidence === 'MEDIUM') ? 'MEDIUM RISK' : 'LOW RISK'}
+            </span>
+          </div>
+        )}
+
+        {/* 48h Timeline bar chart */}
+        {timelineData.length > 0 && (
+          <div className="p-4">
+            <h4 className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2 uppercase">48-Hour Binding Forecast Timeline</h4>
+            <ResponsiveContainer width="100%" height={160}>
+              <BarChart data={timelineData.slice(0, 48)} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                <XAxis
+                  dataKey="hour"
+                  tickFormatter={(v: string) => v.slice(11, 16)}
+                  tick={{ fontSize: 9 }}
+                  interval={5}
+                />
+                <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+                <Tooltip
+                  formatter={(v: number, name: string) => [v, name === 'predicted_binding_count' ? 'Binding Count' : name === 'total_expected_cost' ? `$${v.toFixed(2)}` : v]}
+                  labelFormatter={(v: string) => `Hour: ${v}`}
+                />
+                <Bar dataKey="predicted_binding_count" name="Predicted Bindings">
+                  {timelineData.slice(0, 48).map((entry, idx) => (
+                    <Cell
+                      key={idx}
+                      fill={entry.severity === 'high' ? '#ef4444' : entry.severity === 'medium' ? '#f59e0b' : '#22c55e'}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {/* Top predicted constraints table */}
+        {forecastData.length > 0 && (
+          <div className="px-4 pb-4">
+            <h4 className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2 uppercase">Top Predicted Constraints</h4>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-gray-200 dark:border-gray-700">
+                    <th className="px-3 py-2 text-left text-gray-500 font-medium">Constraint</th>
+                    <th className="px-3 py-2 text-left text-gray-500 font-medium">Region</th>
+                    <th className="px-3 py-2 text-left text-gray-500 font-medium">Hour</th>
+                    <th className="px-3 py-2 text-right text-gray-500 font-medium">Probability</th>
+                    <th className="px-3 py-2 text-right text-gray-500 font-medium">Exp. MV</th>
+                    <th className="px-3 py-2 text-right text-gray-500 font-medium">Price Impact</th>
+                    <th className="px-3 py-2 text-center text-gray-500 font-medium">Confidence</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {forecastData.slice(0, 10).map((f, i) => (
+                    <tr key={i} className="border-b border-gray-100 dark:border-gray-700/50 hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                      <td className="px-3 py-2 font-mono text-gray-800 dark:text-gray-200">{f.constraint_id.slice(0, 30)}</td>
+                      <td className="px-3 py-2">{regionChip(f.region)}</td>
+                      <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{f.target_hour.slice(11, 16)}</td>
+                      <td className="px-3 py-2 text-right font-semibold">
+                        <span className={f.binding_probability > 0.6 ? 'text-red-600 dark:text-red-400' : f.binding_probability > 0.4 ? 'text-amber-600 dark:text-amber-400' : 'text-gray-600 dark:text-gray-400'}>
+                          {(f.binding_probability * 100).toFixed(1)}%
+                        </span>
+                      </td>
+                      <td className="px-3 py-2 text-right text-gray-700 dark:text-gray-300">${f.expected_marginal_value.toFixed(1)}</td>
+                      <td className="px-3 py-2 text-right text-gray-700 dark:text-gray-300">${f.price_impact_estimate.toFixed(2)}</td>
+                      <td className="px-3 py-2 text-center">
+                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${
+                          f.confidence === 'HIGH' ? 'bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300' :
+                          f.confidence === 'MEDIUM' ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300' :
+                          'bg-green-100 text-green-700 dark:bg-green-900/40 dark:text-green-300'
+                        }`}>
+                          {f.confidence}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {forecastData.length === 0 && timelineData.length === 0 && (
+          <div className="px-5 py-8 text-center text-gray-400 dark:text-gray-500 text-sm">
+            No constraint binding predictions available. Historical constraint data may still be loading.
+          </div>
+        )}
+
+        {/* Contributing factors mini-cards */}
+        {forecastData.length > 0 && forecastData[0].contributing_factors && (
+          <div className="px-4 pb-4">
+            <h4 className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2 uppercase">Contributing Factors (Top Constraint)</h4>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+              {forecastData[0].contributing_factors.demand_level != null && (
+                <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
+                  <div className="text-xs text-blue-600 dark:text-blue-400 font-medium">Demand</div>
+                  <div className="text-sm font-bold text-blue-800 dark:text-blue-200">{forecastData[0].contributing_factors.demand_level.toLocaleString()} MW</div>
+                </div>
+              )}
+              {forecastData[0].contributing_factors.wind_forecast != null && (
+                <div className="bg-cyan-50 dark:bg-cyan-900/20 rounded-lg p-3">
+                  <div className="text-xs text-cyan-600 dark:text-cyan-400 font-medium">Wind</div>
+                  <div className="text-sm font-bold text-cyan-800 dark:text-cyan-200">{forecastData[0].contributing_factors.wind_forecast} km/h</div>
+                </div>
+              )}
+              {forecastData[0].contributing_factors.solar_forecast != null && (
+                <div className="bg-amber-50 dark:bg-amber-900/20 rounded-lg p-3">
+                  <div className="text-xs text-amber-600 dark:text-amber-400 font-medium">Solar</div>
+                  <div className="text-sm font-bold text-amber-800 dark:text-amber-200">{forecastData[0].contributing_factors.solar_forecast} W/m2</div>
+                </div>
+              )}
+              {forecastData[0].contributing_factors.temperature != null && (
+                <div className="bg-red-50 dark:bg-red-900/20 rounded-lg p-3">
+                  <div className="text-xs text-red-600 dark:text-red-400 font-medium">Temperature</div>
+                  <div className="text-sm font-bold text-red-800 dark:text-red-200">{forecastData[0].contributing_factors.temperature}°C</div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Region Summary Cards */}

@@ -34268,6 +34268,50 @@ export const briefsApi = {
   },
 }
 
+// E15 — Constraint forecast interfaces
+export interface ConstraintForecast {
+  constraint_id: string
+  constraint_type: string
+  region: string
+  target_hour: string
+  binding_probability: number
+  expected_marginal_value: number
+  price_impact_estimate: number
+  confidence: string
+  contributing_factors: {
+    demand_level?: number | null
+    wind_forecast?: number | null
+    solar_forecast?: number | null
+    temperature?: number | null
+  }
+}
+
+export interface ConstraintForecastResponse {
+  forecasts: ConstraintForecast[]
+  model_info: { version: string; last_trained: string; accuracy_pct: number; method: string }
+  horizon_hours: number
+  region: string | null
+  constraints_analysed: number
+}
+
+export interface ConstraintTimelineEntry {
+  hour: string
+  hour_offset: number
+  predicted_binding_count: number
+  total_expected_cost: number
+  top_constraint: string | null
+  top_probability: number
+  worst_region: string | null
+  severity: string
+}
+
+export interface ConstraintTimelineResponse {
+  timeline: ConstraintTimelineEntry[]
+  horizon_hours: number
+  region: string | null
+  model_info: { version: string; last_trained: string; accuracy_pct: number; method: string }
+}
+
 export const constraintsApi = {
   bindingHeatmap(region: string, days = 7): Promise<{ region: string; days: number; grid: BindingHeatmapCell[] }> {
     return get(`/api/constraints/binding-heatmap?region=${region}&days=${days}`)
@@ -34275,5 +34319,20 @@ export const constraintsApi = {
 
   priceSeparation(hoursBack = 24): Promise<{ hours_back: number; spreads: PriceSeparation[] }> {
     return get(`/api/constraints/price-separation?hours_back=${hoursBack}`)
+  },
+
+  forecast(region?: string, horizonHours = 24, minProbability = 0.3): Promise<ConstraintForecastResponse> {
+    const qs = new URLSearchParams()
+    if (region) qs.append('region', region)
+    qs.append('horizon_hours', String(horizonHours))
+    qs.append('min_probability', String(minProbability))
+    return get(`/api/constraints/forecast?${qs}`)
+  },
+
+  forecastTimeline(region?: string, horizonHours = 48): Promise<ConstraintTimelineResponse> {
+    const qs = new URLSearchParams()
+    if (region) qs.append('region', region)
+    qs.append('horizon_hours', String(horizonHours))
+    return get(`/api/constraints/forecast/timeline?${qs}`)
   },
 }
