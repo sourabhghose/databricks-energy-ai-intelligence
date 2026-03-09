@@ -99,6 +99,7 @@ import {
   ChevronDown,
 } from 'lucide-react'
 
+import NemInfrastructureMap from './pages/NemInfrastructureMap'
 import ElectricityMarketCompetitionConcentrationAnalytics from './pages/ElectricityMarketCompetitionConcentrationAnalytics'
 import Home from './pages/Home'
 import LiveMarket from './pages/LiveMarket'
@@ -614,6 +615,13 @@ const NAV_ITEMS = [
   { to: '/trade-blotter',   label: 'Trade Blotter',    Icon: Receipt        },
   { to: '/forward-curves',  label: 'Forward Curves',   Icon: TrendingUp     },
   { to: '/risk-dashboard',  label: 'Risk Dashboard',   Icon: Shield         },
+  { to: '/bidding-dashboard', label: 'Bidding Dashboard', Icon: BarChart2    },
+  { to: '/battery-dispatch',  label: 'Battery Dispatch',  Icon: Battery      },
+  { to: '/gas-market',        label: 'Gas Market Dashboard', Icon: Flame     },
+  { to: '/wem-dashboard',     label: 'WEM Dashboard',     Icon: Building2    },
+  { to: '/compliance',        label: 'Compliance Dashboard', Icon: FileText  },
+  { to: '/environmentals',    label: 'Environmentals',    Icon: Leaf         },
+  { to: '/reports',           label: 'Reports Library',   Icon: FileText     },
   { to: '/sustainability',  label: 'Sustainability',   Icon: Leaf            },
   { to: '/biomass-bioenergy', label: 'Biomass & Bioenergy', Icon: Leaf       },
   { to: '/merit-order',     label: 'Merit Order',      Icon: TrendingUp      },
@@ -1558,6 +1566,7 @@ const ROUTE_MAP: Record<string, React.ComponentType> = {
   '/community-battery': CommunityBatteryAnalytics,
   '/energy-cyber-security': EnergySectorCyberSecurityAnalytics,
   '/wholesale-market-reform': WholesaleMarketReformAnalytics,
+  '/nem-map': NemInfrastructureMap,
 }
 
 // ---------------------------------------------------------------------------
@@ -1565,6 +1574,25 @@ const ROUTE_MAP: Record<string, React.ComponentType> = {
 // ---------------------------------------------------------------------------
 
 const PINNED_PATHS = new Set(['/', '/live', '/copilot', '/genie', '/alerts'])
+
+const DASHBOARD_LINKS: { to: string; label: string; Icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
+  // Trading & Risk
+  { to: '/deal-capture',      label: 'Deal Capture',   Icon: Plus },
+  { to: '/portfolio',         label: 'Portfolio',      Icon: Briefcase },
+  { to: '/forward-curves',    label: 'Forward Curves', Icon: TrendingUp },
+  { to: '/risk-dashboard',    label: 'Risk',           Icon: Shield },
+  // Market Dashboards
+  { to: '/bidding-dashboard', label: 'Bidding',        Icon: BarChart2 },
+  { to: '/battery-dispatch',  label: 'Battery',        Icon: Battery },
+  { to: '/gas-market',        label: 'Gas Market',     Icon: Flame },
+  { to: '/wem-dashboard',     label: 'WEM',            Icon: Building2 },
+  // Operations & Compliance
+  { to: '/nem-map',           label: 'NEM Map',        Icon: MapIcon },
+  { to: '/market-briefs',     label: 'Market Briefs',  Icon: FileText },
+  { to: '/compliance',        label: 'Compliance',     Icon: FileText },
+  { to: '/environmentals',    label: 'Environmentals', Icon: Leaf },
+  { to: '/reports',           label: 'Reports',        Icon: FileText },
+]
 
 const GROUP_DEFS: { key: string; label: string; Icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
   { key: 'operations',  label: 'Market Operations',   Icon: Radio },
@@ -1613,6 +1641,8 @@ function classifyNavItem(to: string, label: string): string {
     '/gas-market': 'gas',
     '/wem-dashboard': 'operations',
     '/compliance': 'policy',
+    '/spot-forecast': 'prices',
+    '/realtime-operations': 'operations',
     '/environmentals': 'renewables',
     '/reports': 'analytics',
   }
@@ -1984,6 +2014,25 @@ function Sidebar() {
             }
           >
             <Icon size={18} />
+            {label}
+          </NavLink>
+        ))}
+
+        <div className="h-px bg-white/10 my-2 mx-2" />
+
+        {/* Dashboard quick links */}
+        <div className="px-3 pt-1 pb-0.5 text-[10px] font-semibold uppercase tracking-wider text-gray-500">Dashboards</div>
+        {DASHBOARD_LINKS.map(({ to, label, Icon }) => (
+          <NavLink
+            key={to}
+            to={to}
+            className={({ isActive }) =>
+              `flex items-center gap-2.5 pl-5 pr-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
+                isActive ? 'bg-white/10 text-white' : 'text-gray-400 hover:bg-white/5 hover:text-white'
+              }`
+            }
+          >
+            <Icon size={14} />
             {label}
           </NavLink>
         ))}
@@ -2576,6 +2625,7 @@ export default function App() {
               <Route path="/community-battery" element={<PageErrorBoundary pageName="/community-battery"><CommunityBatteryAnalytics /></PageErrorBoundary>} />
               <Route path="/energy-cyber-security" element={<PageErrorBoundary pageName="/energy-cyber-security"><EnergySectorCyberSecurityAnalytics /></PageErrorBoundary>} />
               <Route path="/wholesale-market-reform" element={<PageErrorBoundary pageName="/wholesale-market-reform"><WholesaleMarketReformAnalytics /></PageErrorBoundary>} />
+              <Route path="/nem-map" element={<PageErrorBoundary pageName="/nem-map"><NemInfrastructureMap /></PageErrorBoundary>} />
             </Routes>
           </main>
         </div>

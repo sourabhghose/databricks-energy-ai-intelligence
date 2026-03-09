@@ -26,14 +26,41 @@ from .shared import (
 router = APIRouter()
 _SCHEMA = f"{_CATALOG}.gold"
 
-# Certificate market prices (indicative)
-_CERT_PRICES = {"LGC": 47.50, "ACCU": 32.00, "STC": 39.80}
+# Certificate market prices (indicative fallbacks)
+_CERT_PRICES_DEFAULT = {"LGC": 47.50, "ACCU": 32.00, "STC": 39.80}
 
-# Emissions factors by fuel (tCO2e/MWh)
-_EMISSION_FACTORS = {
+# Emissions factors by fuel fallback (tCO2e/MWh)
+_EMISSION_FACTORS_DEFAULT = {
     "coal_black": 0.90, "coal_brown": 1.15, "gas_ccgt": 0.37,
     "gas_ocgt": 0.55, "distillate": 0.70,
 }
+
+
+def _get_cert_prices() -> dict:
+    """Get certificate prices from lgc_spot_prices, falling back to defaults."""
+    rows = _query_gold(
+        f"SELECT trade_date, price_aud FROM {_SCHEMA}.lgc_spot_prices "
+        f"ORDER BY trade_date DESC LIMIT 1"
+    )
+    prices = dict(_CERT_PRICES_DEFAULT)
+    if rows and rows[0].get("price_aud"):
+        prices["LGC"] = round(float(rows[0]["price_aud"]), 2)
+    return prices
+
+
+def _get_emission_factors() -> dict:
+    """Get emission factors from emissions_factors table (kg→tCO2/MWh)."""
+    rows = _query_gold(
+        f"SELECT fuel_type, total_kg_co2_mwh FROM {_SCHEMA}.emissions_factors"
+    )
+    if rows:
+        factors = {}
+        for r in rows:
+            fuel = r.get("fuel_type", "")
+            kg = float(r.get("total_kg_co2_mwh", 0) or 0)
+            factors[fuel] = round(kg / 1000.0, 4)  # kg → tonnes
+        return factors if factors else dict(_EMISSION_FACTORS_DEFAULT)
+    return dict(_EMISSION_FACTORS_DEFAULT)
 
 
 # ---------------------------------------------------------------------------
@@ -76,12 +103,14 @@ def _get_lgc_position_core() -> Dict[str, Any]:
         "position_by_type": by_type,
         "holdings_detail": holdings or [],
         "balances": [{**b, "as_of_date": str(b.get("as_of_date", ""))} for b in (balances or [])],
-        "market_prices": _CERT_PRICES,
+        "market_prices": _get_cert_prices(),
     }
 
 
 def _get_carbon_exposure_core(region: Optional[str] = None) -> Dict[str, Any]:
     """Calculate carbon exposure based on generation portfolio."""
+    emission_factors = _get_emission_factors()
+
     # Get generation mix
     where = f"AND region_id = '{_sql_escape(region)}'" if region else ""
     gen = _query_gold(
@@ -96,7 +125,7 @@ def _get_carbon_exposure_core(region: Optional[str] = None) -> Dict[str, Any]:
     for g in (gen or []):
         fuel = g["fuel_type"]
         mw = float(g.get("avg_mw", 0) or 0)
-        ef = _EMISSION_FACTORS.get(fuel, 0)
+        ef = emission_factors.get(fuel, 0)
         annual_mwh = mw * 8760
         annual_tco2 = annual_mwh * ef
         total_emissions += annual_tco2
@@ -120,8 +149,10 @@ def _get_carbon_exposure_core(region: Optional[str] = None) -> Dict[str, Any]:
 def _value_bundled_ppa_core(strike_price: float, volume_mw: float,
                              technology: str, region: str,
                              term_years: int = 10,
-                             lgc_price: float = 47.50) -> Dict[str, Any]:
+                             lgc_price: Optional[float] = None) -> Dict[str, Any]:
     """Value a bundled PPA (electricity + LGCs)."""
+    if lgc_price is None:
+        lgc_price = _get_cert_prices().get("LGC", 47.50)
     # Energy value from forward curve
     from .curves import _build_forward_curve
     curve = _build_forward_curve(region=region, profile="FLAT")
@@ -184,9 +215,16 @@ async def environmentals_dashboard():
     position = _get_lgc_position_core()
     carbon = _get_carbon_exposure_core()
 
+    # LGC registry summary (accredited capacity by fuel)
+    lgc_reg = _query_gold(
+        f"SELECT fuel_source_type, COUNT(*) as count, SUM(capacity_mw) as total_mw "
+        f"FROM {_SCHEMA}.lgc_registry GROUP BY fuel_source_type"
+    )
+
     return {
         "certificate_position": position["position_by_type"],
-        "market_prices": _CERT_PRICES,
+        "market_prices": _get_cert_prices(),
+        "lgc_registry_summary": lgc_reg or [],
         "carbon_exposure_summary": {
             "total_annual_tco2": carbon["total_annual_tco2"],
             "estimated_cost_aud": carbon["estimated_cost_aud"],
@@ -223,7 +261,7 @@ async def add_holding(request: Request):
     body = await request.json()
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     qty = int(body.get("quantity", 100))
-    price = float(body.get("unit_price", _CERT_PRICES.get(body.get("certificate_type", "LGC"), 40)))
+    price = float(body.get("unit_price", _get_cert_prices().get(body.get("certificate_type", "LGC"), 40)))
     data = {
         "holding_id": str(uuid.uuid4()),
         "certificate_type": body.get("certificate_type", "LGC"),
@@ -264,5 +302,5 @@ async def value_bundled_ppa(request: Request):
         technology=body.get("technology", "solar_utility"),
         region=body.get("region", "NSW1"),
         term_years=int(body.get("term_years", 10)),
-        lgc_price=float(body.get("lgc_price", _CERT_PRICES["LGC"])),
+        lgc_price=float(body.get("lgc_price", _get_cert_prices()["LGC"])),
     )

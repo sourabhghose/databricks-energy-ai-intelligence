@@ -119,6 +119,41 @@ def _optimize_battery_core(asset_id: str, horizon_hours: int = 24) -> Dict[str, 
 def _get_battery_performance_core(asset_id: Optional[str] = None,
                                    days: int = 7) -> Dict[str, Any]:
     """Get battery fleet performance metrics."""
+    # Try computing performance from real price spreads (charge 1-5am, discharge 4-9pm)
+    real = _query_gold(
+        f"SELECT DATE(interval_datetime) as perf_date, "
+        f"AVG(CASE WHEN HOUR(interval_datetime) BETWEEN 1 AND 5 THEN rrp END) as avg_charge, "
+        f"AVG(CASE WHEN HOUR(interval_datetime) BETWEEN 16 AND 21 THEN rrp END) as avg_discharge, "
+        f"AVG(CASE WHEN HOUR(interval_datetime) BETWEEN 16 AND 21 THEN rrp END) "
+        f"- AVG(CASE WHEN HOUR(interval_datetime) BETWEEN 1 AND 5 THEN rrp END) as spread "
+        f"FROM {_SCHEMA}.nem_prices_5min "
+        f"WHERE interval_datetime >= current_timestamp() - INTERVAL {days} DAYS "
+        f"GROUP BY DATE(interval_datetime) "
+        f"ORDER BY perf_date DESC"
+    )
+    if real:
+        avg_charge = sum(float(r.get("avg_charge", 0) or 0) for r in real) / max(len(real), 1)
+        avg_discharge = sum(float(r.get("avg_discharge", 0) or 0) for r in real) / max(len(real), 1)
+        avg_spread = sum(float(r.get("spread", 0) or 0) for r in real) / max(len(real), 1)
+        # Assume 100MW fleet doing 1 cycle/day
+        daily_revenue = avg_spread * 100 * 2  # 100MW × 2hr discharge
+        return {
+            "period_days": days,
+            "assets": [{
+                "asset_id": asset_id or "fleet",
+                "total_cycles": len(real),
+                "total_throughput": round(len(real) * 200, 0),
+                "arb_rev": round(daily_revenue * len(real), 2),
+                "fcas_rev": 0,
+                "total_rev": round(daily_revenue * len(real), 2),
+                "avg_charge": round(avg_charge, 2),
+                "avg_discharge": round(avg_discharge, 2),
+                "avg_eff": 88.0,
+            }],
+            "fleet_total_revenue": round(daily_revenue * len(real), 2),
+        }
+
+    # Seed fallback
     where = f"WHERE asset_id = '{_sql_escape(asset_id)}'" if asset_id else ""
     if where:
         where += f" AND perf_date >= current_date() - INTERVAL {days} DAYS"
@@ -149,7 +184,16 @@ def _get_battery_performance_core(asset_id: Optional[str] = None,
 @router.get("/api/battery/dashboard")
 async def battery_dashboard():
     """Battery fleet overview: assets, KPIs, recent performance."""
-    assets = _query_gold(
+    # Try real battery facilities from nem_facilities
+    real_assets = _query_gold(
+        f"SELECT duid as asset_id, station_name as name, region_id as region, "
+        f"fuel_type, capacity_mw, capacity_mw * 2 as storage_mwh "
+        f"FROM {_SCHEMA}.nem_facilities "
+        f"WHERE fuel_type = 'battery' AND capacity_mw > 0 "
+        f"ORDER BY capacity_mw DESC"
+    )
+
+    assets = real_assets if real_assets else _query_gold(
         f"SELECT * FROM {_SCHEMA}.battery_assets ORDER BY capacity_mw DESC"
     )
     perf = _get_battery_performance_core(days=7)
@@ -173,6 +217,18 @@ async def battery_dashboard():
 @router.get("/api/battery/assets")
 async def list_battery_assets():
     """List all battery assets."""
+    # Try real battery facilities
+    real = _query_gold(
+        f"SELECT duid as asset_id, station_name as name, region_id as region, "
+        f"fuel_type, capacity_mw, capacity_mw * 2 as storage_mwh, "
+        f"88 as efficiency_pct, 'ONLINE' as status "
+        f"FROM {_SCHEMA}.nem_facilities "
+        f"WHERE fuel_type = 'battery' AND capacity_mw > 0 "
+        f"ORDER BY capacity_mw DESC"
+    )
+    if real:
+        return {"assets": [{**r, "commissioning_date": ""} for r in real]}
+
     rows = _query_gold(f"SELECT * FROM {_SCHEMA}.battery_assets ORDER BY capacity_mw DESC")
     return {"assets": [{**r, "commissioning_date": str(r.get("commissioning_date", ""))}
                         for r in (rows or [])]}

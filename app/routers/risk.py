@@ -1591,9 +1591,10 @@ def _monte_carlo_var_core(portfolio_id: str = "all",
             "portfolio_id": portfolio_id,
             "results": [{**r, "calc_date": str(r.get("calc_date", ""))} for r in rows],
         }
-    # Simulate
+    # Simulate — use real historical vol where available
     rng = random.Random(42)
-    vol = 0.02  # daily vol
+    annual_vol = _get_historical_volatility("NSW1")
+    vol = annual_vol / math.sqrt(252)  # annualised → daily
     notional = 10_000_000
     pnls = sorted([notional * rng.gauss(0, vol * math.sqrt(horizon_days)) for _ in range(num_sims)])
     idx = int(num_sims * (1 - confidence))
@@ -1619,9 +1620,36 @@ def _vol_surface_core(region: str = "NSW1") -> Dict[str, Any]:
         f"WHERE region = '{_sql_escape(region)}' "
         f"ORDER BY tenor_days, strike_pct"
     )
+    if rows:
+        return {
+            "region": region,
+            "surface": [{**r, "calc_date": str(r.get("calc_date", ""))} for r in rows],
+        }
+
+    # Computed fallback: build vol surface from historical vol with tenor/smile adjustments
+    base_vol = _get_historical_volatility(region)
+    today = str(date.today())
+    tenors = [7, 30, 90, 180, 365]
+    strikes = [0.8, 0.9, 1.0, 1.1, 1.2]
+    surface = []
+    for tenor in tenors:
+        # Longer tenors → lower vol (mean reversion), sqrt scaling
+        tenor_adj = math.sqrt(30 / max(tenor, 1))
+        for strike in strikes:
+            # Smile: OTM options have higher vol
+            smile_adj = 1.0 + 0.15 * (strike - 1.0) ** 2
+            vol = round(base_vol * tenor_adj * smile_adj, 4)
+            surface.append({
+                "region": region,
+                "tenor_days": tenor,
+                "strike_pct": strike,
+                "implied_vol": vol,
+                "calc_date": today,
+            })
+
     return {
         "region": region,
-        "surface": [{**r, "calc_date": str(r.get("calc_date", ""))} for r in (rows or [])],
+        "surface": surface,
     }
 
 

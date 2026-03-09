@@ -157,6 +157,15 @@ def _build_var_section() -> str:
 
 
 def _build_credit_section() -> str:
+    rows = _query_gold(
+        f"SELECT counterparty_name, SUM(current_exposure) as exposure, "
+        f"MAX(credit_limit) as credit_limit "
+        f"FROM {_SCHEMA}.credit_exposure "
+        f"GROUP BY counterparty_name ORDER BY exposure DESC LIMIT 5"
+    )
+    if rows:
+        lines = [f"  {r['counterparty_name']}: ${float(r.get('exposure', 0)):,.0f} / ${float(r.get('credit_limit', 0)):,.0f} limit" for r in rows]
+        return "Top Credit Exposures:\n" + "\n".join(lines) + "\n"
     return "Credit exposure within approved limits. No threshold breaches detected.\n"
 
 
@@ -174,6 +183,23 @@ def _build_price_section() -> str:
 
 
 def _build_generation_section() -> str:
+    rows = _query_gold(
+        f"SELECT fuel_type, AVG(total_mw) as avg_mw "
+        f"FROM {_SCHEMA}.nem_generation_by_fuel "
+        f"WHERE interval_datetime >= current_timestamp() - INTERVAL 7 DAYS "
+        f"GROUP BY fuel_type ORDER BY avg_mw DESC"
+    )
+    if rows:
+        total = sum(float(r.get("avg_mw", 0) or 0) for r in rows)
+        lines = []
+        for r in rows:
+            mw = float(r.get("avg_mw", 0) or 0)
+            pct = round(mw / max(total, 1) * 100, 1)
+            lines.append(f"  {r['fuel_type']}: {mw:,.0f} MW ({pct}%)")
+        renewable_types = {"wind", "solar_utility", "solar_rooftop", "hydro"}
+        renewable_mw = sum(float(r.get("avg_mw", 0) or 0) for r in rows if r["fuel_type"] in renewable_types)
+        renewable_pct = round(renewable_mw / max(total, 1) * 100, 1)
+        return f"Generation Mix (7d avg, total {total:,.0f} MW, {renewable_pct}% renewable):\n" + "\n".join(lines) + "\n"
     return "Generation mix analysis: Coal declining, renewables share increasing. See detailed charts.\n"
 
 

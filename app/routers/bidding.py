@@ -207,13 +207,32 @@ def _compare_bid_vs_optimal_core(generator_id: str, region: str = "NSW1") -> Dic
 @router.get("/api/bidding/dashboard")
 async def bidding_dashboard(region: str = Query("NSW1")):
     """Bidding overview: KPIs, recent bids, conformance, revenue."""
-    # KPIs
+    # Try real bid count from nem_bid_stack
+    real_bids = _query_gold(
+        f"SELECT COUNT(DISTINCT duid) as unique_generators, COUNT(*) as total_bands, "
+        f"AVG(volume_mw) as avg_band_mw "
+        f"FROM {_CATALOG}.gold.nem_bid_stack "
+        f"WHERE region_id = '{_sql_escape(region)}' "
+        f"AND interval_datetime >= current_timestamp() - INTERVAL 24 HOURS"
+    )
+
+    # Seed fallback for bids
     bids = _query_gold(
         f"SELECT COUNT(*) as total, "
         f"SUM(CASE WHEN status = 'ACCEPTED' THEN 1 ELSE 0 END) as accepted "
         f"FROM {_SCHEMA}.bids_submitted WHERE region = '{_sql_escape(region)}'"
     )
     conformance = _get_bid_compliance_core(region=region)
+
+    # Try real revenue from generation × prices
+    real_rev = _query_gold(
+        f"SELECT SUM(g.total_mw * p.rrp * 5.0/60.0) as total_rev "
+        f"FROM {_SCHEMA}.nem_generation_by_fuel g "
+        f"JOIN {_SCHEMA}.nem_prices_5min p "
+        f"ON g.region_id = p.region_id AND g.interval_datetime = p.interval_datetime "
+        f"WHERE g.region_id = '{_sql_escape(region)}' "
+        f"AND g.interval_datetime >= current_timestamp() - INTERVAL 7 DAYS"
+    )
 
     revenue = _query_gold(
         f"SELECT SUM(total_revenue) as total_rev, AVG(capacity_factor) as avg_cf "
@@ -226,13 +245,18 @@ async def bidding_dashboard(region: str = Query("NSW1")):
         f"ORDER BY bid_datetime DESC LIMIT 10"
     )
 
+    # Prefer real data where available
+    total_bids = int((real_bids or [{}])[0].get("total_bands", 0)) or int((bids or [{}])[0].get("total", 0))
+    accepted_bids = int((real_bids or [{}])[0].get("unique_generators", 0)) or int((bids or [{}])[0].get("accepted", 0))
+    total_revenue = round(float((real_rev or [{}])[0].get("total_rev", 0) or 0), 2) or round(float((revenue or [{}])[0].get("total_rev", 0) or 0), 2)
+
     return {
         "region": region,
         "kpis": {
-            "total_bids": int((bids or [{}])[0].get("total", 0)),
-            "accepted_bids": int((bids or [{}])[0].get("accepted", 0)),
+            "total_bids": total_bids,
+            "accepted_bids": accepted_bids,
             "conformance_rate": conformance["conformance_rate"],
-            "total_revenue": round(float((revenue or [{}])[0].get("total_rev", 0) or 0), 2),
+            "total_revenue": total_revenue,
             "avg_capacity_factor": round(float((revenue or [{}])[0].get("avg_cf", 0) or 0), 3),
         },
         "recent_bids": [
@@ -246,6 +270,37 @@ async def bidding_dashboard(region: str = Query("NSW1")):
 async def list_bids(region: str = Query("NSW1"), generator_id: Optional[str] = None,
                     limit: int = Query(20)):
     """List submitted bids."""
+    # Try real bid stack — group by duid to get bid-list format
+    gen_filter = f"AND duid = '{_sql_escape(generator_id)}'" if generator_id else ""
+    real = _query_gold(
+        f"SELECT duid as generator_id, station_name as generator_name, "
+        f"fuel_type, bid_type, "
+        f"SUM(volume_mw) as total_mw, COUNT(DISTINCT band_number) as bands_used, "
+        f"MIN(price) as min_price, MAX(price) as max_price, "
+        f"MAX(interval_datetime) as bid_datetime "
+        f"FROM {_CATALOG}.gold.nem_bid_stack "
+        f"WHERE region_id = '{_sql_escape(region)}' "
+        f"AND interval_datetime >= current_timestamp() - INTERVAL 24 HOURS "
+        f"{gen_filter} "
+        f"GROUP BY duid, station_name, fuel_type, bid_type "
+        f"ORDER BY total_mw DESC LIMIT {limit}"
+    )
+    if real:
+        return {"bids": [{
+            "bid_id": f"real-{r['generator_id']}-{r.get('bid_type','')}",
+            "generator_id": r["generator_id"],
+            "generator_name": r.get("generator_name", r["generator_id"]),
+            "fuel_type": r.get("fuel_type", "unknown"),
+            "bid_type": r.get("bid_type", "ENERGY"),
+            "total_mw": round(float(r.get("total_mw", 0) or 0), 1),
+            "bands_used": int(r.get("bands_used", 0) or 0),
+            "price_range": f"${float(r.get('min_price', 0) or 0):.2f} – ${float(r.get('max_price', 0) or 0):.2f}",
+            "bid_datetime": str(r.get("bid_datetime", "")),
+            "status": "ACCEPTED",
+            "created_at": str(r.get("bid_datetime", "")),
+        } for r in real]}
+
+    # Seed fallback
     where = f"WHERE region = '{_sql_escape(region)}'"
     if generator_id:
         where += f" AND generator_id = '{_sql_escape(generator_id)}'"
@@ -292,7 +347,33 @@ async def conformance_events(region: str = Query("NSW1"),
 @router.get("/api/bidding/revenue")
 async def revenue_attribution(region: str = Query("NSW1"),
                                generator_id: Optional[str] = None):
-    """Get revenue attribution by generator."""
+    """Get revenue attribution by fuel type from real generation × price data."""
+    # Try real: JOIN generation × prices → revenue by fuel_type
+    real = _query_gold(
+        f"SELECT g.fuel_type, "
+        f"SUM(g.total_mw * p.rrp * 5.0/60.0) as energy_rev, "
+        f"AVG(p.rrp) as avg_spot, "
+        f"AVG(g.total_mw) as avg_mw "
+        f"FROM {_SCHEMA}.nem_generation_by_fuel g "
+        f"JOIN {_SCHEMA}.nem_prices_5min p "
+        f"ON g.region_id = p.region_id AND g.interval_datetime = p.interval_datetime "
+        f"WHERE g.region_id = '{_sql_escape(region)}' "
+        f"AND g.interval_datetime >= current_timestamp() - INTERVAL 7 DAYS "
+        f"GROUP BY g.fuel_type ORDER BY energy_rev DESC"
+    )
+    if real:
+        return {"revenue": [{
+            "generator_id": r["fuel_type"],
+            "generator_name": r["fuel_type"].replace("_", " ").title(),
+            "fuel_type": r["fuel_type"],
+            "energy_rev": round(float(r.get("energy_rev", 0) or 0), 2),
+            "fcas_rev": 0,
+            "total_rev": round(float(r.get("energy_rev", 0) or 0), 2),
+            "avg_cf": round(float(r.get("avg_mw", 0) or 0) / 1000, 3),
+            "avg_spot": round(float(r.get("avg_spot", 0) or 0), 2),
+        } for r in real]}
+
+    # Seed fallback
     where = f"WHERE region = '{_sql_escape(region)}'"
     if generator_id:
         where += f" AND generator_id = '{_sql_escape(generator_id)}'"

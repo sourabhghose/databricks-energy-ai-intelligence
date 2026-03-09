@@ -34700,6 +34700,45 @@ export const reportsApi = {
   templates(): Promise<{ templates: ReportTemplate[] }> { return get('/api/reports/templates') },
 }
 
+// --- NEM Infrastructure Map ---
+export interface FacilityLocation {
+  duid: string
+  station_name: string
+  lat: number
+  lng: number
+  state: string
+  region_id: string
+  fuel_type: string
+  capacity_mw: number
+  status: string
+  layer_type: string
+}
+
+export interface MapLayer {
+  layer_type: string
+  fuel_type: string
+  count: number
+  total_mw: number
+  color: string
+}
+
+export const mapApi = {
+  facilities(filters?: { fuel_type?: string; region?: string; min_capacity_mw?: number }): Promise<{ facilities: FacilityLocation[]; count: number }> {
+    const params = new URLSearchParams()
+    if (filters?.fuel_type) params.set('fuel_type', filters.fuel_type)
+    if (filters?.region) params.set('region', filters.region)
+    if (filters?.min_capacity_mw) params.set('min_capacity_mw', String(filters.min_capacity_mw))
+    const qs = params.toString() ? `?${params.toString()}` : ''
+    return get(`/api/map/facilities${qs}`)
+  },
+  layers(): Promise<{ layers: MapLayer[] }> {
+    return get('/api/map/layers')
+  },
+  facilityDetail(duid: string): Promise<{ facility: FacilityLocation; generation: { timestamp: string; mw: number }[] }> {
+    return get(`/api/map/facility/${duid}`)
+  },
+}
+
 // --- WS2: Advanced Risk (extensions) ---
 export const advancedRiskApi = {
   historicalVar(portfolioId = 'all', horizonDays = 1, confidence = 0.95): Promise<{ method: string; var_amount?: number; cvar_amount?: number; results?: Array<Record<string, unknown>> }> {

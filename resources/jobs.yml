@@ -118,6 +118,14 @@ resources:
             base_parameters:
               catalog: ${var.catalog}
           environment_key: default
+        - task_key: create_facility_locations
+          depends_on:
+            - task_key: create_tables
+          notebook_task:
+            notebook_path: ../setup/20_create_facility_locations.py
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: default
         - task_key: backfill
           depends_on:
             - task_key: create_tables

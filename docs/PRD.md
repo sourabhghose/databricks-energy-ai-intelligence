@@ -171,6 +171,18 @@ Build an AI-first market intelligence platform that:
 - **Implementation**: `market_briefs.py` router with `_generate_brief_core()` — queries 24h price stats, anomaly events, renewable share, interconnector congestion, weather. Builds markdown narrative (Overnight Summary, Key Events, Today's Outlook, Watch Items). Persists to `gold.market_briefs`. `MarketBriefs.tsx` archive page + `LatestBriefWidget` on Home page (collapsible card with "View all briefs →" link).
 - **Competitive note**: **No incumbent offers AI-generated briefs.** Traders currently spend 30-60 min writing morning briefs manually. This saves 5+ hours/week per trading desk.
 
+##### NEM Infrastructure Map — **DONE** (2026-03-09)
+- [x] Interactive Leaflet map centred on Australia showing all NEM infrastructure
+- [x] 742 facility locations with real lat/lng from OpenNEM stations.json (708 generators) + hardcoded REZ/ISP/gas hub/region centroids
+- [x] Colour-coded circle markers by fuel type: wind (green), solar (yellow), coal (black), gas (blue), hydro (cyan), battery (purple)
+- [x] Toggleable layers: Generators, REZ Zones (14), ISP Projects (10), Gas Hubs (5), Interconnectors (4 lines)
+- [x] Filter sidebar: region, fuel type, minimum capacity (MW)
+- [x] Click-to-detail panel: facility info grid + recent generation bar chart (from `nem_generation_by_fuel`)
+- [x] Legend with fuel type counts and total MW capacity
+- **Data source**: OpenNEM `stations.json` on GitHub — same AEMO registration data, parsed via `setup/20_create_facility_locations.py` into `gold.facility_locations` Delta table
+- **Implementation**: `nem_map.py` router (3 endpoints: `/api/map/facilities`, `/api/map/layers`, `/api/map/facility/{duid}`). `NemInfrastructureMap.tsx` (react-leaflet v4 + OpenStreetMap tiles). Mock fallback for dev environments without data.
+- **Competitive note**: Matches ez2view's geographic view. Exceeds NemSight by including REZ zones, ISP projects, and gas hub locations on one map.
+
 ### 4.2 Out of Scope (Deferred to Phase 2)
 - Deal capture and portfolio management (ETRM)
 - Forward curve construction and mark-to-market
