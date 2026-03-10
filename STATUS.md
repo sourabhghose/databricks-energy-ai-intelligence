@@ -2613,3 +2613,9 @@ Copilot test: "Value a 100MW solar PPA in SA at $55/MWh for 10 years" → return
 | PPA endpoint | Monte Carlo valuation | Pass — 1000 sims, annual cashflows, breakeven $96.92 |
 | Credit endpoint | Pass/warn/block | Pass — 1.1% utilization for $5M AGL trade |
 | Copilot | value_ppa tool | Pass — full analysis with cashflow table + recommendations |
+
+---
+
+## Roadmap
+
+- [ ] **Fresh install test on new workspace** — Spin up a new FEVM workspace and run the full setup chain end-to-end (`databricks bundle deploy` → `databricks bundle run job_00_setup` → upload app files → `databricks apps deploy`). Verify all 73+ gold tables are created, seed data populates, pipelines run, and the app serves real data with no manual intervention.

@@ -21,9 +21,17 @@ resources:
             base_parameters:
               catalog: ${var.catalog}
           environment_key: default
-        - task_key: create_tables
+        - task_key: create_core_nem_tables
           depends_on:
             - task_key: create_schemas
+          notebook_task:
+            notebook_path: ../setup/23_create_core_nem_tables.py
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: default
+        - task_key: create_tables
+          depends_on:
+            - task_key: create_core_nem_tables
           notebook_task:
             notebook_path: ../setup/02_create_tables.py
             base_parameters:
@@ -144,6 +152,7 @@ resources:
           environment_key: default
         - task_key: backfill
           depends_on:
+            - task_key: create_core_nem_tables
             - task_key: create_tables
           notebook_task:
             notebook_path: ../setup/11_historical_backfill.py
