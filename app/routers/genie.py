@@ -678,6 +678,56 @@ _GENIE_SPACES = [
             },
         ],
     },
+    # ── Phase 5: Settlement & Finance ────────────────────────────────
+    {
+        "space_id": "01f12112f4fb1901885d45287acee57e",
+        "title": "Settlement & Finance",
+        "description": "AEMO settlement processing, billing run analysis, charge reconciliation, dispute management, GL journals, and finance-ready outputs.",
+        "icon": "file-check",
+        "tables": ["settlement_runs", "settlement_charges", "settlement_journals", "settlement_disputes", "settlement_gl_mapping", "settlement_evidence"],
+        "question_categories": [
+            {
+                "label": "Settlement Runs",
+                "questions": [
+                    "Show all settlement runs with their status, AEMO total, and variance percentage",
+                    "Which settlement runs have variance above $50,000?",
+                    "Compare PRELIM vs FINAL settlement amounts by region",
+                    "What is the total AEMO settlement amount by region?",
+                    "List all PENDING settlement runs sorted by run date",
+                    "What is the average variance percentage by region and run type?",
+                ],
+            },
+            {
+                "label": "Charges & Reconciliation",
+                "questions": [
+                    "Show charge breakdown by charge type for the latest settlement run",
+                    "What is the total variance by charge type across all runs?",
+                    "How many charges are UNMAPPED vs MAPPED?",
+                    "Show the top 10 charges by absolute variance amount",
+                    "What is the net settlement position (AEMO minus internal) by region?",
+                ],
+            },
+            {
+                "label": "Disputes",
+                "questions": [
+                    "List all open disputes with their priority and workflow state",
+                    "How many disputes are in each workflow state?",
+                    "Show disputes with CRITICAL or HIGH priority that are not CLOSED",
+                    "What is the total disputed variance amount by region?",
+                    "List disputes that have been open for more than 30 days",
+                ],
+            },
+            {
+                "label": "Finance & GL",
+                "questions": [
+                    "Show GL journal entries by period and account code",
+                    "What is the total debit and credit amount by journal type?",
+                    "List unposted journals sorted by amount",
+                    "Show the GL mapping configuration for all charge types",
+                ],
+            },
+        ],
+    },
 ]
 
 

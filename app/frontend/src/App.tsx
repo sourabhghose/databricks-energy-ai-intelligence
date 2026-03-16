@@ -1605,6 +1605,8 @@ const ROUTE_MAP: Record<string, React.ComponentType> = {
 const PINNED_PATHS = new Set(['/', '/live', '/ai-market-intelligence', '/genie', '/alerts'])
 
 const DASHBOARD_LINKS: { to: string; label: string; Icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
+  // Market Operations
+  { to: '/cat/operations', label: 'Market Operations', Icon: Radio },
   // Trading & Risk
   { to: '/deal-capture',      label: 'Deal Capture',   Icon: Plus },
   { to: '/portfolio',         label: 'Portfolio',      Icon: Briefcase },
@@ -1997,8 +1999,8 @@ function CategoryPage() {
 function Sidebar() {
   const location = useLocation()
   const navigate = useNavigate()
-  const [quickAccessOpen, setQuickAccessOpen] = useState(true)
-  const [expandedOffice, setExpandedOffice] = useState<string | null>('front')
+  const [quickAccessOpen, setQuickAccessOpen] = useState(false)
+  const [expandedOffice, setExpandedOffice] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
 
