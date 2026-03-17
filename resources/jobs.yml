@@ -831,3 +831,216 @@ resources:
               - pypi:
                   package: requests
       max_concurrent_runs: 1
+
+    # -----------------------------------------------------------------
+    # Job 22 — Safeguard Mechanism & ACCU Market (monthly)
+    # -----------------------------------------------------------------
+    job_22_safeguard_mechanism:
+      name: "[${bundle.target}] 22 — Safeguard Mechanism"
+      description: "CER Safeguard Mechanism facility baselines, emissions, and ACCU market data."
+      tags:
+        environment: ${bundle.target}
+        pipeline: "22_safeguard_mechanism"
+      schedule:
+        quartz_cron_expression: "0 0 9 ? * 2#1"
+        timezone_id: "Australia/Brisbane"
+        pause_status: UNPAUSED
+      tasks:
+        - task_key: safeguard_ingest
+          notebook_task:
+            notebook_path: ../pipelines/22_safeguard_mechanism_ingest.py
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: default
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"
+      max_concurrent_runs: 1
+
+    # -----------------------------------------------------------------
+    # Job 23 — AEMC Rule Changes (monthly)
+    # -----------------------------------------------------------------
+    job_23_aemc_rule_changes:
+      name: "[${bundle.target}] 23 — AEMC Rule Changes"
+      description: "AEMC Rule Change Register — active and completed NER/WEM rule changes."
+      tags:
+        environment: ${bundle.target}
+        pipeline: "23_aemc_rule_changes"
+      schedule:
+        quartz_cron_expression: "0 30 9 ? * 2#1"
+        timezone_id: "Australia/Brisbane"
+        pause_status: UNPAUSED
+      tasks:
+        - task_key: aemc_rules_ingest
+          notebook_task:
+            notebook_path: ../pipelines/23_aemc_rule_changes_ingest.py
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: default
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"
+            dependencies:
+              - pypi:
+                  package: beautifulsoup4
+              - pypi:
+                  package: requests
+      max_concurrent_runs: 1
+
+    # -----------------------------------------------------------------
+    # Job 24 — BTM DER Installations (monthly)
+    # -----------------------------------------------------------------
+    job_24_btm_der:
+      name: "[${bundle.target}] 24 — BTM DER Installations"
+      description: "CER SRES rooftop solar, home battery, and EV installation data by state."
+      tags:
+        environment: ${bundle.target}
+        pipeline: "24_btm_der"
+      schedule:
+        quartz_cron_expression: "0 0 10 ? * 2#1"
+        timezone_id: "Australia/Brisbane"
+        pause_status: UNPAUSED
+      tasks:
+        - task_key: btm_ingest
+          notebook_task:
+            notebook_path: ../pipelines/24_btm_der_ingest.py
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: default
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"
+      max_concurrent_runs: 1
+
+    # -----------------------------------------------------------------
+    # Job 25 — RAB Determinations (quarterly)
+    # -----------------------------------------------------------------
+    job_25_rab_determinations:
+      name: "[${bundle.target}] 25 — RAB Determinations"
+      description: "AER network regulatory determinations — RAB, WACC, capex/opex allowances."
+      tags:
+        environment: ${bundle.target}
+        pipeline: "25_rab_determinations"
+      schedule:
+        quartz_cron_expression: "0 30 10 ? * 2#1"
+        timezone_id: "Australia/Brisbane"
+        pause_status: UNPAUSED
+      tasks:
+        - task_key: rab_ingest
+          notebook_task:
+            notebook_path: ../pipelines/25_rab_determinations_ingest.py
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: default
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"
+      max_concurrent_runs: 1
+
+    # -----------------------------------------------------------------
+    # Job 26 — Consumer Protection (quarterly)
+    # -----------------------------------------------------------------
+    job_26_consumer_protection:
+      name: "[${bundle.target}] 26 — Consumer Protection"
+      description: "AER Retail Markets data — switching, complaints, hardship, disconnections."
+      tags:
+        environment: ${bundle.target}
+        pipeline: "26_consumer_protection"
+      schedule:
+        quartz_cron_expression: "0 0 11 ? * 2#1"
+        timezone_id: "Australia/Brisbane"
+        pause_status: UNPAUSED
+      tasks:
+        - task_key: consumer_ingest
+          notebook_task:
+            notebook_path: ../pipelines/26_consumer_protection_ingest.py
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: default
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"
+      max_concurrent_runs: 1
+
+    # -----------------------------------------------------------------
+    # Job 27 — TNSP Performance & TUOS (quarterly)
+    # -----------------------------------------------------------------
+    job_27_tnsp_tuos:
+      name: "[${bundle.target}] 27 — TNSP & TUOS"
+      description: "TNSP performance metrics and Transmission Use of System charges."
+      tags:
+        environment: ${bundle.target}
+        pipeline: "27_tnsp_tuos"
+      schedule:
+        quartz_cron_expression: "0 30 11 ? * 2#1"
+        timezone_id: "Australia/Brisbane"
+        pause_status: UNPAUSED
+      tasks:
+        - task_key: tnsp_tuos_ingest
+          notebook_task:
+            notebook_path: ../pipelines/27_tnsp_tuos_ingest.py
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: default
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"
+      max_concurrent_runs: 1
+
+    # -----------------------------------------------------------------
+    # Job 28 — RIT Register (quarterly)
+    # -----------------------------------------------------------------
+    job_28_rit_register:
+      name: "[${bundle.target}] 28 — RIT Register"
+      description: "AER RIT-T/RIT-D register — active and completed regulatory investment tests."
+      tags:
+        environment: ${bundle.target}
+        pipeline: "28_rit_register"
+      schedule:
+        quartz_cron_expression: "0 0 12 ? * 2#1"
+        timezone_id: "Australia/Brisbane"
+        pause_status: UNPAUSED
+      tasks:
+        - task_key: rit_ingest
+          notebook_task:
+            notebook_path: ../pipelines/28_rit_register_ingest.py
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: default
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"
+      max_concurrent_runs: 1
+
+    # -----------------------------------------------------------------
+    # Job 29 — Offshore Wind Areas (quarterly)
+    # -----------------------------------------------------------------
+    job_29_offshore_wind:
+      name: "[${bundle.target}] 29 — Offshore Wind Areas"
+      description: "DCCEEW offshore wind declared areas, licence applications, and project pipeline."
+      tags:
+        environment: ${bundle.target}
+        pipeline: "29_offshore_wind"
+      schedule:
+        quartz_cron_expression: "0 30 12 ? * 2#1"
+        timezone_id: "Australia/Brisbane"
+        pause_status: UNPAUSED
+      tasks:
+        - task_key: offshore_wind_ingest
+          notebook_task:
+            notebook_path: ../pipelines/29_offshore_wind_ingest.py
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: default
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"
+      max_concurrent_runs: 1

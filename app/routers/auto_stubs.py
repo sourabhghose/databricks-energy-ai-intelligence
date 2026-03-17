@@ -468,8 +468,101 @@ def _build_lgc_response(label, seed):
     return None
 
 
+# --- Tier 3: New data fetchers for pipelines 22-29 ---
+
+def _safeguard_data():
+    return _get_cached('safeguard', lambda: _query_gold(f"""
+        SELECT facility_name, company, sector, state, baseline_tco2e,
+               reported_emissions_tco2e, excess_emissions_tco2e, accus_surrendered,
+               compliance_year, status
+        FROM {_CATALOG}.gold.safeguard_facilities ORDER BY baseline_tco2e DESC
+    """))
+
+def _accu_data():
+    return _get_cached('accu', lambda: _query_gold(f"""
+        SELECT trade_date, accu_spot_price_aud, volume_traded,
+               total_accus_issued, total_accus_surrendered
+        FROM {_CATALOG}.gold.accu_market ORDER BY trade_date DESC
+    """))
+
+def _aemc_data():
+    return _get_cached('aemc_rules', lambda: _query_gold(f"""
+        SELECT title, proponent, status, rule_type, date_initiated, date_completed,
+               category, description
+        FROM {_CATALOG}.gold.aemc_rule_changes ORDER BY date_initiated DESC
+    """))
+
+def _btm_data():
+    return _get_cached('btm', lambda: _query_gold(f"""
+        SELECT category, state, year, quarter, cumulative_installations,
+               new_installations, total_capacity_kw, avg_system_size_kw
+        FROM {_CATALOG}.gold.btm_installations ORDER BY year DESC, state
+    """))
+
+def _rab_data():
+    return _get_cached('rab', lambda: _query_gold(f"""
+        SELECT network_business, network_type, state, regulatory_period,
+               rab_opening_m_aud, rab_closing_m_aud, allowed_revenue_m_aud,
+               capex_allowance_m_aud, opex_allowance_m_aud, wacc_nominal_pct, status
+        FROM {_CATALOG}.gold.rab_determinations ORDER BY rab_opening_m_aud DESC
+    """))
+
+def _consumer_data():
+    return _get_cached('consumer_prot', lambda: _query_gold(f"""
+        SELECT metric_type, retailer, state, year, quarter, metric_value, metric_unit
+        FROM {_CATALOG}.gold.consumer_protection ORDER BY year DESC, metric_type
+    """))
+
+def _tnsp_perf_data():
+    return _get_cached('tnsp_perf', lambda: _query_gold(f"""
+        SELECT tnsp, state, year, circuit_km, energy_delivered_gwh,
+               peak_demand_mw, loss_factor_pct, opex_per_km_aud, capex_m_aud
+        FROM {_CATALOG}.gold.tnsp_performance ORDER BY year DESC, tnsp
+    """))
+
+def _tuos_data():
+    return _get_cached('tuos', lambda: _query_gold(f"""
+        SELECT tnsp, state, financial_year, locational_aud_per_kw,
+               non_locational_aud_per_mwh, common_service_aud_per_mwh, total_tuos_revenue_m_aud
+        FROM {_CATALOG}.gold.tuos_charges ORDER BY tnsp
+    """))
+
+def _rit_data():
+    return _get_cached('rit', lambda: _query_gold(f"""
+        SELECT project_name, rit_type, proponent, state, status,
+               estimated_cost_m_aud, net_benefit_m_aud, date_published,
+               date_completed, preferred_option, description
+        FROM {_CATALOG}.gold.rit_register ORDER BY estimated_cost_m_aud DESC
+    """))
+
+def _offshore_wind_data():
+    return _get_cached('offshore_wind', lambda: _query_gold(f"""
+        SELECT area_name, state, declared_date, area_sq_km, estimated_capacity_gw,
+               water_depth_m, distance_from_shore_km, licence_applicants, status,
+               key_projects, description
+        FROM {_CATALOG}.gold.offshore_wind_areas ORDER BY estimated_capacity_gw DESC
+    """))
+
+
 @router.get("/api/aemc-rule-change/dashboard")
 def aemc_rule_change_dashboard():
+    rows = _aemc_data()
+    if rows:
+        in_progress = [r for r in rows if r.get("status") == "IN_PROGRESS"]
+        by_cat = {}
+        for r in rows:
+            c = r.get("category", "OTHER")
+            by_cat.setdefault(c, 0)
+            by_cat[c] += 1
+        return {
+            "summary": {"title": "AEMC Rule Change Register", "total_rules": len(rows),
+                        "in_progress": len(in_progress), "categories": len(by_cat),
+                        "last_updated": _dt.utcnow().isoformat()},
+            "records": [{"title": r.get("title"), "proponent": r.get("proponent"),
+                         "status": r.get("status"), "rule_type": r.get("rule_type"),
+                         "category": r.get("category"), "date_initiated": r.get("date_initiated"),
+                         "description": (r.get("description") or "")[:200]} for r in rows],
+            "by_category": [{"category": k, "count": v} for k, v in sorted(by_cat.items(), key=lambda x: -x[1])]}
     _r.seed(6000)
     return {
         "summary": {"title": "Aemc Rule Change > Dashboard", "status": "operational",
@@ -818,6 +911,22 @@ def black_start_dashboard():
 
 @router.get("/api/btm/dashboard")
 def btm_dashboard():
+    rows = _btm_data()
+    if rows:
+        by_cat = {}
+        for r in rows:
+            c = r.get("category", "OTHER")
+            by_cat.setdefault(c, {"installations": 0, "capacity_kw": 0})
+            by_cat[c]["installations"] += int(r.get("cumulative_installations") or 0)
+            by_cat[c]["capacity_kw"] += float(r.get("total_capacity_kw") or 0)
+        return {
+            "summary": {"title": "Behind-the-Meter > Dashboard", "categories": len(by_cat),
+                        "total_records": len(rows), "last_updated": _dt.utcnow().isoformat()},
+            "records": [{"category": r.get("category"), "state": r.get("state"),
+                         "cumulative": int(r.get("cumulative_installations") or 0),
+                         "new": int(r.get("new_installations") or 0),
+                         "capacity_kw": float(r.get("total_capacity_kw") or 0)} for r in rows],
+            "by_category": [{"category": k, **v} for k, v in by_cat.items()]}
     _r.seed(6029)
     return {
         "summary": {"title": "Btm > Dashboard", "status": "operational",
@@ -829,6 +938,12 @@ def btm_dashboard():
 
 @router.get("/api/btm/ev")
 def btm_ev():
+    rows = _btm_data()
+    if rows:
+        evs = [r for r in rows if r.get("category") == "EV"]
+        if evs:
+            return [{"id": i+1, "state": r.get("state"), "cumulative_evs": int(r.get("cumulative_installations") or 0),
+                     "new_evs": int(r.get("new_installations") or 0)} for i, r in enumerate(evs)]
     _r.seed(6030)
     return [{"id": j + 1, "region": _r.choice(["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]),
               "label": "Btm > Ev", "value": round(_r.uniform(10, 500), 2),
@@ -836,6 +951,13 @@ def btm_ev():
 
 @router.get("/api/btm/home-batteries")
 def btm_home_batteries():
+    rows = _btm_data()
+    if rows:
+        batt = [r for r in rows if r.get("category") == "HOME_BATTERY"]
+        if batt:
+            return [{"id": i+1, "state": r.get("state"), "cumulative": int(r.get("cumulative_installations") or 0),
+                     "new": int(r.get("new_installations") or 0),
+                     "capacity_kw": float(r.get("total_capacity_kw") or 0)} for i, r in enumerate(batt)]
     _r.seed(6031)
     return [{"id": j + 1, "region": _r.choice(["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]),
               "label": "Btm > Home Batteries", "value": round(_r.uniform(10, 500), 2),
@@ -1045,6 +1167,28 @@ def carbon_trajectory():
 
 @router.get("/api/causer-pays/dashboard")
 def causer_pays_dashboard():
+    rows = _get_cached('causer_pays', lambda: _query_gold(f"""
+        SELECT region_id,
+               AVG(raise_6sec_price) AS avg_raise6, AVG(raise_60sec_price) AS avg_raise60,
+               AVG(raise_5min_price) AS avg_raise5, AVG(lower_6sec_price) AS avg_lower6,
+               AVG(lower_60sec_price) AS avg_lower60, AVG(lower_5min_price) AS avg_lower5,
+               COUNT(*) AS intervals
+        FROM {_CATALOG}.gold.nem_prices_5min
+        WHERE interval_datetime >= current_timestamp() - INTERVAL 7 DAYS
+        GROUP BY region_id
+    """))
+    if rows:
+        return {
+            "summary": {"title": "Causer Pays > Dashboard", "regions": len(rows),
+                        "last_updated": _dt.utcnow().isoformat()},
+            "records": [{"region": r.get("region_id"),
+                         "avg_raise_6sec": round(float(r.get("avg_raise6") or 0), 2),
+                         "avg_raise_60sec": round(float(r.get("avg_raise60") or 0), 2),
+                         "avg_raise_5min": round(float(r.get("avg_raise5") or 0), 2),
+                         "avg_lower_6sec": round(float(r.get("avg_lower6") or 0), 2),
+                         "avg_lower_60sec": round(float(r.get("avg_lower60") or 0), 2),
+                         "avg_lower_5min": round(float(r.get("avg_lower5") or 0), 2),
+                         "intervals": int(r.get("intervals") or 0)} for r in rows]}
     _r.seed(6048)
     return {
         "summary": {"title": "Causer Pays > Dashboard", "status": "operational",
@@ -1089,6 +1233,19 @@ def cer_orchestration_dashboard():
 
 @router.get("/api/cer/dashboard")
 def cer_dashboard():
+    result = _build_lgc_response("CER > Dashboard", 6052)
+    if result:
+        # Enrich with certificate balances
+        bal = _get_cached('cer_bal', lambda: _query_gold(f"""
+            SELECT scheme, certificate_type, SUM(balance) AS total_balance
+            FROM {_CATALOG}.gold.certificate_balances
+            GROUP BY scheme, certificate_type
+        """))
+        if bal:
+            result["certificate_balances"] = [{"scheme": r.get("scheme"),
+                "certificate_type": r.get("certificate_type"),
+                "total_balance": float(r.get("total_balance") or 0)} for r in bal]
+        return result
     _r.seed(6052)
     return {
         "summary": {"title": "Cer > Dashboard", "status": "operational",
@@ -1100,6 +1257,18 @@ def cer_dashboard():
 
 @router.get("/api/cer/lret")
 def cer_lret():
+    rows = _get_cached('cer_lret', lambda: _query_gold(f"""
+        SELECT fuel_type, state, SUM(lgc_created_mwh) AS total_lgc, COUNT(*) AS generators
+        FROM {_CATALOG}.gold.lgc_registry
+        GROUP BY fuel_type, state ORDER BY total_lgc DESC
+    """))
+    if rows:
+        total = sum(float(r.get("total_lgc") or 0) for r in rows)
+        return [{"id": i+1, "fuel_type": r.get("fuel_type"), "state": r.get("state"),
+                 "total_lgc_mwh": round(float(r.get("total_lgc") or 0), 0),
+                 "generators": int(r.get("generators") or 0),
+                 "share_pct": round(float(r.get("total_lgc") or 0) / max(total, 1) * 100, 1)
+                } for i, r in enumerate(rows)]
     _r.seed(6053)
     return [{"id": j + 1, "region": _r.choice(["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]),
               "label": "Cer > Lret", "value": round(_r.uniform(10, 500), 2),
@@ -1347,6 +1516,12 @@ def consumer_hardship_dashboard():
 
 @router.get("/api/consumer-protection/complaints")
 def consumer_protection_complaints():
+    rows = _consumer_data()
+    if rows:
+        complaints = [r for r in rows if r.get("metric_type") == "COMPLAINTS"]
+        if complaints:
+            return [{"id": i+1, "retailer": r.get("retailer"), "complaints": int(r.get("metric_value") or 0),
+                     "year": r.get("year"), "quarter": r.get("quarter")} for i, r in enumerate(complaints)]
     _r.seed(6075)
     return [{"id": j + 1, "region": _r.choice(["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]),
               "label": "Consumer Protection > Complaints", "value": round(_r.uniform(10, 500), 2),
@@ -1354,6 +1529,20 @@ def consumer_protection_complaints():
 
 @router.get("/api/consumer-protection/dashboard")
 def consumer_protection_dashboard():
+    rows = _consumer_data()
+    if rows:
+        by_type = {}
+        for r in rows:
+            t = r.get("metric_type", "OTHER")
+            by_type.setdefault(t, [])
+            by_type[t].append(r)
+        return {
+            "summary": {"title": "Consumer Protection > Dashboard", "metric_types": len(by_type),
+                        "total_records": len(rows), "last_updated": _dt.utcnow().isoformat()},
+            "records": [{"metric_type": r.get("metric_type"), "retailer": r.get("retailer"),
+                         "state": r.get("state"), "value": float(r.get("metric_value") or 0),
+                         "unit": r.get("metric_unit")} for r in rows],
+            "by_type": [{"type": k, "count": len(v)} for k, v in by_type.items()]}
     _r.seed(6076)
     return {
         "summary": {"title": "Consumer Protection > Dashboard", "status": "operational",
@@ -1365,6 +1554,12 @@ def consumer_protection_dashboard():
 
 @router.get("/api/consumer-protection/offers")
 def consumer_protection_offers():
+    rows = _consumer_data()
+    if rows:
+        offers = [r for r in rows if r.get("metric_type") == "AVG_OFFER_RATE"]
+        if offers:
+            return [{"id": i+1, "state": r.get("state"),
+                     "avg_offer_aud_kwh": float(r.get("metric_value") or 0)} for i, r in enumerate(offers)]
     _r.seed(6077)
     return [{"id": j + 1, "region": _r.choice(["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]),
               "label": "Consumer Protection > Offers", "value": round(_r.uniform(10, 500), 2),
@@ -1372,6 +1567,12 @@ def consumer_protection_offers():
 
 @router.get("/api/consumer-protection/switching")
 def consumer_protection_switching():
+    rows = _consumer_data()
+    if rows:
+        switching = [r for r in rows if r.get("metric_type") == "SWITCHING_RATE"]
+        if switching:
+            return [{"id": i+1, "state": r.get("state"),
+                     "switching_rate_pct": float(r.get("metric_value") or 0)} for i, r in enumerate(switching)]
     _r.seed(6078)
     return [{"id": j + 1, "region": _r.choice(["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]),
               "label": "Consumer Protection > Switching", "value": round(_r.uniform(10, 500), 2),
@@ -1796,6 +1997,18 @@ def dsr_aggregator_dashboard():
 
 @router.get("/api/efor/availability")
 def efor_availability():
+    rows = _get_cached('efor_avail', lambda: _query_gold(f"""
+        SELECT region_id, fuel_type, SUM(total_mw) AS total_mw, SUM(unit_count) AS units,
+               AVG(capacity_factor) AS avg_cf
+        FROM {_CATALOG}.gold.nem_generation_by_fuel
+        WHERE interval_datetime >= current_timestamp() - INTERVAL 7 DAYS
+        GROUP BY region_id, fuel_type ORDER BY total_mw DESC
+    """))
+    if rows:
+        return [{"id": i+1, "region": r.get("region_id"), "fuel_type": r.get("fuel_type"),
+                 "availability_mw": round(float(r.get("total_mw") or 0), 1),
+                 "units": int(r.get("units") or 0),
+                 "capacity_factor": round(float(r.get("avg_cf") or 0), 3)} for i, r in enumerate(rows[:20])]
     _r.seed(6116)
     return [{"id": j + 1, "region": _r.choice(["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]),
               "label": "Efor > Availability", "value": round(_r.uniform(10, 500), 2),
@@ -1803,6 +2016,19 @@ def efor_availability():
 
 @router.get("/api/efor/dashboard")
 def efor_dashboard():
+    rows = _get_cached('efor_kpis', lambda: _query_gold(f"""
+        SELECT business_name, region, metric_name, metric_value, year, period
+        FROM {_CATALOG}.gold.reliability_kpis
+        ORDER BY year DESC, business_name
+    """))
+    if rows:
+        businesses = set(r.get("business_name") for r in rows if r.get("business_name"))
+        return {
+            "summary": {"title": "EFOR > Dashboard", "businesses": len(businesses),
+                        "total_records": len(rows), "last_updated": _dt.utcnow().isoformat()},
+            "records": [{"business": r.get("business_name"), "region": r.get("region"),
+                         "metric": r.get("metric_name"), "value": r.get("metric_value"),
+                         "year": r.get("year"), "period": r.get("period")} for r in rows[:30]]}
     _r.seed(6117)
     return {
         "summary": {"title": "Efor > Dashboard", "status": "operational",
@@ -1814,6 +2040,15 @@ def efor_dashboard():
 
 @router.get("/api/efor/trends")
 def efor_trends():
+    rows = _get_cached('efor_trends', lambda: _query_gold(f"""
+        SELECT business_name, metric_name, year, metric_value
+        FROM {_CATALOG}.gold.reliability_kpis
+        WHERE metric_name IN ('SAIDI', 'SAIFI', 'CAIDI')
+        ORDER BY year, business_name
+    """))
+    if rows:
+        return [{"id": i+1, "business": r.get("business_name"), "metric": r.get("metric_name"),
+                 "year": r.get("year"), "value": r.get("metric_value")} for i, r in enumerate(rows)]
     _r.seed(6118)
     return [{"id": j + 1, "region": _r.choice(["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]),
               "label": "Efor > Trends", "value": round(_r.uniform(10, 500), 2),
@@ -2384,6 +2619,31 @@ def equity_dashboard():
 
 @router.get("/api/esoo-adequacy/dashboard")
 def esoo_adequacy_dashboard():
+    rows = _get_cached('esoo', lambda: _query_gold(f"""
+        SELECT d.region_id,
+               MAX(d.predicted_demand_mw) AS peak_demand_mw,
+               g.total_capacity_mw,
+               (g.total_capacity_mw - MAX(d.predicted_demand_mw)) AS reserve_margin_mw
+        FROM {_CATALOG}.gold.demand_forecasts d
+        LEFT JOIN (
+            SELECT region_id, SUM(capacity_mw) AS total_capacity_mw
+            FROM {_CATALOG}.gold.nem_facilities
+            GROUP BY region_id
+        ) g ON d.region_id = g.region_id
+        WHERE d.interval_datetime >= current_timestamp()
+          AND d.interval_datetime < current_timestamp() + INTERVAL 7 DAYS
+        GROUP BY d.region_id, g.total_capacity_mw
+    """))
+    if rows:
+        return {
+            "summary": {"title": "ESOO Adequacy > Dashboard", "regions": len(rows),
+                        "last_updated": _dt.utcnow().isoformat()},
+            "records": [{"region": r.get("region_id"),
+                         "peak_demand_mw": round(float(r.get("peak_demand_mw") or 0), 0),
+                         "total_capacity_mw": round(float(r.get("total_capacity_mw") or 0), 0),
+                         "reserve_margin_mw": round(float(r.get("reserve_margin_mw") or 0), 0),
+                         "reserve_margin_pct": round(float(r.get("reserve_margin_mw") or 0) / max(float(r.get("peak_demand_mw") or 1), 1) * 100, 1)
+                        } for r in rows]}
     _r.seed(6165)
     return {
         "summary": {"title": "Esoo Adequacy > Dashboard", "status": "operational",
@@ -3515,6 +3775,9 @@ def ldes_economics_dashboard():
 
 @router.get("/api/lgc-market/dashboard")
 def lgc_market_dashboard():
+    result = _build_lgc_response("LGC Market > Dashboard", 6259)
+    if result:
+        return result
     _r.seed(6259)
     return {
         "summary": {"title": "Lgc Market > Dashboard", "status": "operational",
@@ -4185,6 +4448,18 @@ def offshore_wind_pipeline_capacity_outlook():
 
 @router.get("/api/offshore-wind-pipeline/dashboard")
 def offshore_wind_pipeline_dashboard():
+    rows = _offshore_wind_data()
+    if rows:
+        total_gw = sum(float(r.get("estimated_capacity_gw") or 0) for r in rows)
+        return {
+            "summary": {"title": "Offshore Wind Pipeline", "declared_areas": len(rows),
+                        "total_capacity_gw": round(total_gw, 1),
+                        "last_updated": _dt.utcnow().isoformat()},
+            "records": [{"area": r.get("area_name"), "state": r.get("state"),
+                         "capacity_gw": float(r.get("estimated_capacity_gw") or 0),
+                         "area_sq_km": float(r.get("area_sq_km") or 0),
+                         "status": r.get("status"),
+                         "applicants": int(r.get("licence_applicants") or 0)} for r in rows]}
     result = _build_renewable_response("Offshore Wind Pipeline > Dashboard", 6316)
     if result:
         return result
@@ -4199,9 +4474,14 @@ def offshore_wind_pipeline_dashboard():
 
 @router.get("/api/offshore-wind-pipeline/declared-areas")
 def offshore_wind_pipeline_declared_areas():
-    result = _build_renewable_response("Offshore Wind Pipeline > Declared Areas", 6317)
-    if result and "records" in result:
-        return result["records"]
+    rows = _offshore_wind_data()
+    if rows:
+        return [{"id": i+1, "area": r.get("area_name"), "state": r.get("state"),
+                 "declared_date": r.get("declared_date"), "area_sq_km": float(r.get("area_sq_km") or 0),
+                 "capacity_gw": float(r.get("estimated_capacity_gw") or 0),
+                 "water_depth": r.get("water_depth_m"),
+                 "distance_km": float(r.get("distance_from_shore_km") or 0),
+                 "description": (r.get("description") or "")[:200]} for i, r in enumerate(rows)]
     _r.seed(6317)
     return [{"id": j + 1, "region": _r.choice(["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]),
               "label": "Offshore Wind Pipeline > Declared Areas", "value": round(_r.uniform(10, 500), 2),
@@ -4209,9 +4489,13 @@ def offshore_wind_pipeline_declared_areas():
 
 @router.get("/api/offshore-wind-pipeline/licences")
 def offshore_wind_pipeline_licences():
-    result = _build_renewable_response("Offshore Wind Pipeline > Licences", 6318)
-    if result and "records" in result:
-        return result["records"]
+    rows = _offshore_wind_data()
+    if rows:
+        with_licences = [r for r in rows if int(r.get("licence_applicants") or 0) > 0]
+        return [{"id": i+1, "area": r.get("area_name"), "state": r.get("state"),
+                 "licence_applicants": int(r.get("licence_applicants") or 0),
+                 "status": r.get("status"),
+                 "key_projects": r.get("key_projects")} for i, r in enumerate(with_licences)]
     _r.seed(6318)
     return [{"id": j + 1, "region": _r.choice(["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]),
               "label": "Offshore Wind Pipeline > Licences", "value": round(_r.uniform(10, 500), 2),
@@ -4492,6 +4776,25 @@ def pumped_hydro_resource_assessment_dashboard():
 
 @router.get("/api/rab/dashboard")
 def rab_dashboard():
+    rows = _rab_data()
+    if rows:
+        total_rab = sum(float(r.get("rab_opening_m_aud") or 0) for r in rows)
+        by_type = {}
+        for r in rows:
+            t = r.get("network_type", "DNSP")
+            by_type.setdefault(t, {"count": 0, "rab_m": 0})
+            by_type[t]["count"] += 1
+            by_type[t]["rab_m"] += float(r.get("rab_opening_m_aud") or 0)
+        return {
+            "summary": {"title": "RAB & Network Determinations", "businesses": len(rows),
+                        "total_rab_b_aud": round(total_rab / 1000, 1),
+                        "last_updated": _dt.utcnow().isoformat()},
+            "records": [{"business": r.get("network_business"), "type": r.get("network_type"),
+                         "state": r.get("state"), "period": r.get("regulatory_period"),
+                         "rab_m": float(r.get("rab_opening_m_aud") or 0),
+                         "capex_m": float(r.get("capex_allowance_m_aud") or 0),
+                         "wacc_pct": float(r.get("wacc_nominal_pct") or 0)} for r in rows],
+            "by_type": [{"type": k, **v} for k, v in by_type.items()]}
     _r.seed(6342)
     return {
         "summary": {"title": "Rab > Dashboard", "status": "operational",
@@ -4503,6 +4806,14 @@ def rab_dashboard():
 
 @router.get("/api/rab/determinations")
 def rab_determinations():
+    rows = _rab_data()
+    if rows:
+        return [{"id": i+1, "business": r.get("network_business"), "state": r.get("state"),
+                 "period": r.get("regulatory_period"),
+                 "rab_opening_m": float(r.get("rab_opening_m_aud") or 0),
+                 "rab_closing_m": float(r.get("rab_closing_m_aud") or 0),
+                 "revenue_m": float(r.get("allowed_revenue_m_aud") or 0),
+                 "status": r.get("status")} for i, r in enumerate(rows)]
     _r.seed(6343)
     return [{"id": j + 1, "region": _r.choice(["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]),
               "label": "Rab > Determinations", "value": round(_r.uniform(10, 500), 2),
@@ -4510,6 +4821,18 @@ def rab_determinations():
 
 @router.get("/api/rab/yearly")
 def rab_yearly():
+    rows = _rab_data()
+    if rows:
+        by_state = {}
+        for r in rows:
+            s = r.get("state", "")
+            by_state.setdefault(s, {"rab_m": 0, "capex_m": 0, "opex_m": 0})
+            by_state[s]["rab_m"] += float(r.get("rab_opening_m_aud") or 0)
+            by_state[s]["capex_m"] += float(r.get("capex_allowance_m_aud") or 0)
+            by_state[s]["opex_m"] += float(r.get("opex_allowance_m_aud") or 0)
+        return [{"id": i+1, "state": k, "total_rab_m": round(v["rab_m"], 0),
+                 "total_capex_m": round(v["capex_m"], 0),
+                 "total_opex_m": round(v["opex_m"], 0)} for i, (k, v) in enumerate(sorted(by_state.items()))]
     _r.seed(6344)
     return [{"id": j + 1, "region": _r.choice(["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]),
               "label": "Rab > Yearly", "value": round(_r.uniform(10, 500), 2),
@@ -4531,6 +4854,9 @@ def reactive_power_voltage_dashboard():
 
 @router.get("/api/realtime/dispatch")
 def realtime_dispatch():
+    result = _build_pricing_response("Realtime > Dispatch", 6346)
+    if result and "records" in result:
+        return result["records"]
     _r.seed(6346)
     return [{"id": j + 1, "region": _r.choice(["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]),
               "label": "Realtime > Dispatch", "value": round(_r.uniform(10, 500), 2),
@@ -4538,6 +4864,9 @@ def realtime_dispatch():
 
 @router.get("/api/realtime/generation-mix")
 def realtime_generation_mix():
+    result = _build_generation_response("Realtime > Generation Mix", 6347)
+    if result and "records" in result:
+        return result["records"]
     _r.seed(6347)
     return [{"id": j + 1, "region": _r.choice(["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]),
               "label": "Realtime > Generation Mix", "value": round(_r.uniform(10, 500), 2),
@@ -4975,6 +5304,25 @@ def rit_cost_benefits():
 
 @router.get("/api/rit/dashboard")
 def rit_dashboard():
+    rows = _rit_data()
+    if rows:
+        total_cost = sum(float(r.get("estimated_cost_m_aud") or 0) for r in rows)
+        total_benefit = sum(float(r.get("net_benefit_m_aud") or 0) for r in rows)
+        by_status = {}
+        for r in rows:
+            s = r.get("status", "UNKNOWN")
+            by_status.setdefault(s, 0)
+            by_status[s] += 1
+        return {
+            "summary": {"title": "RIT Register", "total_projects": len(rows),
+                        "total_cost_b_aud": round(total_cost / 1000, 1),
+                        "total_benefit_b_aud": round(total_benefit / 1000, 1),
+                        "last_updated": _dt.utcnow().isoformat()},
+            "records": [{"project": r.get("project_name"), "type": r.get("rit_type"),
+                         "proponent": r.get("proponent"), "state": r.get("state"),
+                         "status": r.get("status"), "cost_m": float(r.get("estimated_cost_m_aud") or 0),
+                         "benefit_m": float(r.get("net_benefit_m_aud") or 0)} for r in rows],
+            "by_status": [{"status": k, "count": v} for k, v in by_status.items()]}
     _r.seed(6383)
     return {
         "summary": {"title": "Rit > Dashboard", "status": "operational",
@@ -4986,6 +5334,12 @@ def rit_dashboard():
 
 @router.get("/api/rit/options")
 def rit_options():
+    rows = _rit_data()
+    if rows:
+        completed = [r for r in rows if r.get("preferred_option")]
+        return [{"id": i+1, "project": r.get("project_name"),
+                 "preferred_option": r.get("preferred_option"),
+                 "cost_m": float(r.get("estimated_cost_m_aud") or 0)} for i, r in enumerate(completed)]
     _r.seed(6384)
     return [{"id": j + 1, "region": _r.choice(["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]),
               "label": "Rit > Options", "value": round(_r.uniform(10, 500), 2),
@@ -4993,6 +5347,12 @@ def rit_options():
 
 @router.get("/api/rit/projects")
 def rit_projects():
+    rows = _rit_data()
+    if rows:
+        return [{"id": i+1, "project": r.get("project_name"), "type": r.get("rit_type"),
+                 "proponent": r.get("proponent"), "state": r.get("state"),
+                 "status": r.get("status"), "description": (r.get("description") or "")[:200]
+                } for i, r in enumerate(rows)]
     _r.seed(6385)
     return [{"id": j + 1, "region": _r.choice(["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]),
               "label": "Rit > Projects", "value": round(_r.uniform(10, 500), 2),
@@ -5028,6 +5388,13 @@ def rooftop_solar_network_impact_dashboard():
 
 @router.get("/api/safeguard/accu-market")
 def safeguard_accu_market():
+    rows = _accu_data()
+    if rows:
+        return [{"id": i+1, "trade_date": r.get("trade_date"),
+                 "accu_spot_price_aud": float(r.get("accu_spot_price_aud") or 0),
+                 "volume_traded": int(r.get("volume_traded") or 0),
+                 "total_issued": int(r.get("total_accus_issued") or 0),
+                 "total_surrendered": int(r.get("total_accus_surrendered") or 0)} for i, r in enumerate(rows)]
     _r.seed(6388)
     return [{"id": j + 1, "region": _r.choice(["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]),
               "label": "Safeguard > Accu Market", "value": round(_r.uniform(10, 500), 2),
@@ -5035,6 +5402,26 @@ def safeguard_accu_market():
 
 @router.get("/api/safeguard/dashboard")
 def safeguard_dashboard():
+    rows = _safeguard_data()
+    if rows:
+        total_baseline = sum(float(r.get("baseline_tco2e") or 0) for r in rows)
+        total_reported = sum(float(r.get("reported_emissions_tco2e") or 0) for r in rows)
+        by_sector = {}
+        for r in rows:
+            s = r.get("sector", "Other")
+            by_sector.setdefault(s, 0)
+            by_sector[s] += 1
+        return {
+            "summary": {"title": "Safeguard Mechanism > Dashboard", "total_facilities": len(rows),
+                        "total_baseline_mt": round(total_baseline / 1e6, 1),
+                        "total_reported_mt": round(total_reported / 1e6, 1),
+                        "last_updated": _dt.utcnow().isoformat()},
+            "records": [{"facility": r.get("facility_name"), "company": r.get("company"),
+                         "sector": r.get("sector"), "state": r.get("state"),
+                         "baseline_mt": round(float(r.get("baseline_tco2e") or 0) / 1e6, 2),
+                         "reported_mt": round(float(r.get("reported_emissions_tco2e") or 0) / 1e6, 2),
+                         "status": r.get("status")} for r in rows],
+            "by_sector": [{"sector": k, "count": v} for k, v in sorted(by_sector.items(), key=lambda x: -x[1])]}
     _r.seed(6389)
     return {
         "summary": {"title": "Safeguard > Dashboard", "status": "operational",
@@ -5528,6 +5915,16 @@ def system_load_balancing_dashboard():
 
 @router.get("/api/system-operator/constraint-relaxations")
 def system_operator_constraint_relaxations():
+    rows = _get_cached('so_constraints', lambda: _query_gold(f"""
+        SELECT notice_id, notice_type, region, issue_date, description
+        FROM {_CATALOG}.gold.nem_market_notices
+        WHERE LOWER(description) LIKE '%constraint%' OR LOWER(notice_type) LIKE '%constraint%'
+        ORDER BY issue_date DESC LIMIT 20
+    """))
+    if rows:
+        return [{"id": i+1, "notice_id": r.get("notice_id"), "region": r.get("region","NEM"),
+                 "description": (r.get("description") or "")[:200], "issue_date": r.get("issue_date"),
+                 "type": "constraint_relaxation"} for i, r in enumerate(rows)]
     _r.seed(6432)
     return [{"id": j + 1, "region": _r.choice(["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]),
               "label": "System Operator > Constraint Relaxations", "value": round(_r.uniform(10, 500), 2),
@@ -5535,6 +5932,16 @@ def system_operator_constraint_relaxations():
 
 @router.get("/api/system-operator/directions")
 def system_operator_directions():
+    rows = _get_cached('so_directions', lambda: _query_gold(f"""
+        SELECT notice_id, notice_type, region, issue_date, description
+        FROM {_CATALOG}.gold.nem_market_notices
+        WHERE LOWER(description) LIKE '%direction%' OR LOWER(notice_type) LIKE '%direction%'
+        ORDER BY issue_date DESC LIMIT 20
+    """))
+    if rows:
+        return [{"id": i+1, "notice_id": r.get("notice_id"), "region": r.get("region","NEM"),
+                 "description": (r.get("description") or "")[:200], "issue_date": r.get("issue_date"),
+                 "type": "direction"} for i, r in enumerate(rows)]
     _r.seed(6433)
     return [{"id": j + 1, "region": _r.choice(["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]),
               "label": "System Operator > Directions", "value": round(_r.uniform(10, 500), 2),
@@ -5542,6 +5949,17 @@ def system_operator_directions():
 
 @router.get("/api/system-operator/load-shedding")
 def system_operator_load_shedding():
+    rows = _get_cached('so_loadshed', lambda: _query_gold(f"""
+        SELECT notice_id, notice_type, region, issue_date, description
+        FROM {_CATALOG}.gold.nem_market_notices
+        WHERE LOWER(description) LIKE '%load shed%' OR LOWER(description) LIKE '%lack of reserve%'
+           OR LOWER(notice_type) LIKE '%LOR%'
+        ORDER BY issue_date DESC LIMIT 20
+    """))
+    if rows:
+        return [{"id": i+1, "notice_id": r.get("notice_id"), "region": r.get("region","NEM"),
+                 "description": (r.get("description") or "")[:200], "issue_date": r.get("issue_date"),
+                 "type": "load_shedding"} for i, r in enumerate(rows)]
     _r.seed(6434)
     return [{"id": j + 1, "region": _r.choice(["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]),
               "label": "System Operator > Load Shedding", "value": round(_r.uniform(10, 500), 2),
@@ -5549,6 +5967,16 @@ def system_operator_load_shedding():
 
 @router.get("/api/system-operator/rert-activations")
 def system_operator_rert_activations():
+    rows = _get_cached('so_rert', lambda: _query_gold(f"""
+        SELECT notice_id, notice_type, region, issue_date, description
+        FROM {_CATALOG}.gold.nem_market_notices
+        WHERE LOWER(description) LIKE '%rert%' OR LOWER(description) LIKE '%reliability%reserve%'
+        ORDER BY issue_date DESC LIMIT 20
+    """))
+    if rows:
+        return [{"id": i+1, "notice_id": r.get("notice_id"), "region": r.get("region","NEM"),
+                 "description": (r.get("description") or "")[:200], "issue_date": r.get("issue_date"),
+                 "type": "rert_activation"} for i, r in enumerate(rows)]
     _r.seed(6435)
     return [{"id": j + 1, "region": _r.choice(["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]),
               "label": "System Operator > Rert Activations", "value": round(_r.uniform(10, 500), 2),
@@ -5674,6 +6102,19 @@ def tnsp_analytics_dashboard():
 
 @router.get("/api/tnsp/dashboard")
 def tnsp_dashboard():
+    rows = _tnsp_perf_data()
+    if rows:
+        total_km = sum(float(r.get("circuit_km") or 0) for r in rows if r.get("year") == 2024)
+        total_gwh = sum(float(r.get("energy_delivered_gwh") or 0) for r in rows if r.get("year") == 2024)
+        return {
+            "summary": {"title": "TNSP Performance", "tnsps": len(set(r.get("tnsp") for r in rows)),
+                        "total_circuit_km": round(total_km, 0), "total_energy_gwh": round(total_gwh, 0),
+                        "last_updated": _dt.utcnow().isoformat()},
+            "records": [{"tnsp": r.get("tnsp"), "state": r.get("state"), "year": r.get("year"),
+                         "circuit_km": float(r.get("circuit_km") or 0),
+                         "energy_gwh": float(r.get("energy_delivered_gwh") or 0),
+                         "peak_mw": float(r.get("peak_demand_mw") or 0),
+                         "loss_pct": float(r.get("loss_factor_pct") or 0)} for r in rows]}
     _r.seed(6446)
     return {
         "summary": {"title": "Tnsp > Dashboard", "status": "operational",
@@ -5781,6 +6222,19 @@ def transmission_dashboard():
 
 @router.get("/api/tuos/dashboard")
 def tuos_dashboard():
+    rows = _tuos_data()
+    if rows:
+        total_rev = sum(float(r.get("total_tuos_revenue_m_aud") or 0) for r in rows)
+        return {
+            "summary": {"title": "TUoS Charges", "tnsps": len(rows),
+                        "total_revenue_b_aud": round(total_rev / 1000, 2),
+                        "last_updated": _dt.utcnow().isoformat()},
+            "records": [{"tnsp": r.get("tnsp"), "state": r.get("state"),
+                         "financial_year": r.get("financial_year"),
+                         "locational_aud_kw": float(r.get("locational_aud_per_kw") or 0),
+                         "non_locational_aud_mwh": float(r.get("non_locational_aud_per_mwh") or 0),
+                         "common_service_aud_mwh": float(r.get("common_service_aud_per_mwh") or 0),
+                         "total_revenue_m": float(r.get("total_tuos_revenue_m_aud") or 0)} for r in rows]}
     _r.seed(6455)
     return {
         "summary": {"title": "Tuos > Dashboard", "status": "operational",
@@ -5815,16 +6269,7 @@ def wave_tidal_ocean_dashboard():
                       "value": round(_r.uniform(10, 500), 2), "timestamp": _dt.utcnow().isoformat()}
                      for j in range(10)]}
 
-@router.get("/api/wem/dashboard")
-def wem_dashboard():
-    _r.seed(6458)
-    return {
-        "summary": {"title": "Wem > Dashboard", "status": "operational",
-                    "last_updated": _dt.utcnow().isoformat(),
-                    "data_points": _r.randint(50, 500), "trend": _r.choice(["up", "down", "stable"])},
-        "records": [{"id": j + 1, "region": _r.choice(["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]),
-                      "value": round(_r.uniform(10, 500), 2), "timestamp": _dt.utcnow().isoformat()}
-                     for j in range(10)]}
+# /api/wem/dashboard removed — served by wem.py router with real WEM data
 
 @router.get("/api/wem/prices")
 def wem_prices():
