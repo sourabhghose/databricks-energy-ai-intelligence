@@ -184,3 +184,120 @@ async def veg_risk_bushfire_forecast() -> JSONResponse:
             "mitigation_plan_status": mitigation,
         })
     return JSONResponse({"zones": result, "count": len(result)})
+
+
+# =========================================================================
+# GET /api/veg-risk/ml-scores
+# =========================================================================
+
+_ML_VEG_LOCATIONS = [
+    ("Kinglake", "Kinglake BMO Ring Circuit"),
+    ("Yarra Ranges", "Yarra Junction 22kV Feeder"),
+    ("Dandenong Ranges", "Belgrave Heights Span"),
+    ("Macedon", "Macedon Ranges 11kV Spur"),
+    ("Healesville", "Healesville–Chum Creek"),
+    ("Warburton", "Warburton Valley Feeder"),
+    ("Gembrook", "Gembrook 11kV Rural Spur"),
+    ("Cockatoo", "Cockatoo–Emerald Line"),
+    ("Marysville", "Marysville BMO Feeder"),
+    ("Toolangi", "Toolangi Forest Span"),
+    ("Narbethong", "Narbethong 11kV Section"),
+    ("Eildon", "Eildon Pondage Circuit"),
+    ("Alexandra", "Alexandra Distribution Feeder"),
+    ("Mansfield", "Mansfield 22kV Rural"),
+    ("Yea", "Yea River Crossing Span"),
+    ("Strathewen", "Strathewen BMO Span"),
+    ("Hurstbridge", "Hurstbridge 11kV Spur"),
+    ("Christmas Hills", "Christmas Hills Rural Feeder"),
+    ("Kangaroo Ground", "Kangaroo Ground 22kV"),
+    ("St Andrews", "St Andrews BMO Line"),
+]
+
+_VEG_TREE_SPECIES = ["Mountain Ash", "Alpine Ash", "Manna Gum", "Stringybark", "Wattle Regrowth", "Native Eucalypt", "Blackwood"]
+_VEG_ACTIONS = ["Emergency Trim", "Priority Trim", "Schedule Trim", "Inspect & Monitor"]
+_VEG_TOP_FEATURES = ["fire_history_score", "inspection_age_days", "tree_species_risk", "last_trim_months", "wind_exposure", "soil_moisture"]
+
+
+@router.get("/api/veg-risk/ml-scores")
+async def veg_risk_ml_scores() -> JSONResponse:
+    """ML-scored span risk classification — XGBoost Classifier with MLflow metadata."""
+    _r.seed(805)
+
+    feature_importances = [
+        {"feature": "Fire History Score", "importance": 0.28},
+        {"feature": "Inspection Age (days)", "importance": 0.21},
+        {"feature": "Tree Species Risk", "importance": 0.17},
+        {"feature": "Last Trim (months)", "importance": 0.14},
+        {"feature": "Wind Exposure", "importance": 0.11},
+        {"feature": "Soil Moisture Index", "importance": 0.05},
+        {"feature": "Slope %", "importance": 0.04},
+    ]
+
+    spans = []
+    for i, (suburb, location) in enumerate(_ML_VEG_LOCATIONS):
+        span_length = _r.randint(180, 820)
+        fire_history = round(_r.uniform(1.0, 9.8), 1)
+        inspection_age = _r.randint(45, 580)
+        last_trim = _r.randint(3, 36)
+        ml_confidence = round(_r.uniform(0.71, 0.98), 2)
+
+        # Derive risk tier from composite score
+        raw_score = (fire_history / 10.0) * 0.35 + min(inspection_age / 600, 1.0) * 0.30 + (last_trim / 36.0) * 0.20 + _r.uniform(0, 0.15)
+        if raw_score > 0.70:
+            risk_tier = "Critical"
+            action = "Emergency Trim"
+        elif raw_score > 0.50:
+            risk_tier = "High"
+            action = "Priority Trim"
+        elif raw_score > 0.30:
+            risk_tier = "Medium"
+            action = "Schedule Trim"
+        else:
+            risk_tier = "Low"
+            action = "Inspect & Monitor"
+
+        spans.append({
+            "span_id": f"SP-{4000 + i + 1:04d}",
+            "location": location,
+            "suburb": suburb,
+            "span_length_m": span_length,
+            "risk_tier": risk_tier,
+            "ml_confidence": ml_confidence,
+            "fire_history_score": fire_history,
+            "inspection_age_days": inspection_age,
+            "last_trim_months": last_trim,
+            "top_feature": _r.choice(_VEG_TOP_FEATURES),
+            "action": action,
+        })
+
+    spans.sort(key=lambda x: (
+        {"Critical": 3, "High": 2, "Medium": 1, "Low": 0}[x["risk_tier"]],
+        x["ml_confidence"]
+    ), reverse=True)
+
+    risk_counts: dict[str, int] = {"Critical": 0, "High": 0, "Medium": 0, "Low": 0}
+    for s in spans:
+        risk_counts[s["risk_tier"]] += 1
+
+    # Simulate "newly flagged" spans not in prior manual assessment
+    new_critical = max(1, risk_counts["Critical"] - 1)
+
+    return JSONResponse({
+        "model_metadata": {
+            "model_name": "veg_risk_classifier_v2",
+            "mlflow_run_id": "b7d3c9e2f1a845670bcde234567890abcdef5678",
+            "algorithm": "XGBoost Classifier",
+            "accuracy": 0.887,
+            "f1_macro": 0.863,
+            "training_date": "2026-02-28",
+            "features": ["span_length_m", "tree_species_risk", "soil_moisture", "fire_history_score",
+                         "inspection_age_days", "wind_exposure", "slope_pct", "last_trim_months"],
+        },
+        "risk_summary": {
+            **risk_counts,
+            "total_spans_scored": len(spans),
+            "model_flagged_new_critical": new_critical,
+        },
+        "top_risk_spans": spans,
+        "feature_importances": feature_importances,
+    })

@@ -1,6 +1,6 @@
 // AIO Submission Pack
 import { useEffect, useState } from 'react'
-import { CheckCircle, AlertCircle, XCircle, Download, FileText, type LucideIcon } from 'lucide-react'
+import { CheckCircle, AlertCircle, XCircle, Download, FileText, Sparkles, Copy, type LucideIcon } from 'lucide-react'
 import { api } from '../api/client'
 
 interface KpiCardProps {
@@ -40,10 +40,28 @@ const FALLBACK_VALIDATION = [
   { issue_id: 'V006', section: 'S1', severity: 'Info', field: 'network_length_km', message: 'Network length increased by 42km since last AIO. Update asset register footnote.', action: 'Add footnote referencing new subdivision connections' },
 ]
 
+const DNSP_OPTIONS = [
+  'AusNet Services', 'Ergon Energy', 'Energex',
+  'Ausgrid', 'Essential Energy', 'SA Power Networks',
+]
+const SECTION_OPTIONS = [
+  'Capital Expenditure', 'Operating Expenditure', 'Reliability Performance',
+  'Connection Standards', 'Demand Management', 'Price & Revenue',
+]
+const YEAR_OPTIONS = [2024, 2025, 2026]
+
 export default function AioSubmissionPack() {
   const [sections, setSections] = useState<any[]>([])
   const [validation, setValidation] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+
+  // AI Draft Generator state
+  const [draftDnsp, setDraftDnsp] = useState('AusNet Services')
+  const [draftSection, setDraftSection] = useState('Capital Expenditure')
+  const [draftYear, setDraftYear] = useState(2026)
+  const [draftLoading, setDraftLoading] = useState(false)
+  const [draftResult, setDraftResult] = useState<Record<string, any> | null>(null)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     Promise.all([
@@ -181,6 +199,119 @@ export default function AioSubmissionPack() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* ── AI Draft Generator ────────────────────────────────────── */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+        <div className="flex items-center gap-2 mb-1">
+          <Sparkles size={16} className="text-blue-500" />
+          <h2 className="text-sm font-semibold text-gray-800 dark:text-gray-100">AI Draft Generator</h2>
+        </div>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Generate regulatory-grade AIO narrative drafts using Claude Sonnet 4.5 via Databricks FMAPI</p>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">DNSP</label>
+            <select
+              value={draftDnsp}
+              onChange={(e) => setDraftDnsp(e.target.value)}
+              className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {DNSP_OPTIONS.map((d) => <option key={d}>{d}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Section</label>
+            <select
+              value={draftSection}
+              onChange={(e) => setDraftSection(e.target.value)}
+              className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {SECTION_OPTIONS.map((s) => <option key={s}>{s}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1">Year</label>
+            <select
+              value={draftYear}
+              onChange={(e) => setDraftYear(Number(e.target.value))}
+              className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              {YEAR_OPTIONS.map((y) => <option key={y}>{y}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <button
+          onClick={async () => {
+            setDraftLoading(true)
+            setDraftResult(null)
+            setCopied(false)
+            try {
+              const result = await api.generateAioDraft({ section: draftSection, dnsp: draftDnsp, year: draftYear })
+              setDraftResult(result)
+            } catch {
+              setDraftResult({ draft_text: 'Failed to generate draft. Please try again.', is_fallback: true, word_count: 0 })
+            } finally {
+              setDraftLoading(false)
+            }
+          }}
+          disabled={draftLoading}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-60 text-white text-sm rounded-lg font-medium transition-colors"
+        >
+          <Sparkles size={15} />
+          {draftLoading ? 'Generating…' : 'Generate Draft with Claude'}
+        </button>
+
+        {draftLoading && (
+          <div className="mt-4 flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
+            <svg className="animate-spin h-4 w-4 text-blue-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+            </svg>
+            Claude is drafting your regulatory narrative…
+          </div>
+        )}
+
+        {draftResult && !draftLoading && (
+          <div className="mt-4 space-y-3">
+            {draftResult.is_fallback && (
+              <div className="flex items-center gap-2 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-700/50 text-xs text-yellow-700 dark:text-yellow-400">
+                <AlertCircle size={13} className="flex-shrink-0" />
+                Live AI unavailable — showing template draft
+              </div>
+            )}
+            <div className="relative">
+              <textarea
+                rows={8}
+                value={draftResult.draft_text ?? ''}
+                onChange={(e) => setDraftResult({ ...draftResult, draft_text: e.target.value, word_count: e.target.value.split(/\s+/).filter(Boolean).length })}
+                className="w-full text-sm border border-gray-200 dark:border-gray-600 rounded-lg px-3 py-2.5 bg-gray-50 dark:bg-gray-700/50 text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+              />
+            </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400">
+                  {draftResult.word_count ?? 0} words
+                </span>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border border-blue-100 dark:border-blue-800/40">
+                  Generated by Claude Sonnet 4.5 · Databricks FMAPI
+                </span>
+              </div>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(draftResult.draft_text ?? '')
+                  setCopied(true)
+                  setTimeout(() => setCopied(false), 2000)
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                <Copy size={12} />
+                {copied ? 'Copied!' : 'Copy'}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

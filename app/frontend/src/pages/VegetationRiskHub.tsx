@@ -71,16 +71,19 @@ export default function VegetationRiskHub() {
   const [summary, setSummary] = useState<Record<string, any>>({})
   const [zones, setZones] = useState<any[]>([])
   const [spans, setSpans] = useState<any[]>([])
+  const [mlVeg, setMlVeg] = useState<Record<string, any> | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     Promise.all([
       api.getVegRiskSummary(),
       api.getVegRiskSpans(),
-    ]).then(([s, sp]) => {
+      api.getVegRiskMlScores(),
+    ]).then(([s, sp, ml]) => {
       setSummary(s ?? {})
       setZones(Array.isArray(s?.zones) ? s.zones : FALLBACK_ZONES)
       setSpans(Array.isArray(sp?.items) ? sp.items : Array.isArray(sp) ? sp : FALLBACK_SPANS)
+      setMlVeg(ml ?? null)
       setLoading(false)
     }).catch(() => {
       setZones(FALLBACK_ZONES)
@@ -177,6 +180,123 @@ export default function VegetationRiskHub() {
           </table>
         </div>
       </div>
+
+      {/* ── ML Risk Intelligence Section ─────────────────────────── */}
+      {mlVeg && (
+        <>
+          <div className="flex items-center gap-3 pt-2">
+            <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">ML Risk Intelligence</h2>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400">XGBoost Classifier v2</span>
+          </div>
+
+          {/* Newly flagged amber alert */}
+          {(mlVeg.risk_summary?.model_flagged_new_critical ?? 0) > 0 && (
+            <div className="rounded-xl border border-amber-200 dark:border-amber-700/50 bg-amber-50 dark:bg-amber-900/10 p-4 flex items-center gap-3">
+              <AlertTriangle size={18} className="text-amber-500 flex-shrink-0" />
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+                {mlVeg.risk_summary.model_flagged_new_critical} span{mlVeg.risk_summary.model_flagged_new_critical > 1 ? 's' : ''} newly flagged by ML model — not present in prior manual assessment
+              </p>
+            </div>
+          )}
+
+          {/* Model card */}
+          <div className="bg-gray-900 dark:bg-gray-950 rounded-xl border border-gray-700 p-5">
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <p className="text-xs text-gray-400 mb-0.5">Model</p>
+                <p className="text-sm font-semibold text-white">{mlVeg.model_metadata?.model_name} — {mlVeg.model_metadata?.algorithm}</p>
+              </div>
+              <span className="text-xs px-2 py-1 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30 font-medium">
+                Powered by Databricks MLflow
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-3">
+              <div>
+                <p className="text-xs text-gray-500">MLflow Run ID</p>
+                <p className="text-xs font-mono text-gray-300 mt-0.5">{String(mlVeg.model_metadata?.mlflow_run_id ?? '').slice(0, 12)}…</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Accuracy</p>
+                <p className="text-sm font-bold text-green-400">{((mlVeg.model_metadata?.accuracy ?? 0) * 100).toFixed(1)}%</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">F1 Macro</p>
+                <p className="text-sm font-bold text-blue-400">{((mlVeg.model_metadata?.f1_macro ?? 0) * 100).toFixed(1)}%</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Training Date</p>
+                <p className="text-xs text-gray-300 mt-0.5">{mlVeg.model_metadata?.training_date}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Feature importances */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-4">Feature Importances — Vegetation Risk Model</h3>
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart
+                data={mlVeg.feature_importances ?? []}
+                layout="vertical"
+                margin={{ left: 10, right: 20 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 10, fill: '#9CA3AF' }} tickFormatter={(v) => `${(v * 100).toFixed(0)}%`} />
+                <YAxis type="category" dataKey="feature" tick={{ fontSize: 10, fill: '#9CA3AF' }} width={155} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: 8 }}
+                  labelStyle={{ color: '#F9FAFB' }}
+                  formatter={(v: number) => [`${(v * 100).toFixed(1)}%`, 'Importance']}
+                />
+                <Bar dataKey="importance" fill="#10B981" radius={[0, 3, 3, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Top 20 ML-scored spans table */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-4">Top 20 ML-Scored Spans — Vegetation Risk</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 dark:border-gray-700">
+                    <th className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 pb-2 pr-3">Span ID</th>
+                    <th className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 pb-2 pr-3">Location</th>
+                    <th className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 pb-2 pr-3">Length (m)</th>
+                    <th className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 pb-2 pr-3">Risk Tier</th>
+                    <th className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 pb-2 pr-3">ML Confidence</th>
+                    <th className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 pb-2 pr-3">Top Risk Factor</th>
+                    <th className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 pb-2">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
+                  {(mlVeg.top_risk_spans ?? []).slice(0, 20).map((row: any, i: number) => {
+                    const tierClass = row.risk_tier === 'Critical'
+                      ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                      : row.risk_tier === 'High'
+                      ? 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400'
+                      : row.risk_tier === 'Medium'
+                      ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+                      : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                    return (
+                      <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                        <td className="py-2.5 pr-3 text-gray-900 dark:text-gray-100 font-mono text-xs">{row.span_id}</td>
+                        <td className="py-2.5 pr-3 text-gray-800 dark:text-gray-200 text-xs max-w-[140px] truncate">{row.location}</td>
+                        <td className="py-2.5 pr-3 text-gray-900 dark:text-gray-100">{row.span_length_m}</td>
+                        <td className="py-2.5 pr-3">
+                          <span className={`px-2 py-0.5 text-xs rounded-full font-semibold ${tierClass}`}>{row.risk_tier}</span>
+                        </td>
+                        <td className="py-2.5 pr-3 font-semibold text-blue-600 dark:text-blue-400">{((row.ml_confidence ?? 0) * 100).toFixed(0)}%</td>
+                        <td className="py-2.5 pr-3 text-gray-600 dark:text-gray-400 text-xs">{row.top_feature}</td>
+                        <td className="py-2.5 text-gray-800 dark:text-gray-200 text-xs">{row.action}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   )
 }

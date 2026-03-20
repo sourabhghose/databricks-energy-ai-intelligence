@@ -5568,11 +5568,20 @@ export const api = {
   getAioSections(): Promise<any> { return get('/api/aio/sections') },
   getAioValidation(): Promise<any> { return get('/api/aio/validation') },
   getAioStpis(): Promise<any> { return get('/api/aio/stpis') },
+  generateAioDraft(body: { section: string; dnsp: string; year: number }): Promise<any> {
+    return fetch('/api/aio/generate-draft', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }).then(r => r.json())
+  },
+  getStpisAnomalies(): Promise<any> { return get('/api/aio/stpis-anomalies') },
 
   // Cross-System Asset Intelligence
   getAssetIntelSummary(): Promise<any> { return get('/api/asset-intel/summary') },
   getAssetIntelHealthScores(): Promise<any> { return get('/api/asset-intel/health-scores') },
   getAssetIntelExpenditureJustification(): Promise<any> { return get('/api/asset-intel/expenditure-justification') },
+  getAssetIntelMlPredictions(): Promise<any> { return get('/api/asset-intel/ml-predictions') },
 
   // AER Benchmarking
   getBenchmarkingSummary(): Promise<any> { return get('/api/benchmarking/summary') },
@@ -5591,12 +5600,14 @@ export const api = {
   getVegRiskSpans(): Promise<any> { return get('/api/veg-risk/spans') },
   getVegRiskElcCompliance(): Promise<any> { return get('/api/veg-risk/elc-compliance') },
   getVegRiskBushfireForecast(): Promise<any> { return get('/api/veg-risk/bushfire-forecast') },
+  getVegRiskMlScores(): Promise<any> { return get('/api/veg-risk/ml-scores') },
 
   // Workforce & Contractor Analytics
   getWorkforceSummary(): Promise<any> { return get('/api/workforce/summary') },
   getWorkforceOpexBenchmark(): Promise<any> { return get('/api/workforce/opex-benchmark') },
   getWorkforceContractors(): Promise<any> { return get('/api/workforce/contractors') },
   getWorkforceProductivity(): Promise<any> { return get('/api/workforce/productivity') },
+  getWorkforceForecast(): Promise<any> { return get('/api/workforce/forecast') },
 
   // DAPR Assembly
   getDaprDemandForecast(): Promise<any> { return get('/api/dapr/demand-forecast') },

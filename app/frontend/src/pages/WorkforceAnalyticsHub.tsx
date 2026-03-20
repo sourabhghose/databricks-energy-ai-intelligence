@@ -2,8 +2,9 @@
 import { useEffect, useState } from 'react'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  ComposedChart, Area, Line,
 } from 'recharts'
-import { Users, DollarSign, TrendingDown, Activity, type LucideIcon } from 'lucide-react'
+import { Users, DollarSign, TrendingDown, Activity, Lightbulb, type LucideIcon } from 'lucide-react'
 import { api } from '../api/client'
 
 interface KpiCardProps {
@@ -37,15 +38,18 @@ const FALLBACK_OPEX = [
 export default function WorkforceAnalyticsHub() {
   const [summary, setSummary] = useState<Record<string, any>>({})
   const [opex, setOpex] = useState<any[]>([])
+  const [forecastData, setForecastData] = useState<Record<string, any> | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     Promise.all([
       api.getWorkforceSummary(),
       api.getWorkforceOpexBenchmark(),
-    ]).then(([s, o]) => {
+      api.getWorkforceForecast(),
+    ]).then(([s, o, f]) => {
       setSummary(s ?? {})
       setOpex(Array.isArray(o?.items) ? o.items : Array.isArray(o) ? o : FALLBACK_OPEX)
+      setForecastData(f ?? null)
       setLoading(false)
     }).catch(() => {
       setOpex(FALLBACK_OPEX)
@@ -164,6 +168,162 @@ export default function WorkforceAnalyticsHub() {
           </table>
         </div>
       </div>
+
+      {/* ── ML Demand Forecasting Section ────────────────────────── */}
+      {forecastData && (
+        <>
+          <div className="flex items-center gap-3 pt-2">
+            <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">ML Demand Forecasting</h2>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400">Prophet + XGBoost</span>
+          </div>
+
+          {/* Model card */}
+          <div className="bg-gray-900 dark:bg-gray-950 rounded-xl border border-gray-700 p-5">
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <p className="text-xs text-gray-400 mb-0.5">Model</p>
+                <p className="text-sm font-semibold text-white">{forecastData.model_metadata?.model_name} — {forecastData.model_metadata?.algorithm}</p>
+              </div>
+              <span className="text-xs px-2 py-1 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30 font-medium">
+                Powered by Databricks MLflow
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-3">
+              <div>
+                <p className="text-xs text-gray-500">MLflow Run ID</p>
+                <p className="text-xs font-mono text-gray-300 mt-0.5">{String(forecastData.model_metadata?.mlflow_run_id ?? '').slice(0, 12)}…</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">MAE (hours)</p>
+                <p className="text-sm font-bold text-green-400">{forecastData.model_metadata?.mae_hours}</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">MAPE</p>
+                <p className="text-sm font-bold text-blue-400">{forecastData.model_metadata?.mape_pct}%</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Training Date</p>
+                <p className="text-xs text-gray-300 mt-0.5">{forecastData.model_metadata?.training_date}</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Forecast area chart */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-1">Field Crew Demand — Historical & Forecast (Hours/Month)</h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mb-4">Shaded band = 80% prediction interval · Dashed = forecast months</p>
+            <ResponsiveContainer width="100%" height={300}>
+              <ComposedChart data={forecastData.forecast ?? []} margin={{ left: 10, right: 10, bottom: 20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
+                <XAxis dataKey="month" tick={{ fontSize: 10, fill: '#9CA3AF' }} angle={-30} textAnchor="end" interval={1} />
+                <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} tickFormatter={(v) => `${(v / 1000).toFixed(0)}k`} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: 8 }}
+                  labelStyle={{ color: '#F9FAFB' }}
+                  itemStyle={{ color: '#D1D5DB' }}
+                  formatter={(v: number, name: string) => [v ? v.toLocaleString() : '—', name]}
+                />
+                <Legend wrapperStyle={{ fontSize: 11, color: '#9CA3AF' }} />
+                {/* Prediction interval band */}
+                <Area
+                  type="monotone"
+                  dataKey="upper_bound"
+                  fill="#3B82F6"
+                  fillOpacity={0.08}
+                  stroke="none"
+                  name="Upper Bound"
+                  legendType="none"
+                />
+                <Area
+                  type="monotone"
+                  dataKey="lower_bound"
+                  fill="#fff"
+                  fillOpacity={1}
+                  stroke="none"
+                  name="Lower Bound"
+                  legendType="none"
+                />
+                {/* Actual hours (historical) */}
+                <Line
+                  type="monotone"
+                  dataKey="actual_hours"
+                  stroke="#3B82F6"
+                  strokeWidth={2}
+                  dot={{ r: 3, fill: '#3B82F6' }}
+                  name="Actual Hours"
+                  connectNulls={false}
+                />
+                {/* Forecast line */}
+                <Line
+                  type="monotone"
+                  dataKey="forecast_hours"
+                  stroke="#F97316"
+                  strokeWidth={2}
+                  strokeDasharray="5 3"
+                  dot={{ r: 3, fill: '#F97316' }}
+                  name="Forecast Hours"
+                />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Skills gap table */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-4">Skills Demand Forecast — 6-Month Gap Analysis</h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 dark:border-gray-700">
+                    <th className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 pb-2 pr-4">Skill</th>
+                    <th className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 pb-2 pr-4">Current FTE</th>
+                    <th className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 pb-2 pr-4">Forecast FTE (6m)</th>
+                    <th className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 pb-2 pr-4">Gap</th>
+                    <th className="text-left text-xs font-medium text-gray-500 dark:text-gray-400 pb-2">Risk</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50 dark:divide-gray-700/50">
+                  {(forecastData.skill_demand_forecast ?? []).map((row: any, i: number) => {
+                    const gapColor = row.gap > 0
+                      ? 'text-red-600 dark:text-red-400'
+                      : 'text-green-600 dark:text-green-400'
+                    const riskBadge = row.risk === 'High'
+                      ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                      : row.risk === 'Medium'
+                      ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+                      : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                    return (
+                      <tr key={i} className="hover:bg-gray-50 dark:hover:bg-gray-700/30">
+                        <td className="py-2.5 pr-4 font-medium text-gray-900 dark:text-gray-100">{row.skill}</td>
+                        <td className="py-2.5 pr-4 text-gray-900 dark:text-gray-100">{row.current_fte}</td>
+                        <td className="py-2.5 pr-4 text-gray-900 dark:text-gray-100">{row.forecast_fte_6m}</td>
+                        <td className="py-2.5 pr-4">
+                          <span className={`font-bold ${gapColor}`}>{row.gap > 0 ? '+' : ''}{row.gap}</span>
+                        </td>
+                        <td className="py-2.5">
+                          <span className={`px-2 py-0.5 text-xs rounded-full font-semibold ${riskBadge}`}>{row.risk}</span>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* AI insights */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-3">Model Insights</h3>
+            <ul className="space-y-2">
+              {(forecastData.insights ?? []).map((insight: string, i: number) => (
+                <li key={i} className="flex items-start gap-2.5">
+                  <Lightbulb size={15} className="text-amber-500 flex-shrink-0 mt-0.5" />
+                  <span className="text-sm text-gray-700 dark:text-gray-300">{insight}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
+      )}
     </div>
   )
 }

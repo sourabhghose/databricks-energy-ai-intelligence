@@ -1,7 +1,7 @@
 // STPIS Performance Calculator
 import { useEffect, useState } from 'react'
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell,
 } from 'recharts'
 import { Clock, Zap, TrendingUp, DollarSign, type LucideIcon } from 'lucide-react'
 import { api } from '../api/client'
@@ -44,12 +44,17 @@ const bandColor = (band: string) => {
 export default function StpisCalculator() {
   const [data, setData] = useState<any[]>([])
   const [summary, setSummary] = useState<Record<string, any>>({})
+  const [anomalyData, setAnomalyData] = useState<Record<string, any> | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    api.getAioStpis().then((d) => {
+    Promise.all([
+      api.getAioStpis(),
+      api.getStpisAnomalies(),
+    ]).then(([d, anom]) => {
       setSummary(d?.summary ?? {})
       setData(Array.isArray(d?.items) ? d.items : Array.isArray(d) ? d : FALLBACK_DATA)
+      setAnomalyData(anom ?? null)
       setLoading(false)
     }).catch(() => {
       setData(FALLBACK_DATA)
@@ -144,6 +149,121 @@ export default function StpisCalculator() {
         </div>
         <p className="text-xs text-gray-400 dark:text-gray-500 mt-3">Band A = top quartile (reward), Band B = within target, Band C/D = penalty zone. S-factor applied to Maximum Allowable Revenue.</p>
       </div>
+
+      {/* ── AI Anomaly Intelligence Section ──────────────────────── */}
+      {anomalyData && (
+        <>
+          <div className="flex items-center gap-3 pt-2">
+            <h2 className="text-base font-bold text-gray-900 dark:text-gray-100">AI Anomaly Intelligence</h2>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400">Isolation Forest + Z-score</span>
+          </div>
+
+          {/* Summary banner */}
+          <div className={`rounded-xl border p-4 flex items-center gap-3 ${(anomalyData.anomalies ?? []).length > 0 ? 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800/40' : 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800/40'}`}>
+            <TrendingUp size={18} className={`flex-shrink-0 ${(anomalyData.anomalies ?? []).length > 0 ? 'text-red-500' : 'text-green-500'}`} />
+            <p className={`text-sm font-semibold ${(anomalyData.anomalies ?? []).length > 0 ? 'text-red-800 dark:text-red-300' : 'text-green-800 dark:text-green-300'}`}>
+              {(anomalyData.anomalies ?? []).length} metric period{(anomalyData.anomalies ?? []).length !== 1 ? 's' : ''} flagged as anomalous — estimated revenue impact: ${Math.abs(anomalyData.revenue_impact_m ?? 0).toFixed(2)}M
+            </p>
+          </div>
+
+          {/* Model card */}
+          <div className="bg-gray-900 dark:bg-gray-950 rounded-xl border border-gray-700 p-5">
+            <div className="flex items-start justify-between mb-3">
+              <div>
+                <p className="text-xs text-gray-400 mb-0.5">Model</p>
+                <p className="text-sm font-semibold text-white">{anomalyData.model_metadata?.model_name} — {anomalyData.model_metadata?.algorithm}</p>
+              </div>
+              <span className="text-xs px-2 py-1 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30 font-medium">
+                Powered by Databricks MLflow
+              </span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-3">
+              <div>
+                <p className="text-xs text-gray-500">MLflow Run ID</p>
+                <p className="text-xs font-mono text-gray-300 mt-0.5">{String(anomalyData.model_metadata?.mlflow_run_id ?? '').slice(0, 12)}…</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Detection Rate</p>
+                <p className="text-sm font-bold text-green-400">{((anomalyData.model_metadata?.detection_rate ?? 0) * 100).toFixed(1)}%</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">False Positive Rate</p>
+                <p className="text-sm font-bold text-amber-400">{((anomalyData.model_metadata?.false_positive_rate ?? 0) * 100).toFixed(1)}%</p>
+              </div>
+              <div>
+                <p className="text-xs text-gray-500">Peer Group Size</p>
+                <p className="text-sm font-bold text-gray-200">{anomalyData.model_metadata?.peer_group_size} DNSPs</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Anomaly alert cards */}
+          <div className="space-y-3">
+            {(anomalyData.anomalies ?? []).map((anom: any, i: number) => {
+              const severityClass = anom.severity === 'High'
+                ? 'border-red-200 dark:border-red-800/40 bg-red-50 dark:bg-red-900/10'
+                : 'border-orange-200 dark:border-orange-800/40 bg-orange-50 dark:bg-orange-900/10'
+              const badgeClass = anom.severity === 'High'
+                ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                : 'bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400'
+              return (
+                <div key={i} className={`rounded-xl border p-4 ${severityClass}`}>
+                  <div className="flex items-start justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 text-xs rounded-full font-semibold ${badgeClass}`}>{anom.severity}</span>
+                      <span className="text-sm font-bold text-gray-900 dark:text-gray-100">{anom.metric}</span>
+                      <span className="text-xs text-gray-500 dark:text-gray-400">{anom.period}</span>
+                    </div>
+                    <span className="text-xs font-mono text-gray-500 dark:text-gray-400">z = {anom.zscore}</span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                    <div>
+                      <p className="text-gray-500">Actual Value</p>
+                      <p className="font-bold text-gray-900 dark:text-gray-100">{anom.value} min</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Peer Avg</p>
+                      <p className="font-semibold text-gray-700 dark:text-gray-300">{anom.peer_avg} min</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Revenue Risk</p>
+                      <p className="font-bold text-red-600 dark:text-red-400">${anom.revenue_risk_m}M</p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500">Anomaly Score</p>
+                      <p className="font-semibold text-gray-700 dark:text-gray-300">{anom.anomaly_score}</p>
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-600 dark:text-gray-400 mt-2"><span className="font-medium">Likely cause:</span> {anom.likely_cause}</p>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Peer comparison bar chart */}
+          <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100 mb-4">Peer Comparison — SAIDI (minutes)</h3>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={anomalyData.peer_comparison ?? []} margin={{ bottom: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
+                <XAxis dataKey="dnsp" tick={{ fontSize: 10, fill: '#9CA3AF' }} angle={-15} textAnchor="end" interval={0} />
+                <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} unit=" min" />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: 8 }}
+                  labelStyle={{ color: '#F9FAFB' }}
+                  itemStyle={{ color: '#D1D5DB' }}
+                />
+                <Bar dataKey="saidi" name="SAIDI (min)" radius={[3, 3, 0, 0]}>
+                  {(anomalyData.peer_comparison ?? []).map((entry: any, index: number) => (
+                    <Cell key={index} fill={entry.is_self ? '#F97316' : '#3B82F6'} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+            <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">Orange = AusNet Services (self) · Blue = peer DNSPs</p>
+          </div>
+        </>
+      )}
     </div>
   )
 }
