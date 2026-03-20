@@ -5523,7 +5523,10 @@ export const api = {
     const q = params?.dnsp ? `?dnsp=${params.dnsp}` : ''
     return get(`/api/rab/rollforward${q}`)
   },
-  getRabWaccSensitivity(): Promise<any> { return get('/api/rab/wacc-sensitivity') },
+  getRabWaccSensitivity(params?: { dnsp?: string }): Promise<any> {
+    const q = params?.dnsp ? `?dnsp=${encodeURIComponent(params.dnsp)}` : ''
+    return get(`/api/rab/wacc-sensitivity${q}`)
+  },
 
   // DAPR Compliance
   getDaprSummary(): Promise<any> { return get('/api/dapr/summary') },

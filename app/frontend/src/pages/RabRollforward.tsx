@@ -23,10 +23,10 @@ function KpiCard({ label, value, sub, Icon, color }: KpiCardProps) {
   )
 }
 
-const DNSPS = ['AusNet', 'Ergon', 'Energex']
+const DNSPS = ['AusNet Services', 'Ergon Energy', 'Energex']
 
 export default function RabRollforward() {
-  const [selectedDnsp, setSelectedDnsp] = useState('AusNet')
+  const [selectedDnsp, setSelectedDnsp] = useState('AusNet Services')
   const [summary, setSummary] = useState<Record<string, any>>({})
   const [rollforward, setRollforward] = useState<any[]>([])
   const [waccSensitivity, setWaccSensitivity] = useState<any[]>([])
@@ -37,7 +37,7 @@ export default function RabRollforward() {
     Promise.all([
       api.getRabSummary({ dnsp: selectedDnsp }),
       api.getRabRollforward({ dnsp: selectedDnsp }),
-      api.getRabWaccSensitivity(),
+      api.getRabWaccSensitivity({ dnsp: selectedDnsp }),
     ]).then(([s, r, w]) => {
       setSummary(s ?? {})
       setRollforward(Array.isArray(r?.rollforward) ? r.rollforward : Array.isArray(r) ? r : [])
@@ -68,10 +68,10 @@ export default function RabRollforward() {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiCard label="Total RAB" value={`$${(summary.total_rab_b ?? 0).toFixed(2)}B`} sub="Opening RAB this year" Icon={Building2} color="bg-blue-500" />
-        <KpiCard label="YTD Capex Additions" value={`$${(summary.ytd_capex_additions_m ?? 0).toFixed(0)}M`} sub="Net capex added" Icon={TrendingUp} color="bg-green-500" />
-        <KpiCard label="Depreciation" value={`$${(summary.depreciation_m ?? 0).toFixed(0)}M`} sub="YTD regulatory depreciation" Icon={TrendingDown} color="bg-orange-500" />
-        <KpiCard label="Closing RAB Forecast" value={`$${(summary.closing_rab_forecast_b ?? 0).toFixed(2)}B`} sub="End-of-year estimate" Icon={DollarSign} color="bg-purple-500" />
+        <KpiCard label="Total RAB" value={`$${((summary.total_rab_m_aud ?? 0) / 1000).toFixed(2)}B`} sub="Opening RAB this year" Icon={Building2} color="bg-blue-500" />
+        <KpiCard label="YTD Capex Additions" value={`$${(summary.ytd_capex_additions_m_aud ?? 0).toFixed(0)}M`} sub="Net capex added" Icon={TrendingUp} color="bg-green-500" />
+        <KpiCard label="Depreciation" value={`$${(summary.depreciation_m_aud ?? 0).toFixed(0)}M`} sub="YTD regulatory depreciation" Icon={TrendingDown} color="bg-orange-500" />
+        <KpiCard label="Closing RAB Forecast" value={`$${((summary.closing_rab_forecast_m_aud ?? 0) / 1000).toFixed(2)}B`} sub="End-of-year estimate" Icon={DollarSign} color="bg-purple-500" />
       </div>
 
       <div className="bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 p-5">
@@ -84,10 +84,10 @@ export default function RabRollforward() {
               <YAxis tick={{ fontSize: 11, fill: '#9CA3AF' }} unit=" M" />
               <Tooltip contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: 8 }} labelStyle={{ color: '#F9FAFB' }} itemStyle={{ color: '#D1D5DB' }} />
               <Legend wrapperStyle={{ fontSize: 11, color: '#9CA3AF' }} />
-              <Bar dataKey="opening_rab_m" fill="#6B7280" name="Opening RAB ($M)" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="capex_m" fill="#3B82F6" name="Capex Additions ($M)" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="depreciation_m" fill="#EF4444" name="Depreciation ($M)" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="closing_rab_m" fill="#22C55E" name="Closing RAB ($M)" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="opening_rab" fill="#6B7280" name="Opening RAB ($M)" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="capex_additions" fill="#3B82F6" name="Capex Additions ($M)" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="depreciation" fill="#EF4444" name="Depreciation ($M)" radius={[3, 3, 0, 0]} />
+              <Bar dataKey="closing_rab" fill="#22C55E" name="Closing RAB ($M)" radius={[3, 3, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         ) : (
@@ -110,10 +110,10 @@ export default function RabRollforward() {
             <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
               {waccSensitivity.map((s, i) => (
                 <tr key={i} className="text-gray-700 dark:text-gray-300">
-                  <td className="py-1.5 pr-4 font-medium">{s.scenario}</td>
+                  <td className="py-1.5 pr-4 font-medium">WACC {(s.wacc_pct ?? 0).toFixed(0)}% Scenario</td>
                   <td className="py-1.5 pr-4">{(s.wacc_pct ?? 0).toFixed(2)}%</td>
-                  <td className="py-1.5 pr-4">${(s.allowed_revenue_m ?? 0).toFixed(0)}M</td>
-                  <td className="py-1.5">{s.rab_impact_m >= 0 ? '+' : ''}{(s.rab_impact_m ?? 0).toFixed(0)}M</td>
+                  <td className="py-1.5 pr-4">${(s.allowed_revenue_m_aud ?? 0).toFixed(0)}M</td>
+                  <td className="py-1.5">{(s.delta_vs_base_m_aud ?? 0) >= 0 ? '+' : ''}{(s.delta_vs_base_m_aud ?? 0).toFixed(0)}M</td>
                 </tr>
               ))}
               {waccSensitivity.length === 0 && (
