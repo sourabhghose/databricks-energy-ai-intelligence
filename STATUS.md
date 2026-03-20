@@ -2899,3 +2899,120 @@ All 29 new pages load. DNSP sidebar renders in 6 semantic sub-groups. Copilot an
 - **51 FMAPI AI tools** (47 + 4 DNSP tools)
 - **12 Genie AI/BI spaces** (11 + DNSP Enterprise Intelligence)
 - **29 scheduled pipeline jobs** (unchanged)
+
+---
+
+## Session 2026-03-20 — Phase 6 DNSP Competitive Gaps + Real NEM Data Pipeline
+
+### Objective
+Deploy Phase 6 (7 DNSP competitive gap page groups, 21 pages) and fix the NEM Daily Brief showing "Price data unavailable" / "No interconnector congestion". Build a real-data pipeline to replace the NEM Simulator.
+
+---
+
+### Phase 6 — DNSP Competitive Gaps (21 pages, 7 routers)
+
+**Frontend (`app/frontend/src/App.tsx`)**
+- Added 21 `<Route>` elements for all Phase 6 pages (gaps 1–7)
+- Gap 1 AIO: `/dnsp/aio`, `/dnsp/aio/stpis-calc`, `/dnsp/aio/submission`
+- Gap 2 Asset Intelligence: `/dnsp/asset-intelligence`, `/dnsp/asset-intelligence/predictive-maintenance`, `/dnsp/asset-intelligence/condition-monitoring`
+- Gap 3 Benchmarking: `/dnsp/benchmarking`, `/dnsp/benchmarking/efficiency-benchmarks`, `/dnsp/benchmarking/cost-benchmarks`
+- Gap 4 DER & Hosting Capacity: `/dnsp/hosting-capacity`, `/dnsp/hosting-capacity/solar-map`, `/dnsp/hosting-capacity/battery-map`
+- Gap 5 Vegetation Risk: `/dnsp/vegetation-risk`, `/dnsp/vegetation-risk/bushfire-zones`, `/dnsp/vegetation-risk/inspection-schedule`
+- Gap 6 Workforce Analytics: `/dnsp/workforce`, `/dnsp/workforce/skills-matrix`, `/dnsp/workforce/field-utilization`
+- Gap 7 DAPR Assembly: `/dnsp/dapr-assembly`, `/dnsp/dapr-assembly/dapr-builder`, `/dnsp/dapr-assembly/submission-pack`
+
+**Hub navigation (`app/frontend/src/pages/DnspHub.tsx`)**
+- Added 21 `ModuleCard` entries to `MODULES` array with 7 new badge types
+- New badge colors: AIO (indigo), Asset Intel (cyan), Benchmarking (teal), DER & Hosting (amber), Veg Risk (emerald), Workforce (violet), DAPR (rose)
+- Imported 13 new Lucide icons: `BookOpen, Cpu, BarChart3, Zap, TreePine, Briefcase, TrendingUp, Users, Scale, Target, Sliders, Upload, Award`
+
+---
+
+### NEM Daily Brief Fixes
+
+**`app/routers/market_briefs.py`**
+
+**Fix 1 — "Price data unavailable"**: Brief was using `current_timestamp()` as the time anchor, but gold table data timestamps were from the simulator (not wall clock), so `current_timestamp() - 24 HOURS` matched nothing. Fixed by anchoring on `MAX(interval_datetime)` from the gold table:
+```python
+anchor_rows = _query_gold(f"SELECT MAX(interval_datetime) AS latest FROM {_CATALOG}.gold.nem_prices_5min")
+anchor_ts = anchor_rows[0]["latest"] if anchor_rows and anchor_rows[0].get("latest") else None
+if anchor_ts:
+    time_filter = f"interval_datetime >= TIMESTAMP('{anchor_ts}') - INTERVAL {lookback_hours} HOURS AND interval_datetime <= TIMESTAMP('{anchor_ts}')"
+else:
+    time_filter = f"interval_datetime >= current_timestamp() - INTERVAL {lookback_hours} HOURS"
+```
+
+**Fix 2 — "No interconnector congestion"**: Congestion query was using a single snapshot (`WHERE interval_datetime = MAX(...)` and `is_congested = true`). A single 5-min snapshot almost never shows congestion. Fixed to aggregate over full lookback window with `HAVING congested_intervals > 0`.
+
+---
+
+### Pipeline 13 — NEMWEB Bronze → Gold (Real Price Data)
+
+**`pipelines/13_nemweb_bronze_to_gold.py`** (new)
+
+Incremental pipeline promoting real AEMO NEMWEB dispatch prices from `bronze.nemweb_dispatch_price` into `gold.nem_prices_5min`, replacing simulator-generated prices with actual market data.
+
+**Source table:** `energy_copilot_catalog.bronze.nemweb_dispatch_price`
+- Columns: `_source_file, _ingested_at, settlement_date, run_no, regionid, rrp, intervention, lastchanged`
+- `lastchanged` format: `'YYYY/MM/DD HH:mm:ss'` (UTC)
+- 106,380 rows as of 2026-03-20
+
+**Transform logic:**
+1. Parse `lastchanged` → `interval_datetime` (timestamp)
+2. Filter `intervention = '0'` (exclude intervention pricing)
+3. Filter `regionid IN ('NSW1','QLD1','VIC1','SA1','TAS1')`
+4. Deduplicate: keep lowest `run_no` per `(interval_datetime, region_id)` (initial dispatch only)
+5. Watermark: only process rows newer than `MAX(interval_datetime)` in gold
+
+**MERGE into gold:**
+- Match key: `(interval_datetime, region_id)`
+- On match: update `rrp` with real price (overwrites simulator value)
+- No match: insert new row
+
+**Gold table schema** (actual, from `energy_copilot_catalog.gold.nem_prices_5min`):
+```
+interval_datetime TIMESTAMP, region_id STRING, rrp DOUBLE, rop DOUBLE,
+total_demand_mw DOUBLE, available_gen_mw DOUBLE, net_interchange_mw DOUBLE,
+intervention BOOLEAN, apc_flag BOOLEAN, market_suspended BOOLEAN, _updated_at TIMESTAMP
+```
+
+**Debugging notes:**
+- Catalog is `energy_copilot_catalog` (not `energy_copilot`) — confirmed via `SHOW CATALOGS`
+- Job fails silently in 24s if notebook queries a non-existent table without try/except
+- Gold table already had 240,400 simulator rows current to 2026-03-20 05:10 UTC
+- After first successful run: 241,035 rows, latest `2026-03-20 16:12 UTC` (+635 real rows)
+
+**Job registration:**
+- Job ID: `154845545310728`
+- Schedule: every 5 minutes (cron `0 */5 * * * ?`, Australia/Sydney)
+- Notebook: `/Workspace/Users/sourabh.ghose@databricks.com/energy-copilot/pipelines/13_nemweb_bronze_to_gold`
+
+---
+
+### Deploy Fixes Discovered This Session
+
+| Issue | Root Cause | Fix |
+|-------|-----------|-----|
+| Phase 6 pages blank | No `<Route>` elements in App.tsx | Added 21 `<Route>` entries |
+| Phase 6 pages unreachable | DnspHub.tsx `MODULES` array had no Phase 6 cards | Added 21 ModuleCard entries with new badge colors |
+| NEM Daily Brief: Price data unavailable | `current_timestamp()` anchor vs simulator data timestamps | Anchor to `MAX(interval_datetime)` from gold |
+| NEM Daily Brief: No congestion | Single-snapshot query on `is_congested` | Aggregate over full lookback window |
+| Pipeline 13 failures | Wrong catalog name (`energy_copilot` vs `energy_copilot_catalog`) | Fixed to use correct catalog |
+
+### Deploy Workflow (confirmed correct)
+```bash
+npx vite build                                                                       # from app/frontend/
+databricks workspace import-dir app/frontend/dist .../frontend/dist --overwrite -p fe-vm-energy-copilot
+databricks workspace import-dir app/routers .../routers --overwrite -p fe-vm-energy-copilot
+databricks workspace import --file app/main.py --format AUTO --language PYTHON --overwrite .../main.py -p fe-vm-energy-copilot
+databricks apps deploy energy-copilot --source-code-path /Workspace/.../energy-copilot -p fe-vm-energy-copilot
+```
+**NEVER** `import-dir app/` — uploads node_modules (100k+ files, breaks all future deploys).
+
+### Current Totals
+- **564 frontend pages** (543 Phase 1–5C + 21 Phase 6)
+- **64 backend routers** (~636+ endpoints)
+- **51 FMAPI AI tools** (unchanged)
+- **12 Genie AI/BI spaces** (unchanged)
+- **30 scheduled pipeline jobs** (29 existing + pipeline 13)
+- **108+ gold Delta tables** (unchanged)
