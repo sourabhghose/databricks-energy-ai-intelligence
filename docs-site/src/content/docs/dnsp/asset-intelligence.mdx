@@ -1,0 +1,154 @@
+---
+title: Asset Intelligence
+description: Asset health scoring, ML failure prediction, expenditure justification, risk matrix, and cross-system integration for DNSP asset management.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+The Asset Intelligence Hub is Energy Copilot's most sophisticated DNSP module. It combines an asset register with ML-powered failure prediction, condition-based health scoring, and a risk-consequence matrix — giving asset managers a single pane of glass for strategic expenditure decisions.
+
+The XGBoost failure prediction model achieves **AUC 0.961** and **92.3% accuracy** on the test set. See [Asset Failure Prediction ML](/databricks-energy-copilot/ai-ml/asset-failure) for full model documentation.
+
+## Asset Registry
+
+The asset registry (`gold.dnsp_asset_register`) maintains a comprehensive record of all distribution network assets:
+
+| Asset Type | Key Attributes |
+|-----------|---------------|
+| **Transformers** | MVA capacity, voltage, age, insulation type, last test date, oil condition |
+| **Switchgear** | Type (SF6, oil, air), voltage class, last test, mechanism condition |
+| **Underground cables** | Length, insulation material, age, fault history, thermal load |
+| **Overhead conductors** | Length, conductor type, age, sag, span rating, vegetation clearance |
+| **Poles** | Material (wood, steel, concrete), age, tip load, soil classification |
+| **Protection relays** | Manufacturer, model, firmware version, last test, trip history |
+
+## Asset Health Scoring
+
+Each asset receives a **Health Index (HI)** score from 0 (end of life) to 100 (new):
+
+```
+HI = Σ (weight_i × condition_factor_i)
+```
+
+Condition factors include:
+- **Age factor**: normalised by expected service life
+- **Load factor**: operating load vs thermal rating
+- **Fault history factor**: number and severity of past faults
+- **Maintenance recency**: days since last inspection or test
+- **Observed defects**: known issues from last inspection
+
+Health Index bands:
+
+| Score | Band | Recommended Action |
+|-------|------|--------------------|
+| 80–100 | Good | Routine maintenance |
+| 60–79 | Satisfactory | Enhanced monitoring |
+| 40–59 | Poor | Prioritise for maintenance/replacement |
+| 20–39 | Very Poor | Urgent replacement program |
+| 0–19 | Critical | Immediate action required |
+
+## Failure Prediction Model
+
+The XGBoost failure prediction model runs as a Model Serving endpoint and scores each asset monthly:
+
+```python
+# Feature set used by the model
+features = [
+    'age_years',
+    'health_index',
+    'fault_count_5yr',
+    'peak_load_ratio',        # peak load / thermal rating
+    'days_since_maintenance',
+    'insulation_condition_score',
+    'weather_exposure_index'  # based on geographic zone and climate data
+]
+```
+
+Model outputs:
+- `failure_probability_12m`: probability of failure in the next 12 months (0–1)
+- `failure_risk_class`: High / Medium / Low
+- `top_risk_factors`: SHAP-derived explanations of the top 3 contributors
+
+*Screenshot: Asset Intelligence Hub showing risk matrix heat map with assets plotted by failure probability (x-axis) vs consequence (y-axis).*
+
+## Risk-Consequence Matrix
+
+Assets are plotted on a 5×5 risk matrix:
+
+```
+             ┌───────────────────────────────────────────────────┐
+         5   │ Med  │ High │ High │ Crit │ Crit │
+  C      4   │ Low  │ Med  │ High │ High │ Crit │
+  O      3   │ Low  │ Low  │ Med  │ High │ High │
+  N      2   │ Neg  │ Low  │ Low  │ Med  │ High │
+  S      1   │ Neg  │ Neg  │ Low  │ Low  │ Med  │
+  Q          └───────────────────────────────────────────────────┘
+  U               1      2      3      4      5
+  E                   FAILURE PROBABILITY
+  N
+  C
+  E
+```
+
+Consequence dimensions assessed:
+- **SAIDI impact**: expected customer-minutes interrupted if this asset fails
+- **Network criticality**: radial vs meshed supply
+- **Customer type**: hospitals, high-dependency customers, CBD
+- **Replacement lead time**: how long to restore if a major failure occurs
+
+## Expenditure Justification
+
+AER requires DNSPs to justify capital expenditure proposals under the "capex test" — expenditure must be prudent, efficient, and consistent with a prudent regulatory obligation.
+
+The Asset Intelligence Hub generates expenditure justification packs:
+
+1. **Asset condition evidence**: health scores, condition inspection reports, defect photos
+2. **Failure risk quantification**: failure probability × consequence × cost-of-failure
+3. **Alternatives analysis**: repair vs replace vs augment
+4. **Cost-benefit analysis**: NPV of different options over the regulatory period
+5. **Benchmark comparison**: cost per unit vs AER benchmarks
+
+## Cross-System Integration
+
+The Asset Intelligence Hub integrates data from multiple DNSP systems:
+
+| System | Data Provided | Integration Method |
+|--------|--------------|------------------|
+| EAM/SAP PM | Asset register, maintenance history | API or daily export |
+| SCADA/DMS | Load data, fault events | API or real-time feed |
+| GIS | Geographic attributes, span lengths | Shapefile import |
+| Customer system | Customer connections by feeder | API |
+| Vegetation management | Last clearance date, clearance status | API |
+
+## API Endpoints
+
+```bash
+# Asset health summary
+GET /api/dnsp/assets/summary?dnsp=ausgrid
+
+# Individual asset details
+GET /api/dnsp/assets/{asset_id}
+
+# High-risk assets (failure probability > threshold)
+GET /api/dnsp/assets/high-risk?dnsp=ergon&threshold=0.3&horizon_months=12
+
+# Risk matrix data
+GET /api/dnsp/assets/risk-matrix?dnsp=energex
+
+# Expenditure justification pack
+POST /api/dnsp/assets/capex-justification
+{
+  "asset_ids": ["TXF-001-234", "TXF-001-235"],
+  "project_type": "replacement",
+  "cost_aud": 450000
+}
+
+# Failure prediction scores (latest)
+GET /api/dnsp/assets/failure-prediction?dnsp=essential_energy&min_probability=0.2
+```
+
+<Aside type="tip">
+  The AI Copilot `get_asset_health_scores` tool retrieves health scores and failure predictions. Ask: "Which transformers in Zone 3 are at high failure risk in the next 12 months and what is the estimated SAIDI impact if they fail?"
+</Aside>

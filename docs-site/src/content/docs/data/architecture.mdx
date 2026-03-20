@@ -1,0 +1,195 @@
+---
+title: Data Architecture Overview
+description: Bronze/Silver/Gold medallion lakehouse, Unity Catalog layout, DLT pipelines vs regular jobs, and the Lakebase serving layer.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Medallion Architecture
+
+Energy Copilot implements the Databricks Medallion (Bronze → Silver → Gold) lakehouse architecture within Unity Catalog. Each layer serves a distinct purpose:
+
+```
+External Sources
+      │
+      ▼
+┌────────────────────────────────────────────────────────┐
+│ BRONZE — Raw Ingestion                                 │
+│ • Append-only tables                                   │
+│ • Data stored exactly as received from source          │
+│ • Partitioned by ingest date                           │
+│ • No transformations, no deduplication                 │
+│ • 11+ tables                                           │
+└────────────────────────────────────────────────────────┘
+      │
+      ▼ (clean, validate, deduplicate)
+┌────────────────────────────────────────────────────────┐
+│ SILVER — Clean and Validated                           │
+│ • Deduplicated (QUALIFY + ROW_NUMBER)                  │
+│ • Schema enforced, nulls handled                       │
+│ • Timestamps normalised to UTC                         │
+│ • Quality flags added (is_valid, quality_score)        │
+│ • 13+ tables                                           │
+└────────────────────────────────────────────────────────┘
+      │
+      ▼ (aggregate, enrich, join)
+┌────────────────────────────────────────────────────────┐
+│ GOLD — Curated Analytics                               │
+│ • Partitioned by interval_date                         │
+│ • Auto-optimise enabled                                │
+│ • Change Data Feed enabled (agent tables)              │
+│ • COMMENT on every column (Genie semantic layer)       │
+│ • 84+ tables                                           │
+└────────────────────────────────────────────────────────┘
+      │
+      ├──────────────────────────────────────────────────┐
+      ▼                                                  ▼
+┌──────────────────┐                         ┌───────────────────────┐
+│ ML SCHEMA        │                         │ TOOLS SCHEMA          │
+│ • Feature store  │                         │ • 14 UC SQL functions │
+│ • Model outputs  │                         │   for AI agent        │
+│ • Eval metrics   │                         └───────────────────────┘
+└──────────────────┘
+```
+
+## Unity Catalog Layout
+
+### Catalog Structure
+
+```
+energy_copilot_catalog (dev: with [dev] prefix)
+energy_copilot (prod)
+├── bronze/
+│   ├── raw_dispatch_scada          # NEMWEB Dispatch SCADA (5-min)
+│   ├── raw_dispatch_regionsum      # NEMWEB Regional Summary
+│   ├── raw_trading_regionsum       # NEMWEB Trading Regional Summary
+│   ├── raw_weather_observations    # BOM weather feeds
+│   ├── raw_solar_apvi              # APVI rooftop solar
+│   ├── raw_gas_sttm                # STTM gas hub prices
+│   ├── raw_market_notices          # AEMO market notices
+│   ├── raw_aer_enforcement         # AER enforcement register
+│   ├── raw_aemc_rule_changes       # AEMC rule change proposals
+│   ├── raw_lgc_registry            # CER LGC issuance data
+│   └── raw_dnsp_outages            # DNSP outage notifications
+│
+├── silver/
+│   ├── dispatch_prices_clean       # Validated 5-min prices
+│   ├── dispatch_scada_clean        # Validated generation SCADA
+│   ├── trading_prices_clean        # Validated 30-min prices
+│   ├── weather_clean               # Normalised weather data
+│   ├── solar_rooftop_clean         # APVI solar (with ACT→NSW1 mapping)
+│   ├── gas_prices_clean            # STTM gas prices validated
+│   ├── fcas_prices_pivoted         # FCAS pivoted to long format
+│   ├── interconnectors_clean       # Validated interconnector flows
+│   ├── aer_enforcement_clean       # Parsed enforcement register
+│   ├── lgc_clean                   # Validated LGC data
+│   ├── dnsp_assets_clean           # Validated DNSP asset data
+│   ├── dnsp_stpis_clean            # Validated STPIS metrics
+│   └── isp_projects_clean          # ISP project data
+│
+├── gold/                           # 84+ curated tables
+│   └── (see Gold Tables Reference)
+│
+├── ml/
+│   ├── feature_store_price         # Price forecast features
+│   ├── price_forecast_evaluation   # Model evaluation metrics
+│   ├── asset_failure_predictions   # Monthly failure predictions
+│   ├── vegetation_risk_scores      # Weekly vegetation risk
+│   └── workforce_demand_forecast   # Monthly workforce forecast
+│
+└── tools/
+    └── (14 UC SQL functions — see API Reference)
+```
+
+## DLT Pipelines vs Regular Jobs
+
+Energy Copilot uses both Delta Live Tables (DLT) pipelines and regular Python jobs:
+
+### DLT Pipelines (used for streaming/continuous)
+
+DLT is used where declarative quality constraints and lineage tracking add value:
+
+```python
+# Example: pipelines/01_nemweb_ingest.py (DLT)
+import dlt
+
+@dlt.table(
+    comment="NEMWEB dispatch prices Bronze — raw 5-min intervals",
+    table_properties={"quality": "bronze"}
+)
+def raw_dispatch_prices():
+    return (
+        spark.readStream.format("cloudFiles")
+        .option("cloudFiles.format", "csv")
+        .load("abfss://raw@storage.dfs.core.windows.net/nemweb/dispatchprice/")
+    )
+
+@dlt.table(
+    comment="Validated 5-min dispatch prices Silver",
+    expectations={"valid_price": "rrp BETWEEN -1000 AND 16600"}
+)
+def dispatch_prices_validated():
+    return (
+        dlt.read_stream("raw_dispatch_prices")
+        .where("rrp IS NOT NULL")
+        .dropDuplicates(["settlementdate", "regionid"])
+    )
+```
+
+### Regular Python Jobs (used for batch/scheduled)
+
+Regular jobs are used for more complex ETL, ML inference, and reporting:
+
+- `pipelines/06_market_summary.py` — AI-generated daily market summary
+- `pipelines/13_nemweb_bronze_to_gold.py` — NEMWEB Bronze → Gold (high frequency, batch)
+- `pipelines/05_forecast_pipeline.py` — ML inference pipeline
+- `pipelines/09_dashboard_snapshot_generator.py` — Pre-computed snapshots
+
+## Lakebase Serving Layer
+
+Lakebase is a managed Postgres instance provisioned within the Databricks workspace. High-traffic Gold tables are continuously synced from Delta to Lakebase via Databricks Synced Tables:
+
+```python
+# pipelines/12_recreate_synced_tables_continuous.py
+from databricks.sdk import WorkspaceClient
+
+w = WorkspaceClient()
+
+# Create a continuously-synced Lakebase table
+w.pipelines.create(
+    name="gold-lakebase-sync-nem-prices",
+    libraries=[{
+        "notebook": {"path": "/Shared/sync-nem-prices"}
+    }],
+    continuous=True,  # Sync runs continuously, not on a schedule
+    target="gold",
+)
+```
+
+Synced tables provide sub-10ms query latency compared to 400–1000ms for the SQL Warehouse, enabling the real-time feel of the live market dashboards.
+
+<Aside type="note">
+  Lakebase is optional — the application gracefully falls back to SQL Warehouse if Lakebase is unavailable or stale. The `X-Data-Source` response header indicates which serving layer answered each request.
+</Aside>
+
+## Table Properties
+
+All Gold tables are created with consistent properties:
+
+```sql
+CREATE TABLE energy_copilot.gold.nem_prices_5min (
+    interval_datetime TIMESTAMP NOT NULL COMMENT 'NEM dispatch interval end time (UTC)',
+    interval_date DATE NOT NULL COMMENT 'Partition column — cast from interval_datetime',
+    region_id STRING NOT NULL COMMENT 'NEM region: NSW1, QLD1, SA1, TAS1, VIC1',
+    rrp DOUBLE COMMENT 'Regional Reference Price ($/MWh)',
+    ...
+)
+USING DELTA
+PARTITIONED BY (interval_date)
+TBLPROPERTIES (
+    'delta.autoOptimize.optimizeWrite' = 'true',
+    'delta.autoOptimize.autoCompact' = 'true',
+    'delta.enableChangeDataFeed' = 'true',
+    'quality' = 'gold'
+);
+```

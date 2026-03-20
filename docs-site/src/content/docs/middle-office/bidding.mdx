@@ -1,0 +1,138 @@
+---
+title: Bidding Strategy
+description: DUID bid stack analysis, bid band optimisation, rebid tracking, and merit order analytics for NEM dispatch.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+The Bidding Strategy module provides analysis tools for generators and BESS operators who participate in AEMO's central dispatch process. Understanding the bid stack, tracking competitor rebids, and optimising bid bands are critical activities for maximising revenue in the NEM.
+
+## NEM Dispatch Mechanism
+
+AEMO dispatches all market units every 5 minutes using a least-cost dispatch algorithm (NEMDE). Each generator submits a bid consisting of:
+
+- **10 price bands**: from −$1,000/MWh to $16,600/MWh
+- **Volume availability** in each band (MW)
+- **Ramp rates**: ramp up and ramp down limits (MW/minute)
+- **FCAS availability offers**: MW available for each FCAS service
+
+The dispatch algorithm stacks all bids from cheapest to most expensive and clears the market at the intersection with forecast demand. The clearing price becomes the dispatch price for that 5-minute interval.
+
+## DUID Bid Stack Analysis
+
+### Current Bid Stack (`/middle-office/bid-stack`)
+
+- Stack chart: all DUIDs sorted by offer price, coloured by fuel type
+- Demand line: current and forecast demand overlaid on the stack
+- Marginal unit indicator: which DUID is setting the price
+- FCAS co-optimisation: how FCAS bids shift the effective stack
+
+*Screenshot: Bid stack chart for NSW1 showing stacked generation offers (MW vs $/MWh) with demand line and marginal unit highlighted.*
+
+### Merit Order Analysis
+
+The merit order ranks generating units by their short-run marginal cost (SRMC):
+
+| Fuel Type | Typical SRMC Range | Dispatch Priority |
+|-----------|-------------------|------------------|
+| Wind | $0–$5/MWh | First in (zero fuel cost) |
+| Solar | $0–$10/MWh | First in (zero fuel cost) |
+| Hydro | $0–$20/MWh | Flexible dispatch |
+| Black Coal | $30–$60/MWh | Base load |
+| Brown Coal | $10–$40/MWh | Base load |
+| CCGT | $70–$130/MWh | Mid-merit |
+| OCGT | $100–$200/MWh | Peaking |
+| Battery | Variable | Arbitrage / FCAS |
+
+## Rebid Tracking
+
+**Rebidding** is when a generator submits a new bid to change their price or volume availability. Rebids must be submitted before the 5-minute gate closure. Legitimate rebids reflect changed circumstances (equipment availability, fuel constraints); strategic rebids are monitored by the AER.
+
+### Rebid Feed (`/middle-office/rebids`)
+
+- Live rebid notifications as they occur
+- Rebid reason codes (as submitted to AEMO)
+- Price band changes visualised as before/after stack overlays
+- Volume availability changes per band
+- DUID filter to monitor specific competitors
+
+```sql
+-- Query today's rebids for a specific DUID
+SELECT
+    submission_timestamp,
+    duid,
+    rebid_reason,
+    price_band_number,
+    old_price,
+    new_price,
+    old_volume_mw,
+    new_volume_mw
+FROM energy_copilot.gold.nem_rebids
+WHERE interval_date = CURRENT_DATE()
+  AND duid = 'LYNE1'
+ORDER BY submission_timestamp DESC;
+```
+
+## Bid Band Optimisation
+
+For BESS operators with battery optimisation access, the platform provides bid band optimisation suggestions:
+
+### Optimisation Objective
+
+```
+Maximise: Revenue_Energy + Revenue_FCAS - Degradation_Cost
+Subject to:
+    Charge_constraint: SOC >= SOC_min (typically 10%)
+    Discharge_constraint: SOC <= SOC_max (typically 90%)
+    Ramp_constraint: |ΔOutput| <= Ramp_rate × 5min
+    FCAS_trapezium: FCAS offer consistent with dispatch headroom
+```
+
+### Bid Band Suggestion
+
+Given a 24-hour price forecast, the optimiser suggests bid bands to maximise revenue:
+
+```python
+# Example optimised bid suggestion
+{
+  "duid": "HPRL1",
+  "trading_day": "2025-03-22",
+  "suggested_bands": {
+    "band_1": {"price": -1000, "volume_mw": 0},    # No strategic negative bid
+    "band_2": {"price": 0, "volume_mw": 20},        # Charge at zero (overnight)
+    "band_3": {"price": 50, "volume_mw": 0},
+    "band_4": {"price": 150, "volume_mw": 100},     # Discharge at $150+
+    "band_5": {"price": 300, "volume_mw": 50},      # Peak hour arbitrage
+    "band_6": {"price": 1000, "volume_mw": 30},     # Price spike capture
+    ...
+  }
+}
+```
+
+## API Endpoints
+
+```bash
+# Current bid stack for region
+GET /api/bidding/stack?region=SA1
+
+# Recent rebids
+GET /api/bidding/rebids?duid=HPRL1&hours=24
+
+# Merit order for region
+GET /api/bidding/merit-order?region=NSW1
+
+# Bid band optimisation for BESS
+POST /api/bidding/optimise
+{
+  "duid": "HPRL1",
+  "forecast_horizon_h": 24,
+  "fcas_services": ["RAISEREG", "LOWERREG", "RAISE6SEC"],
+  "soc_current_pct": 65
+}
+```
+
+<Aside type="note">
+  Bid data from AEMO is available in the pre-dispatch process, approximately 30 minutes before dispatch. The Energy Copilot bid stack shows pre-dispatch bids, which may differ from final dispatch instructions due to subsequent rebids.
+</Aside>

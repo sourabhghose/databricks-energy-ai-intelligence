@@ -1,0 +1,155 @@
+---
+title: Workforce Analytics
+description: Contractor scorecard, opex benchmarking, field crew productivity, skills gap analysis, and ML-powered workforce demand forecasting.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+DNSPs employ large workforces of skilled electrical tradespeople, engineers, and contractors. Workforce costs typically represent 25–35% of total opex. Efficient workforce management — having the right skills, in the right place, at the right time — is both a cost efficiency imperative and an AER benchmarking requirement.
+
+Energy Copilot's Workforce Analytics module provides a data-driven view of workforce performance, capacity, and forward demand.
+
+## ML Demand Forecasting
+
+The workforce demand forecasting model (Prophet + XGBoost ensemble) predicts the number of field crew hours required across skill categories over an 18-month horizon.
+
+### Model Architecture
+
+```
+Prophet (trend + seasonality) ──┐
+                                 ├──→ Ensemble → Forecast
+XGBoost (exogenous features) ───┘
+```
+
+**Prophet components**:
+- Long-term trend (workforce growth with network expansion)
+- Annual seasonality (higher demand in summer for storm response, lower in winter)
+- Weekly seasonality (Monday peak for planned work, reduced weekends)
+
+**XGBoost features**:
+- Capex program spend (drives contractor demand for large projects)
+- Planned vegetation clearance program (seasonal)
+- Scheduled asset replacements
+- Storm event indicator (drives unplanned demand)
+- Public holiday flag
+
+### Model Performance
+
+| Metric | Value |
+|--------|-------|
+| MAE (monthly) | 124 crew-hours |
+| MAPE | 4.2% |
+| Forecast horizon | 18 months |
+| Retraining frequency | Monthly |
+
+See [Workforce Demand Forecasting ML](/databricks-energy-copilot/ai-ml/workforce-forecast) for technical details.
+
+## Dashboard Pages
+
+### Workforce Demand Forecast (`/dnsp/workforce/forecast`)
+
+- 18-month forecast chart by skill category (HV/LV linesperson, cable jointer, engineer, project manager)
+- Comparison: forecast vs plan (from annual workforce plan)
+- Gap analysis: forecast demand minus current capacity = gap to fill via contractors
+- Confidence intervals (P10/P50/P90)
+
+*Screenshot: Workforce demand forecast chart showing 18-month horizon with actual (solid), P50 forecast (dashed), and P10/P90 confidence band (shaded).*
+
+### Contractor Scorecard (`/dnsp/workforce/contractors`)
+
+Performance tracking for external contractors:
+
+| Metric | Calculation | Target |
+|--------|-------------|--------|
+| **Job completion rate** | Jobs completed on time / Total jobs | >95% |
+| **Defect rate** | Defective work items / Total work items | &lt;2% |
+| **Safety record** | LTI frequency rate | &lt;1.5 |
+| **Cost efficiency** | Actual cost / Quoted cost | &lt;1.05 |
+| **Response time** | Hours from callout to arrival (emergency) | &lt;4h |
+
+### Field Crew Productivity (`/dnsp/workforce/productivity`)
+
+Productivity metrics by work type and crew:
+
+```sql
+-- Crew productivity by work type
+SELECT
+    crew_id,
+    work_type,
+    region,
+    completed_jobs,
+    average_job_duration_h,
+    travel_ratio_pct,   -- travel time / total time
+    utilisation_pct,    -- productive time / available time
+    productivity_index  -- actual output / expected output
+FROM energy_copilot.gold.dnsp_workforce_metrics
+WHERE period_month = DATE_TRUNC('month', CURRENT_DATE())
+ORDER BY productivity_index ASC  -- show lowest performers first
+LIMIT 20;
+```
+
+### Skills Gap Analysis (`/dnsp/workforce/skills-gap`)
+
+Skills gap analysis compares current skills inventory against forecast demand:
+
+| Skill | Current Headcount | Forecast Peak Demand (12m) | Gap | Gap Type |
+|-------|------------------|--------------------------|-----|----------|
+| HV Linesperson | 85 | 92 | -7 | Shortage |
+| Cable Jointer | 32 | 28 | +4 | Surplus |
+| Protection Engineer | 12 | 15 | -3 | Shortage |
+| Project Manager | 18 | 20 | -2 | Shortage |
+
+Skills gaps drive recruitment targets and contractor pre-qualification requirements.
+
+## Bushfire Seasonality
+
+Bushfire season creates significant demand spikes for vegetation management crews:
+
+```
+Nov-Feb: +35% to +80% above base demand (vegetation clearance emergency response)
+Mar-Apr: +15% above base (post-season remediation)
+May-Oct: base demand
+```
+
+The forecast model explicitly incorporates bushfire season effects, and the workforce plan configures standby contractor arrangements for the peak period.
+
+## Opex Benchmarking
+
+Workforce opex is benchmarked against AER efficiency benchmarks and peer DNSPs:
+
+```bash
+# Workforce opex benchmark comparison
+GET /api/dnsp/workforce/opex-benchmark?dnsp=ausgrid&year=2024
+
+# Response includes:
+# - total_workforce_opex_aud
+# - per_customer_aud (benchmarked vs peer group)
+# - per_km_network_aud (benchmarked vs peer group)
+# - efficiency_score (0-100, 100 = most efficient in peer group)
+# - aer_reference_expenditure_aud (AER's approved opex allowance)
+```
+
+## API Endpoints
+
+```bash
+# Workforce demand forecast
+GET /api/dnsp/workforce/forecast?dnsp=ergon&horizon=18m
+
+# Contractor scorecard
+GET /api/dnsp/workforce/contractors?dnsp=sa_power_networks&period=2025-Q1
+
+# Skills gap analysis
+GET /api/dnsp/workforce/skills-gap?dnsp=essential_energy
+
+# Crew productivity
+GET /api/dnsp/workforce/productivity?dnsp=energex&work_type=vegetation
+
+# Forecast vs plan comparison
+GET /api/dnsp/workforce/plan-comparison?dnsp=ausgrid&year=2025
+```
+
+<Aside type="tip">
+  The AI Copilot can forecast staffing needs: "Based on the current vegetation risk scores and the bushfire season outlook, how many additional clearance crews will Essential Energy need in November?" The `get_workforce_forecast` and `get_vegetation_risk_scores` tools work together to produce an integrated answer.
+</Aside>

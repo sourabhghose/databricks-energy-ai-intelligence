@@ -1,0 +1,116 @@
+---
+title: AER Regulatory
+description: RIN submissions, annual reporting, revenue determination periods, and revenue cap regulation for Australian DNSPs.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+The Australian Energy Regulator (AER) regulates DNSPs under a **building block** revenue regulation model. Every five years, the AER conducts a regulatory determination that sets the maximum revenue a DNSP can earn. Between determinations, the DNSP must comply with extensive annual reporting requirements via Regulatory Information Notices (RINs).
+
+## Revenue Regulation Model
+
+The AER's building block model sets the allowed revenue as the sum of:
+
+```
+Allowed_Revenue = WACC × RAB + Depreciation + Opex_Allowance + Incentive_Adjustments + Tax
+```
+
+Where:
+- **WACC**: Weighted Average Cost of Capital (set by AER, ~5–7%)
+- **RAB**: Regulatory Asset Base (see [RAB Roll-Forward](/databricks-energy-copilot/dnsp/rab))
+- **Depreciation**: straight-line depreciation of regulatory assets
+- **Opex Allowance**: approved operating expenditure
+- **Incentive Adjustments**: STPIS, EBSS, CESS (see below)
+- **Tax**: regulated return on tax asset base
+
+## Regulatory Determination Periods
+
+Current determination periods:
+
+| DNSP | Regulatory Period | Revenue Determination Date |
+|------|------------------|--------------------------|
+| Ausgrid | 2024–2029 | June 2023 |
+| Endeavour Energy | 2024–2029 | June 2023 |
+| Essential Energy | 2024–2029 | June 2023 |
+| Energex | 2025–2030 | June 2024 |
+| Ergon Energy | 2025–2030 | June 2024 |
+| AusNet | 2026–2031 | In progress |
+| SA Power Networks | 2025–2030 | June 2024 |
+
+The Energy Copilot platform tracks the current determination period for each DNSP and highlights when the next reset submission is due.
+
+## Regulatory Information Notices (RINs)
+
+The AER issues RINs to collect information needed for economic regulation. There are two main categories:
+
+### Annual Reporting RINs
+
+Filed annually for each financial year, covering:
+- Actual expenditure (capex and opex)
+- Revenue and tariff data
+- Asset information
+- Customer and service data
+- Regulatory compliance attestations
+
+### Periodic RINs
+
+Filed as part of the regulatory reset process (every 5 years), covering:
+- Revenue proposal documentation
+- Asset management plans
+- Demand forecasts
+- Expenditure justification
+
+## AER Regulatory Dashboard (`/dnsp/aer-regulatory`)
+
+- Current determination period status for each DNSP
+- RIN filing calendar with due dates and completion status
+- Revenue comparison: actual vs allowance by building block
+- RAB movements: additions, disposals, depreciation
+- WACC tracker: current AER-set WACC vs market benchmarks
+
+```sql
+-- Revenue allowance vs actual by year
+SELECT
+    financial_year,
+    dnsp_name,
+    revenue_allowance_aud,
+    actual_revenue_aud,
+    revenue_variance_aud,
+    variance_pct,
+    over_under_recovery
+FROM energy_copilot.gold.dnsp_revenue_tracking
+WHERE financial_year >= YEAR(CURRENT_DATE()) - 3
+ORDER BY financial_year DESC, dnsp_name;
+```
+
+## Incentive Schemes
+
+The AER's incentive schemes adjust DNSP revenue based on performance:
+
+| Scheme | Acronym | Measures | Direction |
+|--------|---------|---------|-----------|
+| Service Target Performance Incentive | STPIS | SAIDI, SAIFI, MAIFI | Better = earn more |
+| Efficiency Benefit Sharing Scheme | EBSS | Opex efficiency vs allowance | Save more = earn more |
+| Capital Expenditure Sharing Scheme | CESS | Capex underspend vs allowance | Underspend = earn more |
+
+## API Endpoints
+
+```bash
+# Current regulatory period details
+GET /api/dnsp/regulatory/period?dnsp=ausgrid
+
+# Revenue allowance vs actual
+GET /api/dnsp/regulatory/revenue?dnsp=energex&years=3
+
+# RIN filing calendar
+GET /api/dnsp/regulatory/rin-calendar?dnsp=essential_energy
+
+# Determination timeline
+GET /api/dnsp/regulatory/determination-timeline?dnsp=ausnet
+```
+
+<Aside type="note">
+  AER determination documents and RIN templates are ingested via `pipelines/25_rab_determinations_ingest.py` and the AER CDR API. The platform maintains a library of published determinations going back to 2014.
+</Aside>

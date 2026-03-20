@@ -1,0 +1,164 @@
+---
+title: DAPR Assembly
+description: Distribution Annual Planning Report builder — demand forecast, network capability statement, REZ contribution, and compliance checklist.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+The **Distribution Annual Planning Report (DAPR)** is a regulatory obligation under NER clause 5.20A. DNSPs must publish a DAPR annually, providing a 5-year forward view of network planning, demand forecasts, and connection opportunities. The DAPR is a significant document (typically 100–200 pages) that requires input from multiple teams across the DNSP.
+
+Energy Copilot's DAPR Assembly module automates data compilation and AI-generates narrative sections, reducing the time to produce the DAPR from weeks to days.
+
+## DAPR Structure
+
+A DAPR comprises eight main sections:
+
+| Section | Content | Energy Copilot Module |
+|---------|---------|----------------------|
+| 1. Network Overview | Asset register, key statistics | Asset Intelligence |
+| 2. Demand Forecast | 5-year demand forecast by zone | Demand & Weather ML |
+| 3. Network Capability Statement | Transfer capacity, constraints | Hosting Capacity |
+| 4. Planned Network Investments | Approved augmentation projects | Asset Intelligence |
+| 5. Connection Opportunities | Available capacity for new connections | Hosting Capacity |
+| 6. Non-network Alternatives | DER, demand response options | DER Management |
+| 7. REZ Assessment | Contribution to Renewable Energy Zones | Data → ISP |
+| 8. Compliance Checklist | NER 5.20A mandatory content checklist | Compliance |
+
+## Dashboard Pages
+
+### DAPR Builder (`/dnsp/dapr/builder`)
+
+The DAPR Builder is a guided, step-by-step workflow:
+
+1. **Select DNSP and reporting year** — loads all data for that DNSP
+2. **Review auto-compiled data** — each section shows auto-populated figures with sources
+3. **Generate narrative** — Claude Sonnet 4.5 generates draft text for each section
+4. **Edit and approve** — engineers review and edit AI-generated content
+5. **Compile and export** — outputs a formatted Word document or PDF
+
+*Screenshot: DAPR Builder interface showing section navigation, data tables, and AI-generated narrative with edit controls.*
+
+### Demand Forecast Section
+
+The DAPR demand forecast is produced from the ML demand model:
+
+```sql
+-- DAPR demand forecast extract
+SELECT
+    zone_id,
+    zone_name,
+    forecast_year,
+    low_demand_mw,
+    medium_demand_mw,       -- P50 forecast
+    high_demand_mw,
+    peak_demand_mw,         -- Maximum annual peak (P10)
+    der_offset_mw,          -- Demand reduction from behind-the-meter DER
+    net_system_load_mw      -- Medium demand minus DER offset
+FROM energy_copilot.gold.dnsp_dapr_demand_forecast
+WHERE dnsp_id = 'AUSGRID'
+  AND forecast_year BETWEEN 2025 AND 2030
+ORDER BY zone_id, forecast_year;
+```
+
+### Network Capability Statement
+
+The network capability statement documents the transfer capacity of each major interconnection into each zone:
+
+```
+Zone: BANKSTOWN (132/33kV substation)
+Firm capacity: 180 MVA
+Non-firm capacity: 220 MVA
+Current peak demand: 152 MVA (84% of firm capacity)
+5-year forecast peak: 165 MVA
+Forecast headroom: 15 MVA
+Augmentation trigger: 2027 (when forecast peak exceeds firm capacity)
+```
+
+### Compliance Checklist
+
+NER 5.20A specifies 42 mandatory content requirements for the DAPR. Energy Copilot maintains a checklist that maps each requirement to specific sections of the document:
+
+```bash
+GET /api/dnsp/dapr/compliance-checklist?dnsp=energex&year=2025
+
+# Returns:
+{
+  "mandatory_items": 42,
+  "items_met": 39,
+  "items_pending": 3,
+  "items": [
+    {
+      "requirement_id": "5.20A.a",
+      "description": "5-year demand forecast by zone",
+      "status": "complete",
+      "section": "Section 2 — Demand Forecast",
+      "data_source": "ML demand model, last updated 2025-03-15"
+    },
+    ...
+  ]
+}
+```
+
+## AI-Assisted Narrative Generation
+
+Each DAPR section has an AI-generation endpoint that produces compliant, professional text:
+
+```bash
+POST /api/dnsp/dapr/generate-narrative
+{
+  "dnsp": "ausgrid",
+  "section": "demand_forecast",
+  "year": 2025,
+  "data": {
+    "total_zones": 47,
+    "average_demand_growth_pct": 1.2,
+    "highest_growth_zone": "Western Sydney",
+    "highest_growth_pct": 3.8,
+    "der_penetration_pct": 28
+  }
+}
+
+# Returns AI-generated paragraph:
+# "Ausgrid's network area is forecast to experience average demand growth
+#  of 1.2% per annum over the 2025–2030 period, consistent with the
+#  transition to electric vehicles and the continuing uptake of air
+#  conditioning in residential premises. The Western Sydney network zone
+#  is forecast to grow at 3.8% per annum driven by..."
+```
+
+## API Endpoints
+
+```bash
+# DAPR builder status
+GET /api/dnsp/dapr/status?dnsp=ausgrid&year=2025
+
+# Demand forecast data
+GET /api/dnsp/dapr/demand-forecast?dnsp=energex&years=5
+
+# Network capability statement
+GET /api/dnsp/dapr/capability-statement?dnsp=sa_power_networks
+
+# Compliance checklist
+GET /api/dnsp/dapr/compliance-checklist?dnsp=essential_energy&year=2025
+
+# Generate narrative section
+POST /api/dnsp/dapr/generate-narrative
+
+# Export DAPR document
+POST /api/dnsp/dapr/export
+{
+  "dnsp": "ergon",
+  "year": 2025,
+  "format": "docx"  // or "pdf"
+}
+```
+
+<Aside type="note">
+  The DAPR Assembly module requires that the underlying data (asset register, hosting capacity, demand forecast) be current before generating the report. The DAPR Builder dashboard shows data freshness indicators for each section.
+</Aside>
+
+<Aside type="tip">
+  AI-generated narrative should always be reviewed by qualified engineers before publication. The generator produces compliant, professional draft text but may not capture every nuance of the DNSP's specific network conditions.
+</Aside>

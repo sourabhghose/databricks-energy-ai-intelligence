@@ -1,0 +1,131 @@
+---
+title: Portfolio & P&L
+description: Mark-to-market portfolio valuation, P&L attribution, position limits monitoring, and portfolio summary dashboards.
+---
+
+## Overview
+
+The Portfolio & P&L module provides real-time visibility into the financial performance of energy derivative positions. All MtM valuations are computed against forward curves built from live ASX Energy Futures data.
+
+## Mark-to-Market Valuation
+
+Mark-to-market (MtM) is calculated daily for all active deals:
+
+```
+MtM_value = (Forward_price - Strike_price) × Volume_MW × Hours_remaining × Direction
+```
+
+Where:
+- `Forward_price`: the current forward price for the deal's tenor from the ASX futures-derived curve
+- `Strike_price`: the fixed price in the deal
+- `Volume_MW`: notional MW volume
+- `Hours_remaining`: hours from valuation date to deal end date
+- `Direction`: +1 for buy, -1 for sell
+
+For options (caps, floors, collars), the MtM uses a Black-76 option pricing model:
+- Underlying: forward electricity price
+- Volatility: implied from observable ASX options prices (or historical volatility if not available)
+- Risk-free rate: RBA cash rate + credit spread
+
+## Dashboard Pages
+
+### Portfolio Summary (`/middle-office/portfolio-summary`)
+
+The top-level portfolio dashboard shows:
+
+- **Total portfolio MtM**: current net present value of all positions
+- **P&L attribution**: today's change in MtM broken down by portfolio, deal, and driver (price move, theta, vega)
+- **Position heat map**: regions × tenors coloured by net exposure
+- **Limit utilisation gauges**: how close each portfolio is to its position limits
+
+*Screenshot: Portfolio summary dashboard showing 3 portfolios with MtM bars, P&L waterfall chart, and limit gauges.*
+
+### Deal-Level MtM (`/middle-office/deal-mtm`)
+
+- MtM table for every active deal
+- Sort by MtM value, region, counterparty, or tenor
+- Colour coding: green (positive MtM), red (negative MtM)
+- Export to Excel for reconciliation
+
+### P&L Attribution Waterfall
+
+The daily P&L is decomposed into:
+
+| Attribution Component | Description |
+|----------------------|-------------|
+| **Delta P&L** | P&L from price movement in the forward curve |
+| **Theta P&L** | P&L from time decay (closer to expiry each day) |
+| **Vega P&L** | P&L from changes in implied volatility (options only) |
+| **New Trades** | MtM of deals entered today |
+| **Expired Positions** | Realised P&L from deals that settled |
+
+## Position Limits
+
+Position limits are defined per portfolio and monitored in real time:
+
+| Limit Type | Example | Alert Threshold |
+|-----------|---------|----------------|
+| Net MW exposure per region | ±500 MW per region | 80% of limit |
+| Gross notional value | $100M total | 85% of limit |
+| Counterparty credit exposure | $50M per counterparty | 90% of credit limit |
+| Delta equivalent MW (options) | ±200 MW delta | 80% of limit |
+| VaR (1-day, 95%) | $2M | 75% of limit |
+
+When a limit is breached, the platform triggers an alert and prevents new deals (unless approved by a risk manager role).
+
+## Realised P&L
+
+When a deal expires or is settled, the realised P&L is calculated against actual NEM settlement prices:
+
+```
+Realised_PnL = Σ (Settlement_Price_t - Strike_Price) × Volume_MW × 0.5h × Direction
+```
+
+Where the sum is over all 30-minute trading intervals during the deal's life.
+
+Realised P&L feeds into:
+- `gold.realised_pnl` table
+- The Back Office settlement reconciliation workflow
+- GL journal generation for accounting systems
+
+## API Endpoints
+
+```bash
+# Portfolio summary (MtM, P&L, limits)
+GET /api/portfolio/summary
+
+# P&L attribution for date
+GET /api/portfolio/pnl-attribution?date=2025-03-21
+
+# Per-deal MtM
+GET /api/portfolio/mtm?portfolio_id=1
+
+# Realised P&L for period
+GET /api/portfolio/realised-pnl?start=2025-01-01&end=2025-03-21&portfolio_id=1
+```
+
+## Gold Table Schemas
+
+```sql
+-- gold.mtm_valuations
+-- valuation_date    DATE
+-- deal_id           BIGINT
+-- portfolio_id      INT
+-- mtm_value_aud     DOUBLE
+-- delta_pnl_aud     DOUBLE
+-- theta_pnl_aud     DOUBLE
+-- vega_pnl_aud      DOUBLE (options only)
+-- forward_price     DOUBLE
+-- strike_price      DOUBLE
+-- volume_mw         DOUBLE
+-- hours_remaining   DOUBLE
+
+-- gold.realised_pnl
+-- settlement_date   DATE
+-- deal_id           BIGINT
+-- settlement_price  DOUBLE
+-- strike_price      DOUBLE
+-- volume_mw         DOUBLE
+-- realised_pnl_aud  DOUBLE
+-- region_id         STRING
+```

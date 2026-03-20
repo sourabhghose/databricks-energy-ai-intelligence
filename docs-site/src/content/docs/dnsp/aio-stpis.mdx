@@ -1,0 +1,152 @@
+---
+title: AIO & STPIS Compliance
+description: Annual Information Obligations tracking, SAIDI/SAIFI/MAIFI metrics, STPIS incentive calculations, and AI-powered anomaly detection.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Annual Information Obligations (AIO)
+
+Annual Information Obligations are the detailed data submissions that DNSPs must make to the AER each year. Unlike RINs (which are requested), AIOs are standing obligations defined in the Electricity Distribution Network Service Providers Service Target Performance Incentive Scheme.
+
+### AIO Categories
+
+Energy Copilot tracks AIO obligations across 8 categories:
+
+| Category | Typical Data Points | Filing Deadline |
+|----------|-------------------|----------------|
+| Customer Service | Call wait times, complaints, connection times | 31 October |
+| Reliability Metrics | SAIDI, SAIFI, MAIFI by feeder | 31 October |
+| Asset Information | Asset registry, condition assessments | 31 October |
+| Financial Information | Actual capex and opex by category | 31 October |
+| Network Performance | Outage management data | 31 October |
+| DER Information | Connections, hosting capacity | 31 October |
+| Safety Data | Electrical incidents, near misses | 31 October |
+| Environmental Data | Vegetation management, bushfire risk | 31 October |
+
+### AIO Hub (`/dnsp/aio`)
+
+The AIO Hub provides end-to-end AIO management:
+
+- **Filing status tracker**: each AIO item with completion status
+- **Data validation**: checks data against AER schema requirements before submission
+- **Draft generator**: Claude Sonnet 4.5 generates narrative sections from structured data
+- **Submission pack**: assembled AIO submission ready for AER portal upload
+
+## Service Target Performance Incentive Scheme (STPIS)
+
+STPIS creates financial incentives for DNSPs to improve network reliability above their AER-set targets. Under-performing DNSPs face revenue reductions; over-performing ones earn bonuses.
+
+### STPIS Metrics
+
+Three reliability metrics are tracked under STPIS:
+
+| Metric | Full Name | Definition | Direction |
+|--------|-----------|-----------|-----------|
+| **SAIDI** | System Average Interruption Duration Index | Total customer-minutes interrupted / Total customers | Lower = better |
+| **SAIFI** | System Average Interruption Frequency Index | Total customer interruptions / Total customers | Lower = better |
+| **MAIFI** | Momentary Average Interruption Frequency Index | Momentary interruptions (&lt;1 min) / Total customers | Lower = better |
+
+### Revenue Impact
+
+The STPIS incentive payment is calculated as:
+
+```
+STPIS_Revenue_Adjustment = Incentive_Rate × (Target - Actual) × Customer_Base
+
+# Example (simplified):
+# SAIDI target: 120 min/customer/year
+# Actual SAIDI: 115 min/customer/year
+# Incentive rate: $100,000 per customer-minute improvement
+# Revenue bonus: $100,000 × (120 - 115) = $500,000
+```
+
+The maximum revenue adjustment (cap) is typically ±1% of the DNSP's allowed annual revenue.
+
+### STPIS Dashboard (`/dnsp/stpis`)
+
+- **Current year performance**: SAIDI, SAIFI, MAIFI vs target — year-to-date
+- **Revenue impact**: estimated incentive payment based on current trajectory
+- **Feeder ranking**: which feeders have the worst reliability performance?
+- **Outage categorisation**: planned vs unplanned, SAIDI contribution by cause
+- **Time series**: 5-year historical trend
+
+*Screenshot: STPIS dashboard showing SAIDI YTD vs target gauge, feeder ranking table, and 5-year trend chart.*
+
+```sql
+-- SAIDI performance by feeder, current year
+SELECT
+    feeder_id,
+    feeder_name,
+    zone_substation,
+    saidi_ytd_minutes,
+    saidi_target_minutes,
+    saidi_variance_minutes,
+    saifi_ytd,
+    customer_count,
+    estimated_revenue_impact_aud
+FROM energy_copilot.gold.dnsp_stpis_metrics
+WHERE financial_year = YEAR(CURRENT_DATE())
+ORDER BY saidi_ytd_minutes DESC
+LIMIT 20;
+```
+
+## AI-Powered STPIS Anomaly Detection
+
+The STPIS Anomaly Detection capability uses an **Isolation Forest** model combined with **Z-score** ensemble detection to identify anomalous reliability performance patterns across the 6-DNSP peer group.
+
+### What It Detects
+
+- **Sudden SAIDI spikes**: unusually high outage duration in a specific period
+- **SAIFI anomalies**: unexpected increase in interruption frequency
+- **Peer outliers**: a DNSP performing significantly worse than the peer group norm
+- **Data quality anomalies**: values that are likely reporting errors vs genuine performance issues
+
+### Detection Performance
+
+| Metric | Value |
+|--------|-------|
+| Detection rate | 93.4% |
+| False positive rate | 4.7% |
+| True negatives | 95.3% |
+| Z-score threshold | 2.5σ |
+| Isolation Forest contamination | 0.05 |
+
+See [STPIS Anomaly Detection ML Model](/databricks-energy-copilot/ai-ml/stpis-anomaly) for technical details.
+
+## AIO Draft Generator
+
+The AI Draft Generator uses Claude Sonnet 4.5 to generate draft narrative sections for AIO submissions. Given structured data (SAIDI numbers, asset counts, expenditure figures), it produces compliant, professional text in the AER's preferred format.
+
+See [AIO Draft Generator (Claude)](/databricks-energy-copilot/ai-ml/aio-draft) for full documentation.
+
+## API Endpoints
+
+```bash
+# AIO filing status
+GET /api/dnsp/aio/status?year=2025&dnsp=ausgrid
+
+# STPIS metrics
+GET /api/dnsp/stpis/metrics?dnsp=ergon&year=2025
+
+# Feeder ranking by SAIDI
+GET /api/dnsp/stpis/feeders?dnsp=energex&year=2025&sort=saidi_desc
+
+# Revenue impact estimate
+GET /api/dnsp/stpis/revenue-impact?dnsp=essential_energy&year=2025
+
+# STPIS anomaly detection results
+GET /api/dnsp/stpis/anomalies?dnsp=ausnet&year=2025
+
+# Generate AIO draft section
+POST /api/dnsp/aio/generate-draft
+{
+  "dnsp": "sa_power_networks",
+  "section": "reliability_performance",
+  "year": 2025
+}
+```
+
+<Aside type="tip">
+  The AI Copilot can explain STPIS performance: "What feeders are at risk of missing the SAIDI target this year for Ausgrid and what is the estimated revenue impact?" The `get_stpis_metrics` tool retrieves the relevant data and the copilot provides qualitative interpretation.
+</Aside>

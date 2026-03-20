@@ -1,0 +1,86 @@
+---
+title: Front Office Overview
+description: Overview of the Front Office module — real-time NEM market data across 8 categories and approximately 200 dashboard pages.
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## What Is the Front Office?
+
+The Front Office module covers all real-time and historical market monitoring capabilities for the Australian National Electricity Market (NEM). It provides approximately 200 dashboard pages across 8 categories, drawing data from AEMO NEMWEB, OpenElectricity, BOM weather feeds, STTM gas hubs, and more.
+
+The Front Office is the starting point for market participants who need to understand current market conditions, identify price drivers, and monitor generation and demand in real time.
+
+## Categories
+
+<CardGrid>
+  <Card title="Live Market & NEM Prices" icon="rocket">
+    5-minute spot prices, 30-minute trading intervals, regional price maps, interconnector flows, and active constraint flags. The most frequently accessed section.
+  </Card>
+  <Card title="Generation & Fuel Mix" icon="setting">
+    Real-time and historical generation by fuel type (coal, gas, wind, solar, hydro, battery). DUID-level dispatch data, facility registry, Dispatch SCADA integration.
+  </Card>
+  <Card title="Renewables" icon="star">
+    Rooftop solar (APVI), utility-scale solar, wind generation, hydro, and AEMO ISP 2024 renewable project pipeline. Solar forecast using BOM NWP feeds.
+  </Card>
+  <Card title="Energy Storage & Battery" icon="list-format">
+    BESS dispatch tracking, battery economics, degradation modelling, second-life value, FCAS co-optimisation, and arbitrage P&L analysis.
+  </Card>
+  <Card title="FCAS & Ancillary Services" icon="document">
+    All 8 FCAS services: regulation raise/lower, 1-second/6-second/60-second contingency raise/lower. Prices, enablement, and contingency event history.
+  </Card>
+  <Card title="Gas Market" icon="open-book">
+    STTM hub prices (Sydney, Adelaide, Brisbane), East Coast gas supply, pipeline flows, and gas-electricity price nexus analysis.
+  </Card>
+  <Card title="Demand & Weather" icon="sun">
+    BOM weather feeds for all 5 NEM regions, temperature-demand correlation, cooling/heating degree day modelling, and demand forecasts by region.
+  </Card>
+  <Card title="NEM Market Briefs" icon="information">
+    Daily AI-generated market summaries produced by Claude Sonnet 4.5 at 05:30 AEST. Structured narrative with price drivers, generation highlights, and forward outlook.
+  </Card>
+</CardGrid>
+
+## Data Freshness
+
+| Category | Update Frequency | Source | Latency via Lakebase |
+|----------|-----------------|--------|---------------------|
+| Live Prices (5-min) | 5 minutes | AEMO NEMWEB | 10–38ms |
+| Live Prices (30-min) | 30 minutes | AEMO NEMWEB | 10–38ms |
+| Generation SCADA | 5 minutes | AEMO NEMWEB | 10–38ms |
+| Interconnectors | 5 minutes | AEMO NEMWEB | 10–38ms |
+| FCAS Prices | 5 minutes | AEMO NEMWEB | 10–38ms |
+| BOM Weather | 1 hour | Open-Meteo BOM ACCESS-G | 400–1000ms |
+| STTM Gas Prices | Daily | AEMO STTM | 400–1000ms |
+| Rooftop Solar | 30 minutes | APVI | 400–1000ms |
+
+## Key API Endpoints
+
+The Front Office is backed by these primary API routers:
+
+```
+GET /api/prices/latest          # Current spot prices, all regions
+GET /api/prices/history         # Historical prices with filters
+GET /api/generation/latest      # Current generation by fuel type
+GET /api/generation/duid        # DUID-level dispatch data
+GET /api/interconnectors/latest # Current interconnector flows
+GET /api/fcas/latest            # Current FCAS prices
+GET /api/weather/latest         # Latest weather by region
+GET /api/market-brief/latest    # Today's AI market brief
+```
+
+## How Data Flows to Dashboards
+
+```
+AEMO NEMWEB
+    │
+    ▼ (pipeline 13: nemweb_bronze_to_gold.py — 5 min)
+gold.nem_prices_5min
+    │
+    ▼ (Lakebase continuous sync)
+Postgres (Lakebase)
+    │
+    ▼ (FastAPI /api/prices/latest — psycopg3)
+React Dashboard
+```
+
+For tables not yet in Lakebase, the flow uses the SQL Warehouse (400–1000ms latency). Pre-computed snapshots (`job_10_dashboard_snapshots`) provide the fastest path for heavily-trafficked dashboard endpoints.

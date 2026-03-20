@@ -1,0 +1,249 @@
+---
+title: Architecture
+description: Full technical architecture of Energy Copilot — medallion lakehouse, React + FastAPI, FMAPI, MLflow, and Genie.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Architecture Overview
+
+Energy Copilot is built entirely on Databricks, using the platform as both the data and compute backbone. The architecture follows three layers: **Data Platform** (ingestion, processing, storage), **Serving Layer** (Lakebase and SQL Warehouse), and **Application Layer** (FastAPI backend + React frontend).
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        EXTERNAL DATA SOURCES                        │
+│  AEMO NEMWEB │ BOM Weather │ AER CDR │ OpenElectricity │ STTM Gas   │
+│  CER LGC Registry │ AEMC │ ISP 2024 │ OpenNEM Facilities │ WEM      │
+└─────────────────────────────────────────────────────────────────────┘
+                              │ (30 pipeline jobs)
+                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                    MEDALLION LAKEHOUSE (Unity Catalog)               │
+│                                                                     │
+│  BRONZE (raw)         SILVER (clean)         GOLD (curated)         │
+│  ─────────────        ────────────────        ──────────────────    │
+│  · Raw NEMWEB CSV     · Deduped prices        · nem_prices_5min     │
+│  · API JSON dumps     · Validated gen data    · nem_generation_by_  │
+│  · Weather feeds      · Normalised weather      fuel                │
+│  · ISP documents      · Parsed AER docs       · nem_fcas_prices     │
+│  · STTM gas data      · DNSP enriched data    · market_briefs       │
+│                                               · dnsp_asset_*        │
+│                                               · 108+ tables total   │
+└─────────────────────────────────────────────────────────────────────┘
+         │                                             │
+         ▼                                             ▼
+┌─────────────────┐                       ┌──────────────────────────┐
+│  ML PLATFORM    │                       │   SERVING LAYER          │
+│  ─────────────  │                       │  ──────────────────────  │
+│  · MLflow       │                       │  Lakebase (primary)      │
+│    Experiments  │                       │  · Postgres-compatible   │
+│  · Model        │                       │  · Continuous sync from  │
+│    Registry     │                       │    Gold Delta tables     │
+│  · XGBoost      │                       │  · 10–38ms query latency │
+│  · Prophet      │                       │                          │
+│  · IsolationFo. │                       │  SQL Warehouse (fallback) │
+│  · LightGBM     │                       │  · 400–1000ms latency    │
+│  5 experiments  │                       │  · All 108+ tables       │
+└─────────────────┘                       └──────────────────────────┘
+                                                       │
+                              ┌────────────────────────┘
+                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                        FASTAPI BACKEND                              │
+│  64 routers │ 636+ endpoints │ Python 3.11                         │
+│  · Market data (prices, gen, FCAS, interconnectors, weather)        │
+│  · DNSP endpoints (AIO, assets, RAB, vegetation, workforce)         │
+│  · AI/ML endpoints (forecasts, anomaly, copilot SSE stream)         │
+│  · Genie proxy (natural language → SQL results)                     │
+│  · Settlement + compliance + environmental endpoints                │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                              ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                       REACT FRONTEND                                │
+│  React 18 │ TypeScript │ Vite │ Tailwind CSS │ Recharts            │
+│  564 pages │ React Router v6 │ SSE streaming copilot               │
+│  · Front Office dashboards (live market, generation, FCAS, gas)     │
+│  · Middle Office ETRM (deals, portfolio, risk, forward curves)      │
+│  · Back Office (settlement, compliance, environmentals)             │
+│  · DNSP Intelligence Suite (10 sub-groups)                         │
+│  · AI Copilot chat interface with live tool call streaming          │
+└─────────────────────────────────────────────────────────────────────┘
+                              │
+                    ┌─────────┴──────────┐
+                    ▼                    ▼
+          ┌──────────────┐    ┌─────────────────────┐
+          │  FMAPI       │    │  12 GENIE AI/BI      │
+          │  (Claude     │    │  SPACES              │
+          │  Sonnet 4.5) │    │  Natural Language    │
+          │  51 tools    │    │  SQL interface       │
+          └──────────────┘    └─────────────────────┘
+```
+
+## Data Platform: Medallion Lakehouse
+
+### Bronze Layer — Raw Ingestion
+
+The Bronze layer stores raw data exactly as received from source systems, with minimal transformation. All Bronze tables are append-only and partitioned by ingest date.
+
+| Schema | Purpose |
+|--------|---------|
+| `bronze` | Raw NEM dispatch CSVs, API JSON dumps, weather feeds |
+| `silver` | Cleaned, validated, deduplicated intermediate tables |
+| `gold` | Curated, business-ready tables for dashboards and ML |
+| `ml` | Feature store tables, model outputs, evaluation metrics |
+| `tools` | UC SQL functions registered for the AI agent |
+
+### Silver Layer — Validation and Enrichment
+
+Silver pipelines perform:
+- **Deduplication**: using QUALIFY + ROW_NUMBER() OVER(PARTITION BY ...) patterns
+- **Schema enforcement**: Pydantic-style column type coercion in PySpark
+- **Null handling**: configurable fill strategies per column
+- **Time zone normalisation**: all timestamps stored as UTC with AEST offset columns
+- **Quality flags**: `is_valid`, `quality_score` columns added for downstream filtering
+
+### Gold Layer — Curated Analytics
+
+Gold tables are optimised for low-latency analytical queries:
+- Partitioned by `interval_date` (cast from dispatch timestamp)
+- Auto-optimise and auto-compaction enabled (`delta.autoOptimize.optimizeWrite = true`)
+- Change Data Feed enabled on tables used by the AI agent
+- COMMENT annotations on every column for the Genie semantic layer
+
+### Unity Catalog Structure
+
+```
+energy_copilot_catalog (or energy_copilot in prod)
+├── bronze/         # 11+ raw tables
+├── silver/         # 13+ validated tables
+├── gold/           # 84+ curated tables
+├── ml/             # Feature store + model outputs
+└── tools/          # 14 UC SQL functions
+```
+
+## Serving Layer
+
+### Lakebase (Primary Path — 10–38ms)
+
+Seven high-traffic Gold tables are continuously synced to a managed Postgres instance via Databricks Synced Tables. The FastAPI backend queries Postgres directly via `psycopg3`, bypassing the SQL Warehouse entirely for these hot-path tables:
+
+- `gold.nem_prices_5min_dedup_synced`
+- `gold.nem_interconnectors_dedup_synced`
+- `gold.nem_generation_by_fuel_synced`
+- `gold.dashboard_snapshots_synced`
+- `gold.asx_futures_eod_synced`
+- `gold.emissions_factors_synced`
+- `gold.gas_hub_prices_synced`
+
+### SQL Warehouse (Fallback — 400–1000ms)
+
+If Lakebase is unavailable or data is stale (>30 minutes), the app falls back to `databricks-sql-connector`. Every API response includes `X-Data-Source` and `X-Query-Ms` headers for observability.
+
+### Dashboard Snapshots (&lt;10ms)
+
+`job_10_dashboard_snapshots` runs every 5 minutes, pre-computing JSON payloads for 15 high-traffic dashboard endpoints and storing them in `gold.dashboard_snapshots`. These are synced to Lakebase and served as pre-built responses — zero SQL at request time.
+
+## Application Layer
+
+### FastAPI Backend
+
+The backend is structured as a FastAPI application with 64 modular routers, each responsible for a domain:
+
+```python
+# main.py — router registration (excerpt)
+app.include_router(prices_router, prefix="/api/prices")
+app.include_router(generation_router, prefix="/api/generation")
+app.include_router(fcas_router, prefix="/api/fcas")
+app.include_router(dnsp_router, prefix="/api/dnsp")
+app.include_router(chat_router, prefix="/api/chat")
+# ... 59 more routers
+```
+
+Key features:
+- **Lifespan health check**: validates Databricks + Lakebase connectivity at startup
+- **Structured logging**: per-request JSON logs with `request_id`, `path`, `status_code`, `duration_ms`
+- **TTL cache**: in-memory cache with configurable TTLs (10s for prices, 30s for generation, 60s for forecasts)
+- **Tiered data access**: Lakebase → SQL Warehouse → pre-built snapshots
+- **SSE streaming**: the `/api/chat` endpoint streams typed events (`text`, `tool_call`, `tool_result`, `done`, `error`) for real-time copilot responses
+
+### React Frontend
+
+The frontend is built with Vite and served as static files from the Databricks App:
+
+```
+src/
+├── pages/          # 564 page components
+├── components/     # Shared UI components
+├── hooks/          # useMarketData, useWebSocket, etc.
+├── api/            # client.ts — typed API client
+└── App.tsx         # React Router v6 route definitions
+```
+
+## AI & ML Architecture
+
+### Claude Sonnet 4.5 via FMAPI
+
+The copilot uses Claude Sonnet 4.5 routed through the Databricks Foundation Model API (FMAPI). This keeps all API calls within the Databricks network perimeter — no external Anthropic API calls:
+
+```python
+client = anthropic.Anthropic(
+    base_url=f"{DATABRICKS_HOST}/serving-endpoints",
+    api_key=DATABRICKS_TOKEN,
+)
+response = client.messages.create(
+    model="databricks-claude-sonnet-4-5",
+    tools=ALL_51_TOOLS,
+    messages=conversation_history,
+)
+```
+
+The agentic loop runs up to 5 tool-call rounds per request, streaming intermediate results via SSE.
+
+### MLflow Model Registry
+
+Five ML experiments are tracked in MLflow:
+1. `price_forecast` — LightGBM multi-horizon (5 regions, 6 horizons)
+2. `demand_forecast` — LightGBM demand forecasting
+3. `wind_forecast` — LightGBM wind generation
+4. `solar_forecast` — LightGBM solar generation (night-excluded)
+5. `anomaly_detection` — Isolation Forest + Z-score ensemble
+
+Models are registered with the alias `production` and loaded via `models:/<name>@production` URI in inference pipelines.
+
+### Genie AI/BI Spaces
+
+12 Genie spaces provide natural language SQL interfaces over Gold tables:
+
+| Space | Primary Tables |
+|-------|---------------|
+| NEM Prices & Demand | `gold.nem_prices_5min`, `gold.weather_nem_regions` |
+| Generation & Fuel Mix | `gold.nem_generation_by_fuel` |
+| Interconnectors | `gold.nem_interconnectors` |
+| FCAS Markets | `gold.nem_fcas_prices` |
+| Settlement & Finance | `gold.settlement_statements` |
+| DNSP Compliance | `gold.dnsp_aio_metrics`, `gold.dnsp_stpis_metrics` |
+| Asset Intelligence | `gold.dnsp_asset_register` |
+| Vegetation Risk | `gold.dnsp_vegetation_risk` |
+| Workforce Analytics | `gold.dnsp_workforce_metrics` |
+| Environmental & LGCs | `gold.lgc_registry`, `gold.emissions_factors` |
+| Forward Curves | `gold.asx_futures_eod` |
+| Gas Markets | `gold.gas_hub_prices` |
+
+## Deployment Architecture
+
+The entire platform is managed via Databricks Asset Bundles (DAB):
+
+```
+databricks.yml              # Root config
+resources/
+├── app.yml                 # Databricks App
+├── jobs.yml                # 30 serverless jobs
+├── pipelines.yml           # DLT pipelines
+├── model_serving.yml       # Model Serving endpoints
+└── experiments.yml         # MLflow experiments
+```
+
+<Aside type="note">
+  The App itself is deployed via `databricks apps deploy` separately from the bundle. The bundle manages all other resources (jobs, pipelines, experiments). See the [Deployment Guide](/databricks-energy-copilot/getting-started/deployment) for step-by-step instructions.
+</Aside>

@@ -1,0 +1,165 @@
+---
+title: AIO Draft Generator (Claude)
+description: Claude Sonnet 4.5 generates AIO submission sections from structured DNSP data — prompt engineering, async HTTPX, fallback templates, and UI guide.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+The AIO Draft Generator uses Claude Sonnet 4.5 to produce draft narrative sections for Annual Information Obligation submissions. Given structured DNSP performance data (SAIDI numbers, asset counts, expenditure figures), it generates compliant, professional text in the AER's preferred format — reducing the time to produce a draft AIO from days to minutes.
+
+## AIO Section Coverage
+
+The generator covers 6 AIO sections:
+
+| Section | Key Data Inputs | Typical Output Length |
+|---------|-----------------|----------------------|
+| `reliability_performance` | SAIDI, SAIFI, MAIFI by feeder | 400–600 words |
+| `asset_management` | Asset health scores, capex/opex | 300–500 words |
+| `customer_service` | Call wait times, complaints, connection times | 200–400 words |
+| `network_safety` | Incidents, near misses, vegetation compliance | 300–500 words |
+| `der_connections` | DER applications, approvals, hosting capacity | 300–400 words |
+| `environmental_obligations` | Vegetation clearance, ELC compliance | 300–400 words |
+
+## Implementation
+
+The draft generator makes an async HTTPX call to the Databricks FMAPI:
+
+```python
+# app/backend/routers/dnsp_aio.py (simplified)
+import httpx
+import json
+
+SYSTEM_PROMPT = """
+You are an expert regulatory writer specialising in Australian electricity
+distribution network regulatory submissions.
+
+Generate a professional draft for the Annual Information Obligation (AIO)
+submission section. The text should:
+- Use formal regulatory language consistent with AER expectations
+- Be factual and data-driven (cite the specific numbers provided)
+- Avoid speculative or promotional language
+- Reference relevant NER obligations where appropriate
+- Be approximately {target_words} words
+"""
+
+async def generate_aio_section(
+    section: str,
+    dnsp_name: str,
+    year: int,
+    data: dict
+) -> str:
+    prompt = f"""
+    Generate the '{section}' section for {dnsp_name}'s {year} AIO submission.
+
+    Performance data:
+    {json.dumps(data, indent=2)}
+
+    Target length: 400-500 words.
+    """
+
+    async with httpx.AsyncClient(timeout=60.0) as client:
+        response = await client.post(
+            f"{DATABRICKS_HOST}/serving-endpoints/databricks-claude-sonnet-4-5/invocations",
+            headers={"Authorization": f"Bearer {DATABRICKS_TOKEN}"},
+            json={
+                "messages": [
+                    {"role": "system", "content": SYSTEM_PROMPT.format(target_words=450)},
+                    {"role": "user", "content": prompt}
+                ],
+                "max_tokens": 1024,
+                "temperature": 0.3  # Lower temperature for consistent regulatory text
+            }
+        )
+        response.raise_for_status()
+        return response.json()["choices"][0]["message"]["content"]
+```
+
+## Fallback Templates
+
+If the FMAPI call fails (timeout, rate limit, or service unavailability), the generator falls back to a structured template:
+
+```python
+FALLBACK_TEMPLATES = {
+    "reliability_performance": """
+{dnsp_name} achieved a System Average Interruption Duration Index (SAIDI) of
+{saidi_actual:.1f} minutes per customer for the {year} financial year, compared
+to the AER-set target of {saidi_target:.1f} minutes per customer.
+
+[REVIEW REQUIRED: Insert qualitative analysis of performance drivers]
+
+SAIFI for {year} was {saifi_actual:.3f} interruptions per customer, against
+a target of {saifi_target:.3f}. MAIFI was {maifi_actual:.3f} against a target
+of {maifi_target:.3f}.
+    """,
+    ...
+}
+```
+
+The template fills in all quantitative data automatically, leaving clearly marked placeholders for narrative content that requires human judgement.
+
+## Prompt Engineering
+
+Several prompt engineering techniques improve output quality:
+
+**Temperature**: Set to 0.3 (lower than default 1.0) for consistent, formal regulatory language. Higher temperature produces more creative but less reliable output.
+
+**Few-shot examples**: The system prompt includes two example AIO section extracts from published (anonymised) AER submissions to calibrate tone and format.
+
+**Structural constraints**: The prompt explicitly specifies the required structure:
+- Opening sentence: state the metric and result
+- Middle: explain the main drivers
+- Closing: describe improvement actions or context
+
+**Data precision**: Data is formatted to appropriate precision (SAIDI to 1 decimal place, SAIFI to 3 decimal places) to match AER conventions.
+
+## UI Guide
+
+### Accessing the Generator
+
+Navigate to **DNSP Intelligence → AIO Hub → Draft Generator** (`/dnsp/aio/draft-generator`)
+
+### Step 1 — Select Section
+
+Choose from the 6 available AIO sections. The page shows a data preview of the inputs that will be provided to Claude.
+
+### Step 2 — Review Data
+
+The data panel shows all the figures that will be included in the draft. Edit any values if needed before generating.
+
+### Step 3 — Generate
+
+Click **Generate Draft**. A loading indicator shows while Claude processes the request (typically 5–15 seconds).
+
+### Step 4 — Review and Edit
+
+The generated draft appears in a rich text editor. Edit as needed — the editor tracks changes so reviewers can see what was AI-generated vs human-edited.
+
+### Step 5 — Export
+
+Export the approved section to Word or PDF for inclusion in the full AIO submission pack.
+
+## Example Generated Draft
+
+**Input data**:
+```json
+{
+  "saidi_actual": 112.4,
+  "saidi_target": 120.0,
+  "saifi_actual": 1.142,
+  "saifi_target": 1.250,
+  "worst_feeder": "CAMPBELLTOWN_11KV_F07",
+  "storm_events": 3,
+  "planned_maintenance_saidi_pct": 28
+}
+```
+
+**Generated output (excerpt)**:
+> Ausgrid achieved a SAIDI of 112.4 minutes per customer for the 2025 financial year, representing a 6.3% improvement against the AER-determined STPIS target of 120.0 minutes per customer. This performance was achieved despite three significant storm events during the reporting period that contributed approximately 31 minutes per customer to total SAIDI.
+>
+> SAIFI of 1.142 interruptions per customer similarly outperformed the AER target of 1.250, reflecting Ausgrid's continued investment in network automation and condition-based replacement programs. The proportion of SAIDI attributable to planned maintenance activities was 28%, consistent with efficient maintenance scheduling...
+
+<Aside type="note">
+  Generated drafts require professional review before submission. While Claude is well-calibrated for regulatory language, it cannot independently assess whether factual claims are accurate — always verify all numbers against source data before submitting to the AER.
+</Aside>

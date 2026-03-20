@@ -1,0 +1,126 @@
+---
+title: Network Operations
+description: Outage management, active constraint sets, network asset registry, and DER management for NEM network operators.
+---
+
+## Overview
+
+The Network Operations module serves Distribution Network Service Providers (DNSPs) and Transmission Network Service Providers (TNSPs) with tools for managing network outages, monitoring active AEMO constraint sets, tracking network assets, and managing distributed energy resources (DER) connecting to the network.
+
+## Outage Management
+
+### Planned Outage Calendar (`/back-office/network-ops/outages`)
+
+The planned outage calendar provides a consolidated view of all scheduled network outages notified to AEMO:
+
+- Outage ID, asset affected, duration, and impact
+- Outage approval status: submitted → approved → active → completed
+- Conflict detection: does this outage reduce a critical constraint headroom?
+- Auto-populate from AEMO's Outage Management System (OMS) via `pipelines/15_dnsp_outage_ingest.py`
+
+```sql
+-- Active and upcoming outages in next 7 days
+SELECT
+    outage_id,
+    network_id,
+    asset_name,
+    outage_type,
+    planned_start,
+    planned_end,
+    DATEDIFF(planned_start, CURRENT_TIMESTAMP()) AS days_until_start,
+    constraint_impact,
+    approval_status
+FROM energy_copilot.gold.dnsp_outages
+WHERE planned_end > CURRENT_TIMESTAMP()
+ORDER BY planned_start;
+```
+
+### Outage Impact Analysis
+
+For each planned outage, the platform assesses:
+- Which constraint sets are potentially impacted
+- What interconnector headroom is affected
+- Expected generation dispatch impact (MW constrained off)
+
+## Active Constraint Sets
+
+AEMO activates constraint equations to manage network limitations. Energy Copilot monitors active constraints in real time:
+
+### Constraint Set Monitor (`/back-office/network-ops/constraints`)
+
+- List of all currently active AEMO constraint set IDs
+- Binding constraints: which equations are currently binding (limiting dispatch)
+- LHS vs RHS: how close is each binding constraint to its limit?
+- Impact on dispatch: which generators are constrained off?
+
+```bash
+GET /api/network/constraints/active
+
+# Response
+{
+  "as_of": "2025-03-21T05:30:00Z",
+  "active_sets": [
+    {
+      "constraint_id": "N^^NIL_NVVT_29",
+      "description": "North/VIC via NSW/VIC line rating",
+      "binding": true,
+      "lhs": 847.3,
+      "rhs": 850.0,
+      "headroom_mw": 2.7
+    }
+  ]
+}
+```
+
+## Network Asset Registry
+
+The Network Asset Registry (`/back-office/network-ops/assets`) provides a searchable database of network assets:
+
+- Transmission lines and cables (circuit ID, voltage, thermal rating, length)
+- Transformers (MVA capacity, age, condition score)
+- Substations (voltage level, installed capacity)
+- Protection systems (relay types, trip settings)
+
+Asset data is sourced from DNSP Asset Intelligence module (`gold.dnsp_asset_register`) and supplemented with AEMO's published network capability statement.
+
+## DER Management
+
+Distributed Energy Resources (DER) — primarily rooftop solar, batteries, and EVs — are connecting to distribution networks at an accelerating rate.
+
+### DER Register (`/back-office/network-ops/der`)
+
+- Total DER connections by zone and technology type
+- Hosting capacity utilisation: how much of available hosting capacity is taken?
+- Export limit settings by network zone
+- Curtailment instances: when and where has DER been curtailed?
+
+DER data is sourced from `pipelines/24_btm_der_ingest.py` using AER CDR and state regulator data.
+
+### DER Impact on Operations
+
+High DER penetration creates challenges:
+- **Reverse power flow**: DER generation exceeding local load
+- **Voltage rise**: solar generation raising voltage above limits
+- **Protection coordination**: fault current levels change with DER
+- **Frequency response**: inverter-based DER provides less inertia than synchronous machines
+
+The platform quantifies these impacts by zone, helping network planners prioritise investment.
+
+## API Endpoints
+
+```bash
+# Active outages
+GET /api/network/outages/active
+
+# Planned outages (next 30 days)
+GET /api/network/outages/planned?days=30
+
+# Active constraint sets
+GET /api/network/constraints/active
+
+# DER penetration by zone
+GET /api/network/der/penetration?zone=SYDNEY_NORTH
+
+# Asset registry
+GET /api/network/assets?asset_type=transformer&voltage_kv=66
+```

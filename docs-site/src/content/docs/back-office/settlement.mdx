@@ -1,0 +1,158 @@
+---
+title: Settlement
+description: AEMO settlement ingest, true-up analysis, prudential checks, GL journal generation, and dispute management across all settlement runs.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+Settlement is the financial heart of the NEM. AEMO calculates and publishes settlement statements that determine how much each market participant owes or is owed for their energy purchases and sales in each 30-minute trading interval. Energy Copilot automates the ingestion, reconciliation, and true-up analysis of settlement statements across all six settlement runs.
+
+## Settlement Runs
+
+```
+                    T+2BD           T+18BD      T+3M    T+6M    T+9M    T+12M
+                       │               │          │       │       │        │
+Trading Day ──────────►│               │          │       │       │        │
+                    PRELIM           FINAL        R1      R2      R3       R4
+                    (estimate)     (metering)   (rev 1) (rev 2) (rev 3) (final)
+```
+
+| Run | Key Changes from Prior Run |
+|-----|--------------------------|
+| **PRELIM → FINAL** | All actual metering data included, provisional data removed |
+| **FINAL → R1** | Metering corrections, late submissions, disputes resolved |
+| **R1 → R2** | Further metering corrections, billing corrections |
+| **R2 → R3** | FCAS true-up adjustments, market fee revisions |
+| **R3 → R4** | Final corrections, closes settlement permanently |
+
+## True-Up Analysis
+
+The true-up measures the financial impact of each settlement revision:
+
+```
+True_Up = Settlement_Amount_Run_N - Settlement_Amount_Run_(N-1)
+```
+
+A positive true-up means you receive more money in the revised run (favourable). A negative true-up means you owe more (adverse).
+
+```sql
+-- True-up analysis: PRELIM vs FINAL for a trading month
+SELECT
+    trading_date,
+    region_id,
+    participant_id,
+    prelim_settlement_aud,
+    final_settlement_aud,
+    (final_settlement_aud - prelim_settlement_aud) AS true_up_aud,
+    ROUND((final_settlement_aud - prelim_settlement_aud) / ABS(prelim_settlement_aud) * 100, 2) AS true_up_pct
+FROM energy_copilot.gold.settlement_true_up
+WHERE settlement_month = '2025-02'
+  AND participant_id = 'YOUR_PARTICIPANT'
+ORDER BY ABS(true_up_aud) DESC;
+```
+
+## Settlement Dashboard
+
+### Settlement Summary (`/back-office/settlement/summary`)
+
+- Current period settlement balance by run
+- True-up waterfall: from PRELIM to latest run
+- Monthly settlement trend: last 12 months
+- Upcoming settlement milestones calendar
+
+*Screenshot: Settlement summary showing PRELIM vs FINAL comparison with true-up bars by region.*
+
+### Settlement Reconciliation (`/back-office/settlement/reconcile`)
+
+Line-by-line reconciliation of AEMO settlement statements against internal trade records:
+
+| Column | Description |
+|--------|-------------|
+| `Trading Interval` | 30-minute interval |
+| `AEMO Settlement` | Amount from AEMO statement |
+| `Internal Calc` | Amount from internal position records |
+| `Difference` | AEMO minus Internal |
+| `Status` | Matched / Tolerance / Investigate |
+| `Dispute Flag` | Flagged for dispute if difference > threshold |
+
+### Dispute Management (`/back-office/settlement/disputes`)
+
+When reconciliation identifies a material difference (default threshold: $1,000 or 0.5% of settlement amount):
+1. The interval is flagged as a potential dispute
+2. The platform generates a dispute evidence pack: relevant metering data, offer data, and AEMO statement extract
+3. The dispute is tracked through to resolution with notes and status
+
+## Prudential Management
+
+Market participants must lodge a prudential deposit with AEMO based on their expected credit exposure. Energy Copilot tracks:
+
+- **Current prudential deposit**: amount held with AEMO
+- **Credit support requirement**: AEMO's calculated requirement based on 14-day forward exposure
+- **Buffer**: current deposit minus requirement
+- **Alert**: if buffer falls below 20%, the platform alerts the settlements team
+
+```bash
+GET /api/settlement/prudential
+
+# Response
+{
+  "participant_id": "MYENERGY",
+  "prudential_deposit_aud": 15000000,
+  "credit_support_requirement_aud": 12400000,
+  "buffer_aud": 2600000,
+  "buffer_pct": 17.3,
+  "alert": true,
+  "alert_message": "Buffer below 20% threshold. Consider lodging additional prudential."
+}
+```
+
+## GL Journal Generation
+
+After each settlement run, the platform can generate GL journal entries in a configurable format:
+
+```
+DR  Market Settlement Payable     $1,234,567
+    CR  Cash / Bank                          $1,234,567
+    Memo: NEM Settlement - March 2025 FINAL Run
+    Cost Centre: Trading Desk NSW
+```
+
+The journal generation is configurable:
+- Chart of accounts mapping (settlement component → GL account)
+- Cost centre allocation by region or portfolio
+- GST treatment (energy settlements are GST-free; ancillary services vary)
+- Journal approval workflow before posting
+
+## API Endpoints
+
+```bash
+# Settlement statements by run
+GET /api/settlement/statements?period=2025-03&run=FINAL
+
+# True-up analysis
+GET /api/settlement/true-up?period=2025-02&compare=PRELIM,FINAL
+
+# Prudential status
+GET /api/settlement/prudential
+
+# Generate GL journals
+POST /api/settlement/journals
+{
+  "period": "2025-03",
+  "run": "FINAL",
+  "gl_format": "xero"  // or "sap", "myob", "csv"
+}
+
+# Dispute register
+GET /api/settlement/disputes?status=open
+```
+
+<Aside type="note">
+  AEMO settlement data is ingested by `pipelines/13_nemweb_bronze_to_gold.py` and additional pipelines. Settlement statements are published by AEMO in the NEMWEB portal and downloaded to `bronze.raw_settlement_statements`.
+</Aside>
+
+<Aside type="tip">
+  The AI Copilot has a `get_settlement_summary` tool that can retrieve settlement data and explain true-up movements. Ask: "What is our PRELIM to FINAL true-up for February 2025 and what drove the difference?"
+</Aside>

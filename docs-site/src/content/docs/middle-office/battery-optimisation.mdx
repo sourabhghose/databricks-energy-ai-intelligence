@@ -1,0 +1,151 @@
+---
+title: Battery Optimisation
+description: BESS dispatch strategy, arbitrage P&L, SOC management, FCAS co-optimisation, and bid stack generation for grid-scale batteries.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+The Battery Optimisation module provides a full operational dispatch optimisation engine for grid-scale Battery Energy Storage Systems (BESS). It combines real-time NEM price data, FCAS market signals, and ML price forecasts to produce an optimal 24-hour dispatch schedule that maximises revenue while respecting battery operating constraints.
+
+## Optimisation Problem
+
+The battery optimisation is a Mixed Integer Linear Program (MILP) solved at each dispatch interval:
+
+```
+Maximise:
+    Σ_t [price_t × (discharge_t - charge_t) × η_discharge
+         + FCAS_rev_t × FCAS_enabled_t]
+    - degradation_cost × (charge_t + discharge_t)
+
+Subject to:
+    SOC_t = SOC_(t-1) + charge_t × η_charge / capacity - discharge_t / (η_discharge × capacity)
+    SOC_min ≤ SOC_t ≤ SOC_max
+    0 ≤ charge_t ≤ max_charge_rate
+    0 ≤ discharge_t ≤ max_discharge_rate
+    charge_t × discharge_t = 0  (can't charge and discharge simultaneously)
+    FCAS_enabled_t ≤ headroom_t  (FCAS limited by SOC headroom)
+```
+
+## Input Data
+
+| Input | Source | Update Frequency |
+|-------|--------|----------------|
+| Current spot prices | `gold.nem_prices_5min` (Lakebase) | Every 5 min |
+| Price forecast (30-min) | ML model via `/api/forecasts` | Every 30 min |
+| FCAS prices | `gold.nem_fcas_prices` (Lakebase) | Every 5 min |
+| Current SOC | DUID SCADA via API | Every 5 min |
+| Pre-dispatch prices | AEMO pre-dispatch feed | Every 5 min |
+
+## Dashboard Pages
+
+### Dispatch Strategy (`/middle-office/battery-optimisation/strategy`)
+
+- 24-hour charge/discharge schedule (optimised)
+- Current and projected SOC profile
+- Revenue breakdown: energy arbitrage vs FCAS by hour
+- Sensitivity analysis: how revenue changes with ±10% price assumptions
+
+*Screenshot: Battery optimisation dashboard showing 24h charge/discharge bars, SOC curve, and revenue attribution waterfall.*
+
+### Live Arbitrage P&L (`/middle-office/battery-optimisation/pnl`)
+
+Realised P&L tracked against the optimised schedule:
+
+```
+Actual_PnL = Σ_t (actual_dispatch_price_t × actual_output_mw_t × 5min/60)
+Schedule_PnL = Σ_t (forecast_price_t × scheduled_mw_t × 5min/60)
+Tracking_Error = Actual_PnL - Schedule_PnL
+```
+
+Tracking error arises from price forecast errors, rebids by other participants, and FCAS price movements.
+
+### SOC Management (`/middle-office/battery-optimisation/soc`)
+
+- Real-time SOC indicator (0–100%) with min/max constraint lines
+- Historical SOC profile — last 7 days
+- Cycle depth histogram — distribution of discharge depths
+- Degradation accumulation — estimated capacity loss to date
+
+## FCAS Co-optimisation
+
+A key advantage of BESS in the NEM is simultaneous FCAS provision:
+
+### Simultaneous Services
+
+A battery with 100 MW / 2-hour capacity can typically provide:
+- **Energy arbitrage**: 60 MW discharge (peak prices) / 60 MW charge (off-peak)
+- **RAISEREG**: 20 MW headroom reserved for frequency regulation raise
+- **LOWERREG**: 20 MW headroom reserved for frequency regulation lower
+- **RAISE6SEC**: 10 MW available for 6-second contingency response
+- **LOWER6SEC**: 10 MW available for 6-second contingency response
+
+The FCAS trapezium constraint means FCAS enablement reduces energy dispatch headroom — the optimiser balances this trade-off.
+
+```python
+# FCAS trapezium feasibility check
+def check_fcas_trapezium(
+    dispatch_mw: float,
+    raise_reg_mw: float,
+    lower_reg_mw: float,
+    max_capacity: float,
+    min_capacity: float = 0
+) -> bool:
+    """
+    Validates FCAS offer is feasible given current dispatch level.
+    Returns True if the FCAS offer is within the trapezium constraints.
+    """
+    max_output = dispatch_mw + raise_reg_mw
+    min_output = dispatch_mw - lower_reg_mw
+    return (max_output <= max_capacity) and (min_output >= min_capacity)
+```
+
+## Bid Generation
+
+The optimisation output feeds directly into a bid file for AEMO submission (for operators using the API integration):
+
+```json
+{
+  "duid": "VBBG1",
+  "trading_day": "2025-03-22",
+  "bids": [
+    {
+      "period": "00:00",
+      "energy_bands": {
+        "band_1": {"price": -1000, "volume_mw": 100},
+        "band_4": {"price": 200, "volume_mw": 100}
+      },
+      "fcas_bids": {
+        "RAISEREG": {"availability_mw": 20, "enablement_min": 80, "enablement_max": 100},
+        "LOWERREG": {"availability_mw": 20, "enablement_min": 0, "enablement_max": 20}
+      }
+    }
+  ]
+}
+```
+
+## API Endpoints
+
+```bash
+# Generate optimised 24h dispatch schedule
+POST /api/battery-opt/schedule
+{
+  "duid": "VBBG1",
+  "capacity_mwh": 450,
+  "power_mw": 300,
+  "soc_current_pct": 55,
+  "fcas_services": ["RAISEREG", "LOWERREG", "RAISE6SEC"],
+  "price_forecast_source": "ml_model"  // or "pre_dispatch"
+}
+
+# Current SOC and status
+GET /api/battery-opt/status?duid=VBBG1
+
+# Realised vs scheduled P&L
+GET /api/battery-opt/pnl?duid=VBBG1&date=2025-03-21
+```
+
+<Aside type="tip">
+  The battery optimisation engine uses the ML price forecast from the NEM Price Forecasting model (LightGBM, 30-min horizon) as the primary forecast input. For longer horizons (>6 hours), it falls back to ASX futures-derived forward prices.
+</Aside>

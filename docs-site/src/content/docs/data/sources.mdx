@@ -1,0 +1,182 @@
+---
+title: Data Sources
+description: All external data sources integrated into Energy Copilot — URLs, update frequencies, ingestion pipelines, and data characteristics.
+---
+
+## Overview
+
+Energy Copilot integrates data from 15+ external sources covering NEM market operations, weather, regulatory information, environmental obligations, and gas markets. All sources are ingested through scheduled pipeline jobs into the Bronze layer.
+
+## Data Sources Reference
+
+### AEMO NEMWEB
+
+| Attribute | Detail |
+|-----------|--------|
+| **URL** | https://nemweb.com.au/Reports/Current/ |
+| **Description** | Official AEMO NEM data publication portal |
+| **Data** | 5-minute dispatch prices, Dispatch SCADA (generation), interconnector flows, FCAS prices, pre-dispatch, market notices |
+| **Update Frequency** | Every 5 minutes (dispatch data) |
+| **Format** | ZIP compressed CSV files |
+| **Pipeline** | `01_nemweb_ingest.py` (DLT), `13_nemweb_bronze_to_gold.py` |
+| **Volume** | ~200MB/day (compressed) |
+
+Key files accessed:
+- `DISPATCHPRICE` — regional spot prices
+- `DISPATCHSCADA` — DUID-level generation SCADA
+- `DISPATCH_UNIT_SOLUTION` — unit dispatch results
+- `DISPATCHREGIONSUM` — regional dispatch summary
+- `TRADINGREGIONSUM` — 30-min trading prices
+
+### OpenElectricity API
+
+| Attribute | Detail |
+|-----------|--------|
+| **URL** | https://api.openelectricity.org.au/ |
+| **Description** | Third-party NEM data API providing clean, structured access to NEMWEB data |
+| **Data** | Generation by fuel type, aggregated by region and interval |
+| **Update Frequency** | Every 5 minutes |
+| **Pipeline** | `02_openelec_ingest.py` |
+
+### BOM Weather (Open-Meteo BOM ACCESS-G)
+
+| Attribute | Detail |
+|-----------|--------|
+| **URL** | https://api.open-meteo.com/v1/bom |
+| **Description** | Bureau of Meteorology ACCESS-G NWP model accessed via Open-Meteo API |
+| **Data** | Temperature, humidity, wind speed, solar irradiance — observed and forecast (+72h) |
+| **Update Frequency** | Hourly |
+| **Pipeline** | `03_weather_ingest.py` |
+| **Parameters** | `temperature_2m`, `relativehumidity_2m`, `windspeed_10m`, `shortwave_radiation` |
+
+### APVI Rooftop Solar
+
+| Attribute | Detail |
+|-----------|--------|
+| **URL** | https://pv-map.apvi.org.au/analyses |
+| **Description** | Australian PV Institute aggregate rooftop solar output by state |
+| **Data** | Aggregate rooftop solar generation by state (30-min intervals) |
+| **Update Frequency** | 30 minutes |
+| **Pipeline** | `04_solar_ingest.py` |
+| **Notes** | ACT output mapped to NSW1 region |
+
+### AER Consumer Data Right (CDR) API
+
+| Attribute | Detail |
+|-----------|--------|
+| **URL** | https://data.aer.gov.au/api/v1/ |
+| **Description** | AER's open data portal — retail tariffs, network pricing |
+| **Data** | Retail electricity tariffs by distributor and customer class |
+| **Update Frequency** | Quarterly |
+| **Pipeline** | `09_aer_tariff_ingest.py` |
+
+### AER Enforcement Register
+
+| Attribute | Detail |
+|-----------|--------|
+| **URL** | https://www.aer.gov.au/enforcement/register |
+| **Description** | Published record of AER enforcement actions |
+| **Data** | Investigation, infringement notice, undertaking, and civil penalty details |
+| **Update Frequency** | As published (weekly check) |
+| **Pipeline** | `17_aer_enforcement_ingest.py` |
+
+### AEMC Rule Changes
+
+| Attribute | Detail |
+|-----------|--------|
+| **URL** | https://www.aemc.gov.au/rule-changes |
+| **Description** | AEMC website rule change consultation and determination register |
+| **Data** | Rule change proposals, status, determination dates |
+| **Update Frequency** | Weekly |
+| **Pipeline** | `23_aemc_rule_changes_ingest.py` |
+
+### CER LGC Registry
+
+| Attribute | Detail |
+|-----------|--------|
+| **URL** | https://www.greenenergymarkets.com.au/Cer/LGCView |
+| **Description** | Clean Energy Regulator Large-scale Generation Certificate registry |
+| **Data** | LGC issuance by accredited power station, surrenders, spot prices |
+| **Update Frequency** | Weekly |
+| **Pipeline** | `11_cer_lgc_ingest.py`, `14_cer_lgc_weekly.py` |
+
+### AEMO Integrated System Plan (ISP)
+
+| Attribute | Detail |
+|-----------|--------|
+| **URL** | https://aemo.com.au/en/energy-systems/major-publications/integrated-system-plan-isp |
+| **Description** | AEMO's 20-year electricity infrastructure plan |
+| **Data** | ISP 2024 project list, REZ capacities, capacity outlook scenarios |
+| **Update Frequency** | Biennial (with updates) |
+| **Pipeline** | `12_isp_data_ingest.py` |
+| **Notes** | Seed data from ISP 2024 Excel workbooks; API not available |
+
+### OpenNEM Facility Timeseries
+
+| Attribute | Detail |
+|-----------|--------|
+| **URL** | https://api.opennem.org.au/ |
+| **Description** | OpenNEM API providing facility-level generation data and registry |
+| **Data** | Per-facility generation timeseries, facility registry (DUID, capacity, fuel type) |
+| **Update Frequency** | Daily |
+| **Pipeline** | `10_opennem_facility_timeseries.py` |
+
+### AEMO STTM Gas
+
+| Attribute | Detail |
+|-----------|--------|
+| **URL** | https://nemweb.com.au/Reports/Current/STTM/ |
+| **Description** | AEMO Short Term Trading Market reports |
+| **Data** | Daily STTM commodity prices and allocated quantities (Sydney, Adelaide, Brisbane) |
+| **Update Frequency** | Daily |
+| **Pipeline** | `13_sttm_gas_ingest.py` |
+
+### AER Reliability Standards
+
+| Attribute | Detail |
+|-----------|--------|
+| **URL** | https://www.aer.gov.au/networks-pipelines/guidelines-schemes-models-reviews/reliability |
+| **Description** | AER published reliability standards and DNSP performance data |
+| **Data** | SAIDI, SAIFI targets and actuals by DNSP |
+| **Update Frequency** | Annual |
+| **Pipeline** | `16_aer_reliability_ingest.py` |
+
+### ESV Electrical Incidents
+
+| Attribute | Detail |
+|-----------|--------|
+| **URL** | https://www.esv.vic.gov.au/data-and-publications/ |
+| **Description** | Energy Safe Victoria electrical incident register |
+| **Data** | Electrical incidents, near misses, enforcement actions |
+| **Update Frequency** | Quarterly |
+| **Pipeline** | `19_esv_incidents_ingest.py` |
+
+### Safeguard Mechanism
+
+| Attribute | Detail |
+|-----------|--------|
+| **URL** | https://cer.gov.au/markets/safeguard-mechanism |
+| **Description** | Clean Energy Regulator Safeguard Mechanism data |
+| **Data** | Covered facilities, baselines, ACCU compliance data |
+| **Update Frequency** | Annual |
+| **Pipeline** | `22_safeguard_mechanism_ingest.py` |
+
+### BTM DER (Behind-the-Meter)
+
+| Attribute | Detail |
+|-----------|--------|
+| **URL** | AER CDR + state regulator APIs |
+| **Description** | Behind-the-meter DER connection data |
+| **Data** | Solar PV and battery installations by network zone |
+| **Update Frequency** | Monthly |
+| **Pipeline** | `24_btm_der_ingest.py` |
+
+### RAB Determinations
+
+| Attribute | Detail |
+|-----------|--------|
+| **URL** | https://www.aer.gov.au/networks-pipelines/determinations-access-arrangements |
+| **Description** | AER published network regulatory determinations |
+| **Data** | Approved RAB, opex, capex allowances by DNSP and regulatory period |
+| **Update Frequency** | On determination (every 5 years per DNSP) |
+| **Pipeline** | `25_rab_determinations_ingest.py` |

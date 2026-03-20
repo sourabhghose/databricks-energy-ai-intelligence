@@ -1,0 +1,137 @@
+---
+title: Benchmarking
+description: AER efficiency benchmarks, 6-DNSP peer group comparison, opex and capex benchmarks, and regulatory reset preparation analytics.
+---
+
+## Overview
+
+The AER uses benchmarking analysis as part of its regulatory determinations to assess whether a DNSP's proposed expenditure is efficient. Benchmarking compares a DNSP's performance and costs against a peer group to identify efficiency opportunities and set expenditure allowances.
+
+Energy Copilot implements the AER's published benchmarking methodology, providing DNSPs with self-assessment capability between regulatory resets.
+
+## AER Benchmarking Methodology
+
+The AER uses two main approaches:
+
+### Partial Factor Productivity (PFP)
+
+Compares output efficiency across DNSPs:
+
+```
+PFP_index = Σ (Output_quantity × Output_weight) / Σ (Input_cost × Input_weight)
+```
+
+Higher PFP = more output per unit of input = more efficient.
+
+### Econometric Benchmarking
+
+Estimates a statistical cost frontier across the DNSP peer group, accounting for differences in network characteristics (customer density, network length, peak demand):
+
+```
+ln(Cost_i) = α + β₁·ln(Output_i) + β₂·X_i + ε_i
+
+Efficiency_score = exp(-ε_i)  // 0-1, 1 = on the frontier
+```
+
+Where `X_i` includes cost drivers like geographic terrain, climate, urban density.
+
+## 6-DNSP Peer Group
+
+The primary peer group used in Energy Copilot benchmarking:
+
+| DNSP | State | Network Length (km) | Customers | Peak Demand (MW) |
+|------|-------|--------------------|-----------|--------------------|
+| Ausgrid | NSW | 51,000 | 1.7M | 5,200 |
+| Endeavour Energy | NSW | 48,000 | 1.0M | 2,800 |
+| Essential Energy | NSW | 187,000 | 870,000 | 1,800 |
+| Energex | QLD | 52,000 | 1.4M | 4,100 |
+| Ergon Energy | QLD | 155,000 | 730,000 | 1,500 |
+| AusNet Services | VIC | 97,000 | 720,000 | 2,100 |
+| SA Power Networks | SA | 89,000 | 870,000 | 1,900 |
+
+## Dashboard Pages
+
+### Opex Benchmark (`/dnsp/benchmarking/opex`)
+
+Operating expenditure benchmarked on three normalisation bases:
+
+| Metric | Definition | AER Weight |
+|--------|-----------|-----------|
+| $/customer | Opex / Total customers | 40% |
+| $/km network | Opex / Circuit km | 30% |
+| $/MWh delivered | Opex / Total energy delivered | 30% |
+
+- Peer group scatter chart: each DNSP plotted on 2D (e.g., network density vs $/km)
+- Percentile ranking for the selected DNSP
+- Trend: how has the DNSP's relative efficiency position changed over 5 years?
+
+### Capex Benchmark (`/dnsp/benchmarking/capex`)
+
+Capital expenditure benchmarked by:
+- Replacement capex ($/km replaced)
+- Augmentation capex ($/MVA added)
+- IT and communications capex ($/customer)
+- Total capex ($/customer, $/km)
+
+Contextualised by network age profile: older networks require more replacement capex.
+
+### Efficiency Frontier (`/dnsp/benchmarking/frontier`)
+
+Econometric frontier analysis:
+
+- Stochastic Frontier Analysis (SFA) model fit to peer group
+- Efficiency scores: how close each DNSP is to the cost frontier
+- Confidence intervals around efficiency estimates
+- Interpretation: "AER may apply a step change efficiency improvement if score falls below X"
+
+## Reset Preparation Analysis
+
+The most commercially important use of benchmarking is preparing for regulatory reset submissions. Energy Copilot provides:
+
+### Self-Assessment Report
+
+```bash
+POST /api/dnsp/benchmarking/self-assessment
+{
+  "dnsp": "ausgrid",
+  "reset_year": 2029,
+  "years_of_historical_data": 5
+}
+
+# Returns:
+# - Current efficiency scores by methodology
+# - Areas of relative strength/weakness vs peer group
+# - Narrative text for AER submission (AI-generated)
+# - Sensitivity: range of efficiency adjustments AER might apply
+```
+
+### Expenditure Proposal Risk Assessment
+
+Assess whether a proposed expenditure level is likely to be accepted by the AER:
+
+- Is proposed opex within the range of peer group efficient costs?
+- Are there specific cost drivers that explain above-average costs?
+- What is the risk of an AER-imposed efficiency adjustment?
+
+## API Endpoints
+
+```bash
+# Opex benchmark comparison
+GET /api/dnsp/benchmarking/opex?dnsp=ausgrid&year=2024
+
+# Capex benchmark
+GET /api/dnsp/benchmarking/capex?dnsp=ergon&year=2024
+
+# Efficiency frontier scores
+GET /api/dnsp/benchmarking/frontier?dnsp=sa_power_networks&years=5
+
+# Peer group comparison (all metrics)
+GET /api/dnsp/benchmarking/peer-comparison?year=2024
+
+# Self-assessment report
+POST /api/dnsp/benchmarking/self-assessment
+{
+  "dnsp": "essential_energy",
+  "reset_year": 2030
+}
+```

@@ -1,10 +1,10 @@
 # Product Requirements Document (PRD)
 # AUS Energy AI Market Intelligence — Phase 1: Market Intelligence & AI Assistant
 
-**Version:** 4.2
-**Date:** 19 March 2026
+**Version:** 5.0
+**Date:** 21 March 2026
 **Author:** Sourabh Ghose
-**Status:** Phases 1–5B Complete
+**Status:** Phases 1–6 Complete
 
 ### Implementation Status
 
@@ -16,10 +16,9 @@
 | Phase 4 | Network Operations & Distribution Intelligence | COMPLETE | 2026-03-09 |
 | Phase 5B | DNSP Distribution Intelligence | COMPLETE | 2026-03-19 |
 | Phase 5C | DNSP Advanced Modules (11 specialist pages) | COMPLETE | 2026-03-19 |
-| Phase 5 | Back-Office & Operational Excellence | PLANNED | — |
-| Phase 6 | DNSP Enterprise Intelligence (Advanced) | PLANNED | — |
+| Phase 6 | DNSP Enterprise Intelligence (Advanced) + AI/ML | COMPLETE | 2026-03-21 |
 
-**Delivered:** 543 frontend pages, 57 backend routers (~608+ endpoints), 51 FMAPI AI tools, 12 Genie AI/BI spaces (incl. DNSP Enterprise Intelligence), 108+ gold Delta tables, Lakebase serving layer (10-38ms reads), NEM infrastructure map (742 facilities), algorithmic trading signals engine (8 signal types), market briefs auto-refresh, DNSP two-level sidebar (6 sub-groups), DNSP copilot with 31 sample questions across 4 categories.
+**Delivered:** 564 frontend pages, 64 backend routers (~636+ endpoints), 51 FMAPI AI tools, 12 Genie AI/BI spaces (incl. DNSP Enterprise Intelligence), 108+ gold Delta tables, 30 scheduled pipeline jobs (incl. Pipeline 13: NEMWEB Bronze→Gold every 5 min), Lakebase serving layer (10-38ms reads), NEM infrastructure map (742 facilities), algorithmic trading signals engine (8 signal types), market briefs auto-refresh, DNSP two-level sidebar (6 sub-groups), 5 AI/ML capabilities (XGBoost asset failure prediction 92.3% acc, Claude FMAPI AIO draft generator, XGBoost vegetation risk classifier 88.7%, Prophet workforce forecasting MAE 124h, Isolation Forest STPIS anomaly detection 93.4%).
 
 ---
 

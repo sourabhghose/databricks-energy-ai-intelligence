@@ -1,0 +1,111 @@
+---
+title: AI & ML Overview
+description: Energy Copilot's AI and ML stack — Claude Sonnet 4.5, 51 tools, 12 Genie spaces, 5 ML models, MLflow, and the Databricks AI story.
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## The Databricks AI Story
+
+Energy Copilot demonstrates the full Databricks AI stack working together:
+
+1. **Foundation Model API (FMAPI)**: Claude Sonnet 4.5 routed through Databricks, keeping API calls within the network perimeter
+2. **MLflow Model Registry**: all 5 ML models trained, tracked, versioned, and deployed via MLflow
+3. **Model Serving**: inference endpoints for real-time model predictions
+4. **Genie AI/BI**: natural language SQL over Gold Delta tables via 12 Genie spaces
+5. **Unity Catalog SQL Functions**: 14 UC functions provide the AI agent with structured access to data
+6. **Vector Search** (RAG): AEMO market rules indexed for semantic retrieval by the copilot
+
+## AI/ML Capabilities
+
+<CardGrid>
+  <Card title="AI Market Intelligence Copilot" icon="star">
+    Claude Sonnet 4.5 with 51 domain-specific tools. Conversational interface for market analysis, DNSP intelligence, and operational queries. Streams responses via SSE.
+  </Card>
+  <Card title="Genie AI/BI Spaces" icon="open-book">
+    12 Genie spaces covering NEM prices, generation, FCAS, settlement, DNSP compliance, assets, vegetation, workforce, and gas markets. Natural language → SQL → results.
+  </Card>
+  <Card title="Asset Failure Prediction" icon="setting">
+    XGBoost classifier. AUC 0.961, accuracy 92.3%. Scores all DNSP network assets monthly on failure probability within 12 months.
+  </Card>
+  <Card title="AIO Draft Generator" icon="document">
+    Claude Sonnet 4.5 drafts AIO submission sections from structured DNSP performance data. Async HTTPX call with fallback template.
+  </Card>
+  <Card title="Vegetation Risk ML" icon="list-format">
+    XGBoost classifier for network span vegetation risk. F1-macro 86.3%, AUC 0.923. BMO zone scoring and newly-flagged alert feed.
+  </Card>
+  <Card title="Workforce Demand Forecasting" icon="rocket">
+    Prophet + XGBoost ensemble. MAPE 4.2%, 18-month horizon. Bushfire seasonality modelled explicitly. Skills gap output for workforce planners.
+  </Card>
+  <Card title="STPIS Anomaly Detection" icon="setting">
+    Isolation Forest + Z-score ensemble. 93.4% detection rate, 4.7% FPR. 6-DNSP peer group benchmarking for SAIDI/SAIFI/MAIFI anomalies.
+  </Card>
+  <Card title="NEM Price Forecasting" icon="star">
+    LightGBM multi-horizon forecasting. 5 regions, 6 forecast horizons (1, 4, 8, 12, 24, 48 × 5-min intervals). Demand, weather, generation features.
+  </Card>
+</CardGrid>
+
+## MLflow Experiment Tracking
+
+All ML models are tracked in MLflow experiments within Unity Catalog:
+
+| Experiment | Model Type | Target Variable | Regions |
+|-----------|-----------|----------------|---------|
+| `price_forecast` | LightGBM | NEM spot price | All 5 NEM |
+| `demand_forecast` | LightGBM | Operational demand | All 5 NEM |
+| `wind_forecast` | LightGBM | Wind generation | All 5 NEM |
+| `solar_forecast` | LightGBM | Solar generation | All 5 NEM |
+| `anomaly_detection` | IsolationForest | Price anomaly | NEM-wide |
+
+Each experiment tracks:
+- Training hyperparameters (Optuna 50-trial HPO)
+- Evaluation metrics (MAE, MAPE, AUC, F1)
+- Feature importances
+- Chronological train/val/test split boundaries (stored as tags)
+- Model artifacts and registered model alias
+
+## Model Serving
+
+The following Model Serving endpoints are configured:
+
+| Endpoint Name | Model | Purpose |
+|-------------|-------|---------|
+| `nem-price-forecaster` | `price_forecast@production` | 30-min and 24h price forecasts |
+| `asset-failure-predictor` | `asset_failure_predictor@production` | DNSP asset failure probability |
+
+Model Serving endpoints use serverless compute and auto-scale to zero when not in use.
+
+## How AI/ML Capabilities Work Together
+
+```
+User Question (Copilot)
+        │
+        ▼
+Claude Sonnet 4.5 (FMAPI)
+        │
+        ├──→ get_price_forecast    ──→ Model Serving (LightGBM)
+        │                                     │
+        │                                     ▼
+        ├──→ get_generation_mix    ──→ Gold Table (Lakebase)
+        │
+        ├──→ get_stpis_metrics     ──→ Gold Table (SQL Warehouse)
+        │
+        ├──→ get_asset_health      ──→ Gold Table + Model Serving
+        │
+        └──→ search_market_rules   ──→ Vector Search Index
+```
+
+The copilot's agentic loop orchestrates calls to multiple tools in sequence or parallel, synthesising the results into a coherent, contextualised response.
+
+## Genie vs Copilot
+
+Both the Copilot and Genie spaces provide natural language access to data, but serve different purposes:
+
+| Feature | AI Copilot | Genie AI/BI |
+|---------|-----------|------------|
+| Interface | Conversational chat | Direct question → SQL → result |
+| Access to real-time data | Yes (via tool calls) | Yes (direct table access) |
+| Custom tool calling | Yes (51 tools) | No |
+| Multi-step reasoning | Yes (agentic loop) | Limited |
+| Best for | Complex analysis, narratives | Direct data queries |
+| SQL visibility | No (abstracted) | Yes (show SQL) |

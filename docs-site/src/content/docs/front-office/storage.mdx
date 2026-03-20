@@ -1,0 +1,134 @@
+---
+title: Energy Storage & Battery
+description: BESS dispatch tracking, battery economics, degradation modelling, second-life value, and arbitrage P&L analysis.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+Grid-scale battery energy storage systems (BESS) are now a significant and growing part of the NEM. Australia has deployed more than 3 GW of grid-scale battery capacity, with the Hornsdale Power Reserve (South Australia) being the world's most studied large-scale battery project. Energy Copilot provides comprehensive analytics for BESS operators, investors, and market analysts.
+
+## Key BESS Facilities
+
+| Facility | State | Capacity | Duration | Owner |
+|----------|-------|---------|---------|-------|
+| Victorian Big Battery (Moorabool) | VIC | 300 MW / 450 MWh | 1.5h | AGL/Neoen |
+| Hornsdale Power Reserve | SA | 150 MW / 193.5 MWh | 1.3h | Neoen |
+| Capital Battery (Canberra) | ACT | 50 MW / 50 MWh | 1h | ActewAGL |
+| Waratah Super Battery (proposed) | NSW | 850 MW / 1,680 MWh | 2h | Akaysha |
+| Eraring Battery (under const.) | NSW | 460 MW / 920 MWh | 2h | Origin Energy |
+
+## Dashboard Pages
+
+### BESS Dispatch Overview (`/front-office/battery-dispatch`)
+
+- Current charge/discharge status for all registered BESS DUIDs
+- State of charge (SOC) estimates based on dispatch history
+- Charge/discharge cycle count (daily, monthly, cumulative)
+- Revenue breakdown: energy arbitrage vs FCAS vs network services
+
+### Battery Economics (`/front-office/battery-economics`)
+
+- **Arbitrage P&L calculator**: model expected returns based on historical price spreads
+- **LCOE comparison**: levelised cost of storage vs spot price revenue
+- **Revenue stack**: energy, FCAS (8 services), RERT, network services
+- **Payback analysis**: configurable capex, opex, degradation rate, discount rate
+
+### Degradation Modelling (`/front-office/battery-degradation`)
+
+The platform models battery degradation using a cycle-based and calendar-based approach:
+
+```
+Capacity_remaining(%) = 100 - (Cycle_Degradation_pct × Cycles) - (Calendar_Degradation_pct × Years)
+```
+
+Where:
+- `Cycle_Degradation_pct`: typically 0.003–0.008% per full cycle for NMC chemistry
+- `Calendar_Degradation_pct`: typically 1–2% per year depending on operating temperature
+
+Users can input actual degradation observations to calibrate the model against real performance data.
+
+### Arbitrage Optimisation
+
+The platform provides a simplified arbitrage optimisation analysis:
+
+```python
+# Optimal charge/discharge schedule for a 4-hour battery
+# Given price forecast for next 24 hours
+def calculate_arbitrage_schedule(
+    prices_24h: list[float],
+    capacity_mw: float,
+    duration_h: float,
+    efficiency: float = 0.92
+) -> dict:
+    """
+    Returns optimal charge/discharge schedule maximising revenue.
+    Uses dynamic programming over discretised state of charge.
+    """
+    ...
+```
+
+The Middle Office [Battery Optimisation](/databricks-energy-copilot/middle-office/battery-optimisation) page provides the full operational optimisation tool with real-time price data.
+
+## FCAS Revenue from Batteries
+
+Batteries are particularly well-suited to FCAS markets because:
+1. They can respond in milliseconds (vs minutes for thermal generators)
+2. They can simultaneously provide multiple FCAS services (regulation + contingency)
+3. Their FCAS availability is not limited by fuel supply
+
+*Screenshot: Hornsdale Power Reserve FCAS enablement timeline showing simultaneous regulation raise, regulation lower, and contingency services enabled.*
+
+### FCAS Revenue Analysis
+
+```bash
+GET /api/battery/fcas-revenue?duid=HPRL1&start=2025-03-14&end=2025-03-21
+
+# Response
+{
+  "duid": "HPRL1",
+  "period": {"start": "2025-03-14", "end": "2025-03-21"},
+  "fcas_revenue_aud": 142350,
+  "energy_revenue_aud": 28940,
+  "total_revenue_aud": 171290,
+  "fcas_services_enabled": ["RAISE6SEC", "LOWER6SEC", "RAISE60SEC", "LOWER60SEC", "RAISEREG", "LOWERREG"]
+}
+```
+
+## Second-Life Battery Value
+
+As the first generation of large-scale BESS approaches end of warranty (~10 years), second-life analysis becomes commercially important. The platform includes:
+
+- **Remaining useful life (RUL)** estimation based on degradation model
+- **Second-life use case matching**: grid services, off-grid, EV charging infrastructure
+- **Repurposing economics**: cost of refurbishment vs value of remaining capacity
+- **Carbon accounting**: embodied carbon in manufacturing vs lifecycle extension
+
+<Aside type="note">
+  Second-life calculations use the `gold.battery_degradation_models` table, which is seeded with chemistry-specific parameters from manufacturer datasheets. Users can override parameters via the settings panel.
+</Aside>
+
+## API Endpoints
+
+```bash
+# Current BESS dispatch across NEM
+GET /api/battery/dispatch/latest
+
+# BESS for specific DUID
+GET /api/battery/dispatch?duid=HPRL1&period=7d
+
+# Arbitrage opportunity analysis
+GET /api/battery/arbitrage?region=SA1&capacity_mw=100&duration_h=2
+
+# Degradation projection
+POST /api/battery/degradation
+Content-Type: application/json
+{
+  "initial_capacity_mwh": 193.5,
+  "current_cycles": 1842,
+  "age_years": 6.5,
+  "chemistry": "NMC",
+  "avg_dod_pct": 85
+}
+```

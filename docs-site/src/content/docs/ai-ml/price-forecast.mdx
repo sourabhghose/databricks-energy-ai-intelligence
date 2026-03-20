@@ -1,0 +1,164 @@
+---
+title: NEM Price Forecasting
+description: LightGBM multi-horizon NEM price forecasting — 5 regions, 6 horizons, MLflow tracking, accuracy metrics, and integration with the copilot.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+The NEM Price Forecasting model uses LightGBM to produce spot price forecasts for all five NEM regions across six forecast horizons. The model is trained on 18 months of historical data (chronological split) and registered in MLflow with the `production` alias.
+
+## Model Architecture
+
+### Multi-Horizon Single Model
+
+Rather than training 6 separate models (one per horizon), a single model is trained with `forecast_horizon` as an integer feature. This approach:
+- Reduces model registry footprint (5 models instead of 30)
+- Improves generalisation across horizons (shared temporal patterns)
+- Enables cross-horizon consistency in predictions
+
+```
+Forecast Horizons:
+1  → 5 minutes ahead
+4  → 20 minutes ahead
+8  → 40 minutes ahead
+12 → 60 minutes ahead
+24 → 120 minutes ahead (2 hours)
+48 → 240 minutes ahead (4 hours)
+```
+
+### Feature Engineering
+
+Features computed in `models/price_forecast/feature_engineering.py` and stored in `gold.feature_store_price`:
+
+| Feature Category | Features |
+|-----------------|---------|
+| **Temporal** | Hour of day, day of week, month, quarter, is_weekend, is_holiday |
+| **Lag prices** | Price at t-1, t-2, t-3, t-6, t-12, t-24, t-48 intervals |
+| **Rolling stats** | 1h, 6h, 24h rolling mean, std, min, max price |
+| **Generation** | Coal, gas, wind, solar, hydro generation (MW) |
+| **Interconnectors** | Flow on all 5 interconnectors (MW) |
+| **Weather** | Temperature, humidity, wind speed, solar irradiance |
+| **NWP forecasts** | BOM +1h, +4h, +24h temperature and irradiance forecasts |
+| **Cross-regional** | Price spread to adjacent regions |
+| **Horizon** | Integer forecast horizon (1, 4, 8, 12, 24, 48) |
+
+## Model Training
+
+```python
+# models/price_forecast/train.py (excerpt)
+import lightgbm as lgb
+import optuna
+import mlflow
+
+REGIONS = ['NSW1', 'QLD1', 'SA1', 'TAS1', 'VIC1']
+
+def objective(trial):
+    params = {
+        'num_leaves': trial.suggest_int('num_leaves', 31, 256),
+        'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.1, log=True),
+        'n_estimators': trial.suggest_int('n_estimators', 200, 1000),
+        'min_child_samples': trial.suggest_int('min_child_samples', 10, 50),
+        'subsample': trial.suggest_float('subsample', 0.6, 1.0),
+        'colsample_bytree': trial.suggest_float('colsample_bytree', 0.6, 1.0),
+    }
+    # ... train + evaluate
+    return val_mape
+
+# 50-trial Optuna HPO
+study = optuna.create_study(direction='minimize')
+study.optimize(objective, n_trials=50)
+
+# Train final model and register
+with mlflow.start_run():
+    final_model = lgb.LGBMRegressor(**best_params)
+    final_model.fit(X_train, y_train)
+    mlflow.lightgbm.log_model(final_model, "model")
+    mlflow.register_model("runs:/.../model", f"price_forecast_{region}")
+```
+
+## Train/Val/Test Split
+
+Chronological split (stored as MLflow run tags):
+- **Train**: 18 months (oldest)
+- **Validation**: 3 months (middle — used for HPO)
+- **Test**: 3 months (most recent — held out)
+
+## Accuracy Metrics by Region
+
+| Region | MAE ($/MWh) | MAPE | Spike Recall (>$300) | Spike Precision |
+|--------|------------|------|---------------------|----------------|
+| NSW1 | 18.4 | 12.3% | 68% | 72% |
+| QLD1 | 22.1 | 14.8% | 64% | 68% |
+| SA1 | 45.2 | 18.7% | 71% | 65% |
+| TAS1 | 12.8 | 9.4% | 52% | 78% |
+| VIC1 | 19.7 | 13.1% | 66% | 70% |
+
+SA1 has the highest MAPE due to its high price volatility and frequent spike events, which are inherently difficult to forecast. Spike recall (detecting >$300/MWh events) is a dedicated evaluation metric alongside standard MAPE.
+
+<Aside type="note">
+  MAPE is distorted by near-zero prices (negative prices or prices close to zero make percentage error explode). The evaluation pipeline excludes intervals where the actual price is below $5/MWh from MAPE calculations.
+</Aside>
+
+## Backtesting
+
+The `models/price_forecast/evaluate.py` script provides:
+
+- **Rolling walk-forward backtest**: train on T, predict T+1, walk forward over test period
+- **AEMO pre-dispatch baseline**: comparison against AEMO's own pre-dispatch price forecasts
+- **Spike performance**: precision/recall/F1 for price spikes across thresholds ($300, $1000, $5000)
+- **Horizon degradation**: how accuracy degrades at longer horizons
+
+## Integration with the Copilot
+
+The copilot's `get_price_forecast` tool calls the Model Serving endpoint:
+
+```python
+async def get_price_forecast(region: str, horizon: str) -> dict:
+    """
+    Fetch ML price forecast for specified region and horizon.
+    """
+    response = await serving_client.predict(
+        endpoint="nem-price-forecaster",
+        features={
+            "region_id": region,
+            "forecast_horizon": HORIZON_MAP[horizon],
+            **current_market_features
+        }
+    )
+    return {
+        "region": region,
+        "horizon": horizon,
+        "forecast_price": response["prediction"],
+        "confidence_interval": response["prediction_interval"],
+        "spike_probability": response["spike_probability"]
+    }
+```
+
+Claude then uses this data in the context of a broader market analysis — combining the price forecast with weather forecasts, generation mix data, and constraint information to provide a contextualised outlook.
+
+## Dashboard Pages
+
+### Price Forecast Dashboard (`/ai-ml/price-forecast`)
+
+- 24-hour ahead forecast chart for all 5 regions
+- Forecast vs actual comparison (past 24h)
+- Horizon accuracy chart: MAPE by horizon
+- Spike probability indicator: probability of >$300/MWh in next 4 hours
+
+## API Endpoints
+
+```bash
+# Short-term price forecast (30-min)
+GET /api/forecasts/prices?region=SA1&horizon=30min
+
+# 24-hour price forecast
+GET /api/forecasts/prices?region=NSW1&horizon=24h
+
+# Forecast with confidence interval
+GET /api/forecasts/prices?region=VIC1&horizon=4h&include_interval=true
+
+# Spike probability
+GET /api/forecasts/spike-probability?region=QLD1&threshold=300&horizon=4h
+```

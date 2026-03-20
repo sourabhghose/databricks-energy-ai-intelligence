@@ -1,0 +1,113 @@
+---
+title: Pipeline Jobs
+description: All 30 pipeline jobs — schedule, description, and target tables for each job.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+Energy Copilot runs 30 scheduled serverless pipeline jobs in Databricks, orchestrating data ingestion from all external sources through the Bronze → Silver → Gold medallion architecture.
+
+All jobs use **serverless compute** via `environment_key` — no cluster management, no spot instance configuration.
+
+## Pipeline Jobs Reference
+
+| # | Job Name | Schedule | Description | Target Tables |
+|---|----------|---------|-------------|---------------|
+| 00 | `job_00_setup` | One-time | Creates schemas, tables, seeds reference data, backfills 90 days of synthetic NEM data | All schemas |
+| 01 | `01_nemweb_ingest` | Continuous DLT | DLT Autoloader: NEMWEB dispatch prices, SCADA, interconnectors, FCAS Bronze → Silver → Gold | `gold.nem_prices_5min`, `gold.nem_generation_by_fuel`, `gold.nem_interconnectors`, `gold.nem_fcas_prices` |
+| 02 | `02_openelec_ingest` | Every 30 min | OpenElectricity API incremental ingest | `gold.openelec_generation` |
+| 03 | `03_weather_ingest` | Every hour | BOM ACCESS-G weather observations + NWP forecast | `gold.weather_nem_regions` |
+| 04 | `04_solar_ingest` | Every 30 min | APVI rooftop solar by state | `gold.rooftop_solar_state` |
+| 05 | `05_forecast_pipeline` | Every 30 min | MLflow model inference: price, demand, wind, solar forecasts | `gold.price_forecasts`, `gold.demand_forecasts`, `gold.wind_forecasts`, `gold.solar_forecasts` |
+| 06 | `06_market_summary` | Daily 05:30 AEST | Claude Sonnet 4.5 daily NEM market brief | `gold.market_briefs` |
+| 07 | `07_gas_ingest` | Daily 08:00 | STTM gas hub prices (Sydney, Adelaide, Brisbane) | `gold.gas_hub_prices` |
+| 08 | `08_data_quality` | Daily 06:00 | Data completeness, freshness, null rate checks | `gold.data_quality_metrics` |
+| 09 | `09_simulator` | Continuous (manual) | Writes synthetic NEM market data every 30s for demo purposes | All Gold tables |
+| 10 | `10_dashboard_snapshots` | Every 5 min | Pre-computes JSON responses for 15 high-traffic dashboard endpoints | `gold.dashboard_snapshots` |
+| 11 | `11_grant_lakebase_perms` | One-time (post-deploy) | Grants App SP SELECT on Lakebase gold schema | N/A |
+| 12 | `12_recreate_synced_tables` | One-time (post-deploy) | Creates continuous Delta → Lakebase synced tables | Lakebase gold schema |
+| 13 | `13_nemweb_bronze_to_gold` | Every 5 min | Fast path: NEMWEB CSV directly to Gold (bypasses Silver for latency) | `gold.nem_prices_5min`, `gold.nem_generation_by_fuel` |
+| 14 | `14_cer_lgc_weekly` | Weekly Sunday 02:00 | CER LGC registry weekly update | `gold.lgc_registry` |
+| 15 | `15_dnsp_outage_ingest` | Every 15 min | DNSP planned outage notifications | `gold.dnsp_outages` |
+| 16 | `16_aer_reliability_ingest` | Annual (Jan) | AER published DNSP reliability data (SAIDI/SAIFI actuals) | `gold.dnsp_stpis_actuals` |
+| 17 | `17_aer_enforcement_ingest` | Weekly Monday 03:00 | AER enforcement register scrape | `gold.aer_enforcement` |
+| 18 | `18_aer_compliance_calendar` | Monthly 1st | AER compliance calendar update | `gold.compliance_calendar` |
+| 19 | `19_esv_incidents_ingest` | Quarterly | ESV electrical incident register | `gold.esv_incidents` |
+| 20 | `20_esv_regulations_ingest` | Annual | ESV regulatory requirements library | `gold.esv_regulations` |
+| 21 | `21_aemo_procedures_ingest` | Monthly | AEMO market procedures library | `gold.aemo_procedures` |
+| 22 | `22_safeguard_mechanism_ingest` | Annual (Nov) | CER Safeguard Mechanism data | `gold.safeguard_mechanism` |
+| 23 | `23_aemc_rule_changes_ingest` | Weekly Monday 04:00 | AEMC rule change register | `gold.aemc_rule_changes` |
+| 24 | `24_btm_der_ingest` | Monthly | Behind-the-meter DER connection data | `gold.dnsp_hosting_capacity`, `gold.der_connections` |
+| 25 | `25_rab_determinations_ingest` | Quarterly | AER RAB determination data | `gold.dnsp_rab_schedule` |
+| 26 | `26_consumer_protection_ingest` | Monthly | AER consumer protection data | `gold.consumer_protection` |
+| 27 | `27_tnsp_tuos_ingest` | Monthly | TNSP transmission use of system charges | `gold.tuos_charges` |
+| 28 | `28_rit_register_ingest` | Quarterly | AER Regulatory Investment Test register | `gold.rit_register` |
+| 29 | `29_offshore_wind_ingest` | Monthly | Offshore wind project pipeline from DCCEEW | `gold.offshore_wind_projects` |
+| — | `nemweb_downloader` | Utility | Polling utility with exponential backoff for NEMWEB file downloads | Used by jobs 01 and 13 |
+
+## Pipeline Health Monitoring
+
+Job run health is tracked in the `gold.data_quality_metrics` table and displayed on the Data Quality report:
+
+```bash
+# Check all pipeline statuses
+GET /api/reporting/pipeline-runs?days=1
+
+# Response shows last run status for each pipeline:
+{
+  "pipelines": [
+    {
+      "pipeline_name": "13_nemweb_bronze_to_gold",
+      "last_run": "2025-03-21T05:35:00Z",
+      "status": "SUCCESS",
+      "duration_seconds": 45,
+      "rows_written": 15
+    },
+    ...
+  ]
+}
+```
+
+<Aside type="caution">
+  Job 09 (Simulator) should not run simultaneously with real data pipelines in production. It is designed for demonstration environments only. Set `ENERGY_COPILOT_USE_SIMULATOR=false` in the production app environment variables.
+</Aside>
+
+## Retry and Fault Tolerance
+
+All pipelines implement exponential backoff retry logic for transient failures:
+
+```python
+# nemweb_downloader.py — exponential backoff
+import time
+import random
+
+def download_with_retry(url: str, max_retries: int = 5) -> bytes:
+    for attempt in range(max_retries):
+        try:
+            response = requests.get(url, timeout=30)
+            response.raise_for_status()
+            return response.content
+        except requests.HTTPError as e:
+            if attempt == max_retries - 1:
+                raise
+            wait = (2 ** attempt) + random.uniform(0, 1)
+            time.sleep(wait)
+```
+
+For NEMWEB specifically, backoff is important because AEMO's portal can return 429 (rate limit) or 503 (maintenance) responses.
+
+## Adding New Pipelines
+
+To add a new ingestion pipeline:
+
+1. Create `pipelines/NN_source_name_ingest.py`
+2. Add Bronze and Gold table DDL to `setup/02_create_tables.sql`
+3. Add job definition to `resources/jobs.yml`
+4. Run `databricks bundle deploy` to create the job
+5. Trigger a manual backfill run to populate historical data
+
+<Aside type="note">
+  Pipeline numbering is loosely sequential but gaps exist where pipelines were added retrospectively. The numbering is not semantically significant — all pipelines are independent unless explicitly dependent (e.g., job 05 depends on the Gold tables created by jobs 01–04).
+</Aside>

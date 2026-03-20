@@ -19,6 +19,8 @@ A comprehensive guide to the Energy Copilot application for Australian National 
   - Deal Capture, Portfolio, Forward Curves, Risk, Trading Signals, Bidding, Battery Optimisation
 - [Back Office](./guide-back-office.md)
   - Settlement Back Office, Compliance, Environmentals, Reports, Network Operations
+- [DNSP Intelligence](#dnsp-intelligence)
+  - AER Regulatory, STPIS, Asset Intelligence, RAB Roll-Forward, Vegetation Risk, Workforce, AIO Submission, AI/ML Capabilities
 
 ---
 
@@ -26,28 +28,29 @@ A comprehensive guide to the Energy Copilot application for Australian National 
 
 ![Home Dashboard](screenshots/home.png)
 
-Energy Copilot is a full-stack Databricks App providing AI-powered market intelligence for the Australian National Electricity Market (NEM). It combines real-time market data, ML-driven forecasting, natural language analytics, and settlement-grade back office workflows in a single platform.
+Energy Copilot is a full-stack Databricks App providing AI-powered market intelligence for the Australian National Electricity Market (NEM). It combines real-time market data, ML-driven forecasting, natural language analytics, settlement-grade back office workflows, and DNSP regulatory intelligence in a single platform.
 
 ### Key Capabilities
 
 | Capability | Description |
 |-----------|-------------|
-| **497 analytics pages** | Dashboards spanning spot prices, generation, renewables, storage, FCAS, gas, WEM, and more |
-| **50 AI tools** | Claude Sonnet 4.6 agent with context-stuffed market data and 50 callable tools |
-| **11 Genie spaces** | Natural language SQL against 80+ gold Delta tables |
-| **Real-time data** | NEMWEB 5-min dispatch, weather, solar, forecasts — all ingested continuously |
-| **ML forecasting** | LightGBM price/demand/wind/solar forecasts + anomaly detection |
+| **564 analytics pages** | Dashboards spanning spot prices, generation, renewables, storage, FCAS, gas, WEM, DNSP, and more |
+| **51 AI tools** | Claude Sonnet 4.5 agent with context-stuffed market data and 51 callable tools |
+| **12 Genie spaces** | Natural language SQL against 108+ gold Delta tables (incl. DNSP Enterprise Intelligence) |
+| **Real-time data** | NEMWEB 5-min dispatch (Pipeline 13, every 5 min), weather, solar, forecasts — ingested continuously |
+| **5 AI/ML capabilities** | XGBoost asset failure prediction (92.3% acc), Claude FMAPI AIO drafts, XGBoost vegetation risk (88.7%), Prophet workforce forecasting (MAE 124h), Isolation Forest STPIS anomaly detection (93.4%) |
 | **Settlement workflows** | AEMO settlement ingestion, true-up analysis, dispute management, GL journals |
 | **Risk management** | VaR, MtM, credit checks, PPA valuation (Monte Carlo) |
+| **DNSP Intelligence** | AER regulatory compliance, bushfire mitigation, RAB roll-forward, STPIS calculator, AIO submission pack |
 
 ### Architecture
 
 The application is built on:
 
 - **Frontend**: React 18 + TypeScript + Vite + Tailwind CSS + Recharts
-- **Backend**: FastAPI with 35 routers serving 525+ REST endpoints
-- **Data**: 80+ Delta gold tables, Lakebase PostgreSQL serving layer (10-38ms reads)
-- **AI**: Claude Sonnet 4.6 via Databricks Foundation Model API (FMAPI)
+- **Backend**: FastAPI with 64 routers serving 636+ REST endpoints
+- **Data**: 108+ Delta gold tables, 30 scheduled pipeline jobs, Lakebase PostgreSQL serving layer (10-38ms reads)
+- **AI**: Claude Sonnet 4.5 via Databricks Foundation Model API (FMAPI)
 - **ML**: LightGBM models registered in MLflow, inference every 5 minutes
 - **Pipelines**: 13 scheduled Databricks jobs (NEMWEB, weather, solar, forecasts, snapshots)
 

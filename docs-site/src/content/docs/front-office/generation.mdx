@@ -1,0 +1,168 @@
+---
+title: Generation & Fuel Mix
+description: NEM generation by fuel type, DUID-level dispatch data, Dispatch SCADA, and the OpenNEM facility registry.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+The Generation & Fuel Mix section provides real-time and historical visibility into how electricity is being produced across the NEM. Data is sourced from AEMO's Dispatch SCADA feed (updated every 5 minutes) and processed through the `gold.nem_generation_by_fuel` table.
+
+## Generation Categories
+
+The NEM generation mix is tracked across these fuel types:
+
+| Fuel Type | Technology | Typical NEM Share |
+|-----------|-----------|------------------|
+| **Black Coal** | NSW, QLD thermal | 25–35% |
+| **Brown Coal** | VIC brown coal | 10–15% |
+| **Gas (CCGT)** | Combined cycle gas turbine | 5–10% |
+| **Gas (OCGT)** | Open cycle (peaker) gas turbine | 2–5% |
+| **Hydro** | Snowy, TAS hydro | 5–10% |
+| **Wind** | Utility-scale wind farms | 10–20% |
+| **Solar (Utility)** | Large-scale solar farms | 5–15% |
+| **Solar (Rooftop)** | Behind-the-meter rooftop | 5–15% |
+| **Battery** | Grid-scale BESS | 1–3% |
+| **Pumped Hydro** | Wivenhoe, Tumut 3 | 1–3% |
+| **Biomass** | Sugar mill, landfill gas | &lt;1% |
+
+<Aside type="note">
+  Rooftop solar is treated as a demand reduction (negative load) in AEMO's operational demand figures. Energy Copilot shows both the AEMO operational demand view and a gross demand view with rooftop solar added back.
+</Aside>
+
+## Dashboard Pages
+
+### Generation Mix Dashboard (`/front-office/generation-mix`)
+
+- Live donut chart: current NEM-wide generation by fuel type
+- Stacked area chart: generation by fuel over time (configurable 1h to 1y)
+- Carbon intensity indicator: gCO2/kWh in real time
+- Renewable penetration percentage: percentage of demand met by renewables (wind + solar + hydro)
+
+### Regional Generation Breakdown (`/front-office/generation-regional`)
+
+- Side-by-side comparison of generation mix by region
+- Filter by fuel type to see regional distribution
+- SA1 renewable penetration is typically the highest (often >100% momentarily)
+
+### DUID-Level Dispatch (`/front-office/duid-dispatch`)
+
+- Individual generating unit dispatch data
+- Search by DUID, station name, or fuel type
+- Current output vs registered capacity percentage
+- Bid stack position indicator
+
+### Facility Registry (`/front-office/facilities`)
+
+- Complete list of all registered NEM generating facilities
+- Source: OpenNEM facility data + AEMO DUDETAILSUMMARY
+- Includes: capacity (MW), fuel type, first dispatch date, operator, region
+- Filter and sort by any column
+
+## DUID Data
+
+A **Dispatchable Unit Identifier (DUID)** uniquely identifies each generating unit registered with AEMO. Energy Copilot tracks 400+ DUIDs across the NEM.
+
+```sql
+-- Query current generation for coal units in NSW1
+SELECT
+    duid,
+    station_name,
+    fuel_type,
+    current_output_mw,
+    registered_capacity_mw,
+    ROUND(current_output_mw / registered_capacity_mw * 100, 1) AS utilisation_pct
+FROM energy_copilot.gold.nem_generation_by_fuel
+WHERE region_id = 'NSW1'
+  AND fuel_type IN ('Black Coal')
+  AND interval_datetime = (SELECT MAX(interval_datetime) FROM energy_copilot.gold.nem_generation_by_fuel)
+ORDER BY current_output_mw DESC;
+```
+
+## Dispatch SCADA Integration
+
+AEMO publishes Dispatch SCADA data (generation output per DUID) every 5 minutes through NEMWEB. Pipeline `01_nemweb_ingest.py` downloads and processes this data:
+
+```
+NEMWEB SCADA CSV (5-min)
+    │
+    ▼ pipeline 01: DLT Autoloader
+bronze.raw_dispatch_scada
+    │
+    ▼ (dedup, validate)
+silver.dispatch_scada_clean
+    │
+    ▼ (aggregate by fuel type, pivot)
+gold.nem_generation_by_fuel
+```
+
+The Gold table is partitioned by `interval_date` and has Change Data Feed enabled for the AI agent's tool calls.
+
+## API Examples
+
+### Fetch Generation Mix
+
+```bash
+GET /api/generation/latest?region=NSW1
+
+# Response
+{
+  "timestamp": "2025-03-21T05:30:00Z",
+  "region_id": "NSW1",
+  "total_generation_mw": 8250,
+  "renewable_pct": 18.4,
+  "carbon_intensity_gco2_kwh": 710,
+  "fuel_mix": {
+    "black_coal": 4820,
+    "gas_ccgt": 820,
+    "gas_ocgt": 145,
+    "hydro": 320,
+    "wind": 890,
+    "solar_utility": 520,
+    "solar_rooftop": 680,
+    "battery": 55
+  }
+}
+```
+
+### Fetch Fuel Mix History
+
+```bash
+GET /api/generation/history?region=QLD1&fuel_type=wind&start=2025-03-14&end=2025-03-21
+```
+
+## Gold Table Schema
+
+```sql
+-- gold.nem_generation_by_fuel
+DESCRIBE energy_copilot.gold.nem_generation_by_fuel;
+-- interval_datetime   TIMESTAMP  -- 5-min interval (UTC)
+-- interval_date       DATE       -- partition key
+-- region_id           STRING     -- NEM region
+-- fuel_type           STRING     -- generation fuel category
+-- generation_mw       DOUBLE     -- total generation (MW)
+-- duid_count          INT        -- number of DUIDs in this fuel/region bucket
+-- capacity_mw         DOUBLE     -- total registered capacity for this bucket
+-- utilisation_pct     DOUBLE     -- generation / capacity * 100
+```
+
+## Carbon Intensity Calculation
+
+Carbon intensity (gCO2/kWh) is calculated using emissions factors from `gold.emissions_factors`:
+
+| Fuel Type | Emissions Factor (kgCO2/MWh) |
+|-----------|------------------------------|
+| Black Coal | 920 |
+| Brown Coal | 1,180 |
+| Gas (CCGT) | 490 |
+| Gas (OCGT) | 700 |
+| Wind | 11 |
+| Solar (utility) | 45 |
+| Solar (rooftop) | 45 |
+| Hydro | 24 |
+| Battery | 0 (dispatch only) |
+
+<Aside type="tip">
+  Ask the AI copilot: "What is the current carbon intensity of the NEM and how does it compare to last week?" The copilot will retrieve both values using `get_generation_mix` and `get_market_summary` tools and provide context.
+</Aside>

@@ -1,0 +1,97 @@
+---
+title: Middle Office Overview
+description: Overview of Energy Copilot's ETRM capabilities — deal capture, portfolio management, risk, forward curves, trading signals, and battery optimisation.
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## What Is the Middle Office?
+
+The Middle Office module provides Energy Trading and Risk Management (ETRM) capabilities for NEM market participants. It covers the full trade lifecycle from deal capture through to portfolio valuation and risk management, integrated with real-time market data from the Front Office.
+
+Energy Copilot's ETRM is built on top of the same medallion lakehouse that powers the market analytics, meaning deal positions are always evaluated against live market data — no manual data feeds or CSV imports required.
+
+## Capabilities
+
+<CardGrid>
+  <Card title="Deal Capture & ETRM" icon="document">
+    Capture and manage energy derivative deals: swaps, caps, floors, collars, PPAs, and spot contracts. Book assignment, counterparty management, and position tracking in real time.
+  </Card>
+  <Card title="Portfolio & P&L" icon="setting">
+    Mark-to-market valuation using forward curves constructed from ASX energy futures. Real-time P&L attribution, position limits monitoring, and portfolio summary dashboard.
+  </Card>
+  <Card title="Forward Curves" icon="rocket">
+    ASX Energy Futures-derived forward curves for all 5 NEM regions. Seasonal shape calibration, curve smoothing, and historical curve comparison.
+  </Card>
+  <Card title="Risk Management" icon="star">
+    Value at Risk (Historical Simulation and Monte Carlo), credit risk exposure, market position limits, and Greeks for options and PPAs.
+  </Card>
+  <Card title="Trading Signals" icon="list-format">
+    Eight algorithmic trading signal types: momentum, mean reversion, weather-adjusted, renewable ramp, FCAS arbitrage, interconnector basis, demand shock, and time-of-day patterns.
+  </Card>
+  <Card title="Battery Optimisation" icon="open-book">
+    Optimal dispatch strategy for BESS assets: arbitrage P&L modelling, SOC management, FCAS co-optimisation, and bid stack generation.
+  </Card>
+</CardGrid>
+
+## Deal Data
+
+Energy Copilot is pre-seeded with sample trading data to demonstrate the ETRM capabilities:
+
+- **3 portfolios**: Wholesale, Retail Hedge, FCAS
+- **5 counterparties**: AGL Energy, Origin Energy, EnergyAustralia, Shell Energy, Macquarie
+- **50 sample trades**: a mix of swaps, caps, and PPAs across all regions and tenors
+
+Seeded by `job_00_setup` task `seed_deal_data`.
+
+## Key Gold Tables
+
+| Table | Description |
+|-------|-------------|
+| `gold.deals` | Trade register — all captured deals |
+| `gold.portfolios` | Portfolio definitions and hierarchy |
+| `gold.counterparties` | Counterparty registry with credit limits |
+| `gold.positions` | Aggregated positions by portfolio, region, tenor |
+| `gold.mtm_valuations` | Daily MtM valuations per trade |
+| `gold.asx_futures_eod` | ASX Energy futures end-of-day prices |
+| `gold.forward_curves` | Constructed forward price curves |
+
+## Workflow
+
+```
+Deal Capture
+     │
+     ▼
+Position Netting
+     │
+     ├──→ Forward Curve (ASX Futures)
+     │
+     ▼
+Mark-to-Market Valuation
+     │
+     ├──→ P&L Attribution
+     ├──→ VaR Calculation
+     └──→ Position Limit Monitoring
+```
+
+## Integration with Front Office
+
+The Middle Office is fully integrated with real-time Front Office data:
+
+- **Spot exposure**: current spot price impacts on un-hedged positions are calculated against live 5-minute prices
+- **FCAS exposure**: FCAS revenue/cost against live FCAS prices
+- **Weather risk**: temperature forecasts feed into demand-correlated hedge effectiveness calculations
+- **Trading signals**: algorithmic signals are based on live market data from the same Gold tables
+
+## API Router
+
+The ETRM endpoints are served from the `middle-office` router group:
+
+```
+/api/deals/           # Deal CRUD operations
+/api/portfolio/       # Portfolio positions and P&L
+/api/forward-curves/  # Forward curve retrieval and construction
+/api/risk/            # VaR, Greeks, limit monitoring
+/api/trading-signals/ # Algorithmic signal retrieval
+/api/battery-opt/     # Battery optimisation engine
+```

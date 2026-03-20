@@ -1,0 +1,68 @@
+---
+title: Back Office Overview
+description: Overview of Energy Copilot's Back Office module — settlement, regulatory compliance, environmental obligations, network operations, and reporting.
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## What Is the Back Office?
+
+The Back Office module handles post-trade processing, regulatory obligations, and operational reporting for NEM market participants. It covers the full lifecycle from trade settlement through to regulatory compliance, environmental obligation tracking, and network operations management.
+
+Unlike the Front Office (market monitoring) and Middle Office (trading and risk), the Back Office is concerned with obligations — things that must be done accurately and on time to meet NEM Rules requirements.
+
+## Modules
+
+<CardGrid>
+  <Card title="Settlement" icon="document">
+    AEMO settlement statement ingestion and reconciliation. PRELIM → FINAL → R1–R4 run tracking, true-up analysis, prudential deposit management, dispute workflow, and GL journal generation.
+  </Card>
+  <Card title="Compliance & Regulatory" icon="setting">
+    NER obligations calendar, AER enforcement register monitoring, AEMC rule change tracker, AEMO procedures library. Automated compliance due date alerts.
+  </Card>
+  <Card title="Environmental & LGCs" icon="star">
+    Large-scale Generation Certificate (LGC) registry, Safeguard Mechanism reporting, carbon emissions tracking, emissions intensity benchmarks, and ACCU spot prices.
+  </Card>
+  <Card title="Network Operations" icon="rocket">
+    AEMO outage management system integration, active constraint sets, DER management, network asset registry, and planned outage scheduling.
+  </Card>
+  <Card title="Reporting" icon="list-format">
+    AI-generated daily market summary reports, dashboard snapshot exports, data quality report (pipeline health and data completeness), and regulatory submission packs.
+  </Card>
+</CardGrid>
+
+## Settlement Lifecycle
+
+The NEM settlement process follows a defined sequence of runs:
+
+| Run | Name | Timing | Description |
+|-----|------|--------|-------------|
+| **PRELIM** | Preliminary | T+2 business days | First estimate with provisional data |
+| **FINAL** | Final | T+18 business days | Final settlement with all metering data |
+| **R1** | Revised Run 1 | T+3 months | First revision (metering corrections) |
+| **R2** | Revised Run 2 | T+6 months | Second revision |
+| **R3** | Revised Run 3 | T+9 months | Third revision |
+| **R4** | Revised Run 4 | T+12 months | Final revision (closes settlement) |
+
+Energy Copilot ingests AEMO settlement statements for each run and automatically computes the true-up: how much did each run differ from the previous?
+
+## Compliance Areas
+
+The Back Office Compliance module tracks obligations across:
+- **Market (NEM Rules)**: offer compliance, rebid reason codes, market settlement payment timelines
+- **Retail**: mandatory reporting to AER (retail performance data)
+- **Network**: outage notifications, constraint compliance
+- **Environmental**: RET compliance (LGC surrender), Safeguard Mechanism reporting
+- **Safety**: ESV/DNSP electrical incident reporting (for DNSP participants)
+
+## Key Gold Tables
+
+| Table | Description |
+|-------|-------------|
+| `gold.settlement_statements` | AEMO settlement statement by run and period |
+| `gold.settlement_true_up` | Difference between consecutive settlement runs |
+| `gold.compliance_calendar` | Upcoming regulatory deadlines |
+| `gold.aer_enforcement` | AER enforcement register |
+| `gold.lgc_registry` | LGC issuance and surrender records |
+| `gold.emissions_factors` | NEM emissions factors by fuel type |
+| `gold.dnsp_outages` | Planned and unplanned network outages |

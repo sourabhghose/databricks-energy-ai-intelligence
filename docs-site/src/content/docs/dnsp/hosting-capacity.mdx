@@ -1,0 +1,140 @@
+---
+title: Hosting Capacity & DER
+description: LV hosting capacity, solar PV connection limits, battery hosting, curtailment risk, and DER export management for distribution networks.
+---
+
+## Overview
+
+Hosting capacity refers to the amount of Distributed Energy Resources (DER) — primarily rooftop solar, batteries, and EVs — that can connect to a section of the distribution network without requiring network augmentation. As DER penetration accelerates, DNSPs must actively manage hosting capacity to avoid voltage and thermal violations.
+
+## Hosting Capacity Model
+
+Energy Copilot calculates hosting capacity using a simplified hosting capacity analysis:
+
+```
+HC_zone = min(HC_thermal, HC_voltage, HC_protection)
+
+HC_thermal = (Thermal_limit_MVA - Peak_load_MVA) × power_factor
+HC_voltage = f(voltage_rise_limit, line_impedance, DER_power_factor)
+HC_protection = limit based on fault current increase
+```
+
+### Thermal Constraint
+
+Thermal hosting capacity is limited by the current-carrying capacity of the lowest-rated asset in the circuit:
+
+```python
+def thermal_hosting_capacity(
+    circuit_thermal_rating_mva: float,
+    peak_demand_mva: float,
+    diversity_factor: float = 0.85
+) -> float:
+    """
+    Available thermal headroom for DER export.
+    Diversity factor accounts for non-coincident peak export.
+    """
+    headroom = circuit_thermal_rating_mva - peak_demand_mva
+    return headroom / diversity_factor
+```
+
+### Voltage Constraint
+
+Solar PV export raises voltage. The voltage rise is proportional to the exported power and the network impedance:
+
+```
+ΔV = P × R + Q × X  (simplified)
+```
+
+When the voltage rise exceeds the 10% statutory limit (AS 61000-3-3), additional DER cannot connect without network augmentation or export limits being applied.
+
+## Dashboard Pages
+
+### Hosting Capacity Map (`/dnsp/hosting-capacity/map`)
+
+- Geographic heat map: available hosting capacity by distribution zone
+- Colour scale: green (>50% headroom), amber (20–50%), red (&lt;20%), black (at capacity)
+- Layer toggle: thermal constraint vs voltage constraint (shows binding constraint by zone)
+- Filter by voltage level: LV (415V), 11kV, 22kV, 33kV
+
+*Screenshot: Hosting capacity map showing a metropolitan area with colour-coded zones indicating available DER headroom.*
+
+### Curtailment Risk Analysis (`/dnsp/hosting-capacity/curtailment`)
+
+In zones at or near capacity, new DER connections may be subject to export limits or curtailment. The platform assesses:
+
+- Zones where export limits are currently applied
+- Percentage of time solar PV is likely to be curtailed (based on generation profiles)
+- Revenue impact on solar owners: estimated lost generation revenue from curtailment
+- Network augmentation cost to avoid curtailment: capex required to remove export limit
+
+### DER Connection Pipeline (`/dnsp/hosting-capacity/connections`)
+
+Tracking DER connection applications in the pipeline:
+
+- Application ID, address, technology, capacity (kW)
+- Current status: application → technical assessment → approved → connected
+- Aggregate impact: capacity waiting to connect by zone
+- Estimated time to connection
+
+## Battery Storage Hosting
+
+Grid-scale batteries require additional analysis beyond simple export capacity:
+
+- **Charge import capacity**: batteries charging can cause significant import spikes
+- **Rapid ramp capability**: fast-ramping BESS can cause protection coordination issues
+- **Harmonic injection**: inverter harmonics can affect power quality
+
+```bash
+# Battery hosting capacity assessment
+POST /api/dnsp/hosting/battery-assessment
+{
+  "zone_id": "BANKSTOWN_11KV_F04",
+  "battery_capacity_kwh": 500,
+  "battery_power_kw": 250,
+  "charge_profile": "overnight_solar_arbitrage"
+}
+
+# Response includes:
+# - thermal headroom for charge and discharge
+# - voltage impact assessment
+# - protection system compatibility flag
+# - recommended export limit (if any)
+```
+
+## DER Export Management
+
+For zones at capacity, Energy Copilot supports dynamic export management:
+
+- **Static export limits**: kW limit applied to all inverters in a zone
+- **Dynamic export control**: inverters reduce output when zone voltage reaches threshold
+- **Tariff incentives**: time-of-use signals that shift DER export to low-risk periods
+
+```bash
+# Set export limit for zone
+POST /api/dnsp/hosting/export-limit
+{
+  "zone_id": "MANLY_415V_F03",
+  "export_limit_kw": 3.0,
+  "effective_date": "2025-04-01",
+  "reason": "Thermal constraint binding during summer peak export"
+}
+```
+
+## API Endpoints
+
+```bash
+# Hosting capacity by zone
+GET /api/dnsp/hosting/capacity?dnsp=ausgrid&voltage=LV
+
+# Curtailment risk analysis
+GET /api/dnsp/hosting/curtailment-risk?dnsp=sa_power_networks&threshold=10
+
+# DER connection pipeline
+GET /api/dnsp/hosting/connections?dnsp=energex&status=pending
+
+# Zone utilisation history
+GET /api/dnsp/hosting/utilisation?zone_id=BONDI_JUNC_LV&period=90d
+
+# Hosting capacity trend (monthly)
+GET /api/dnsp/hosting/trend?dnsp=essential_energy&months=24
+```

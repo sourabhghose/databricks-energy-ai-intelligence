@@ -1,0 +1,283 @@
+---
+title: Market Data APIs
+description: Key market data endpoints — prices, generation, interconnectors, FCAS, weather, and market briefs with request/response examples.
+---
+
+## Spot Prices
+
+### GET /api/prices/latest
+
+Returns the most recent 5-minute dispatch prices for all or specified NEM regions.
+
+**Query Parameters**:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `region` | string | all | Filter: `NSW1`, `QLD1`, `SA1`, `TAS1`, `VIC1` |
+| `interval_type` | string | `dispatch` | `dispatch` (5-min) or `trading` (30-min) |
+
+**Example Request**:
+```bash
+GET /api/prices/latest?region=SA1
+```
+
+**Example Response**:
+```json
+{
+  "data": {
+    "timestamp": "2025-03-21T05:30:00Z",
+    "interval_type": "dispatch",
+    "regions": {
+      "SA1": {
+        "price": 215.40,
+        "demand_mw": 1580,
+        "net_interchange_mw": -245,
+        "is_price_capped": false
+      }
+    }
+  },
+  "meta": {
+    "timestamp": "2025-03-21T05:30:12Z",
+    "data_source": "lakebase",
+    "query_ms": 11.2
+  }
+}
+```
+
+### GET /api/prices/history
+
+Historical price time series with filtering.
+
+**Query Parameters**:
+
+| Parameter | Type | Required | Description |
+|-----------|------|---------|-------------|
+| `region` | string | No | NEM region (default: all) |
+| `start` | ISO 8601 date | No | Start date (default: 24h ago) |
+| `end` | ISO 8601 date | No | End date (default: now) |
+| `interval` | string | No | `5min` or `30min` (default: `30min`) |
+
+```bash
+GET /api/prices/history?region=SA1&start=2025-03-14&end=2025-03-21&interval=30min
+```
+
+## Generation
+
+### GET /api/generation/latest
+
+Current generation by fuel type.
+
+```bash
+GET /api/generation/latest?region=NSW1
+
+# Response
+{
+  "data": {
+    "timestamp": "2025-03-21T05:30:00Z",
+    "region_id": "NSW1",
+    "total_generation_mw": 8250,
+    "renewable_pct": 18.4,
+    "carbon_intensity_gco2_kwh": 710,
+    "fuel_mix": {
+      "black_coal": 4820,
+      "gas_ccgt": 820,
+      "gas_ocgt": 145,
+      "hydro": 320,
+      "wind": 890,
+      "solar_utility": 520,
+      "solar_rooftop": 680,
+      "battery": 55
+    }
+  }
+}
+```
+
+### GET /api/generation/history
+
+Historical generation time series by fuel type.
+
+```bash
+GET /api/generation/history?region=QLD1&fuel_type=wind&start=2025-03-14
+```
+
+### GET /api/generation/duid
+
+DUID-level generation data.
+
+```bash
+GET /api/generation/duid?region=SA1&fuel_type=battery
+
+# Returns array of DUID records:
+{
+  "data": [
+    {
+      "duid": "HPRL1",
+      "station_name": "Hornsdale Power Reserve",
+      "fuel_type": "battery",
+      "current_output_mw": 45.2,
+      "registered_capacity_mw": 150,
+      "utilisation_pct": 30.1
+    }
+  ]
+}
+```
+
+## Interconnectors
+
+### GET /api/interconnectors/latest
+
+Current interconnector flows.
+
+```bash
+GET /api/interconnectors/latest
+
+# Response
+{
+  "data": {
+    "timestamp": "2025-03-21T05:30:00Z",
+    "interconnectors": {
+      "QNI": {"mw_flow": 782, "export_limit": 1078, "utilisation_pct": 72.5},
+      "VIC1-NSW1": {"mw_flow": -320, "import_limit": 1350, "utilisation_pct": 23.7},
+      "V-SA": {"mw_flow": 245, "export_limit": 650, "utilisation_pct": 37.7},
+      "BASSLINK": {"mw_flow": -120, "import_limit": 594, "utilisation_pct": 20.2}
+    }
+  }
+}
+```
+
+## FCAS
+
+### GET /api/fcas/latest
+
+All 8 FCAS service prices.
+
+```bash
+GET /api/fcas/latest
+
+# Response
+{
+  "data": {
+    "timestamp": "2025-03-21T05:30:00Z",
+    "services": {
+      "RAISEREG":   {"price": 32.50, "enablement_mw": 890},
+      "LOWERREG":   {"price": 18.20, "enablement_mw": 890},
+      "RAISE1SEC":  {"price": 5.80,  "enablement_mw": 420},
+      "LOWER1SEC":  {"price": 2.10,  "enablement_mw": 350},
+      "RAISE6SEC":  {"price": 0.95,  "enablement_mw": 1240},
+      "LOWER6SEC":  {"price": 0.45,  "enablement_mw": 980},
+      "RAISE60SEC": {"price": 0.12,  "enablement_mw": 2100},
+      "LOWER60SEC": {"price": 0.08,  "enablement_mw": 1850}
+    }
+  }
+}
+```
+
+### GET /api/fcas/history
+
+FCAS price history for one or more services.
+
+```bash
+GET /api/fcas/history?service=RAISE6SEC,LOWER6SEC&start=2025-03-14
+```
+
+## Weather
+
+### GET /api/weather/latest
+
+Current weather for NEM regions.
+
+```bash
+GET /api/weather/latest?region=SA1
+
+# Response
+{
+  "data": {
+    "region_id": "SA1",
+    "observed_at": "2025-03-21T05:00:00Z",
+    "temperature_c": 28.4,
+    "humidity_pct": 62,
+    "wind_speed_ms": 8.2,
+    "solar_irradiance_wm2": 0
+  }
+}
+```
+
+### GET /api/weather/forecast
+
+72-hour NWP weather forecast.
+
+```bash
+GET /api/weather/forecast?region=NSW1&horizon=72h
+```
+
+## Market Briefs
+
+### GET /api/market-brief/latest
+
+Today's AI-generated daily market brief.
+
+```bash
+GET /api/market-brief/latest
+
+# Response
+{
+  "data": {
+    "brief_date": "2025-03-21",
+    "generated_at": "2025-03-21T05:32:14+10:00",
+    "brief_text": "## NEM Daily Market Brief — 21 March 2025\n\n...",
+    "word_count": 547,
+    "quality_score": 88
+  }
+}
+```
+
+### GET /api/market-brief/\{date\}
+
+Brief for a specific date.
+
+```bash
+GET /api/market-brief/2025-03-15
+```
+
+## Health
+
+### GET /health
+
+Application health check.
+
+```bash
+GET /health
+
+# Response
+{
+  "status": "ok",
+  "sql_connected": true,
+  "lakebase_connected": true,
+  "lakebase_fresh": true,
+  "version": "1.0.0"
+}
+```
+
+### GET /api/health/datasource
+
+Data source connectivity and statistics.
+
+```bash
+GET /api/health/datasource
+
+# Response
+{
+  "lakebase": {
+    "connected": true,
+    "latency_ms": 12,
+    "queries_served": 14283,
+    "last_error": null
+  },
+  "sql_warehouse": {
+    "connected": true,
+    "latency_ms": 420,
+    "queries_served": 1842,
+    "last_error": null
+  }
+}
+```

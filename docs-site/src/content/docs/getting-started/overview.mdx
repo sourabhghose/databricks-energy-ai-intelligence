@@ -1,0 +1,89 @@
+---
+title: Overview
+description: What is Energy Copilot, who it is for, and what problems it solves in the Australian NEM.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## What is Energy Copilot?
+
+Energy Copilot is a full-stack AI-powered market intelligence platform purpose-built for participants in the Australian National Electricity Market (NEM). It runs entirely on Databricks — from data ingestion and ML training through to the React frontend served as a Databricks App.
+
+The platform aggregates data from more than 15 public and regulated data sources (AEMO NEMWEB, BOM weather, AER CDR, OpenElectricity, STTM gas, CER LGC registry, and more), processes it through a medallion lakehouse architecture, and surfaces it through:
+
+- **564 dashboard pages** built with React 18, TypeScript, and Recharts
+- **51 AI tools** powering a conversational copilot (Claude Sonnet 4.5 via Databricks FMAPI)
+- **12 Genie AI/BI spaces** for natural language SQL queries
+- **5 ML models** tracked in MLflow for price forecasting, asset failure prediction, vegetation risk, workforce demand, and anomaly detection
+
+## The Problem It Solves
+
+### Fragmented NEM Data
+
+Australian electricity market data is spread across dozens of sources: AEMO publishes 5-minute dispatch data via NEMWEB, BOM provides weather forecasts via separate APIs, the AER publishes regulatory decisions in PDF documents, and CER manages the LGC registry in yet another system. Participants historically needed to build and maintain separate integrations for each source.
+
+Energy Copilot solves this by ingesting all sources through 30 scheduled pipeline jobs into a single Unity Catalog medallion lakehouse, making unified cross-source analysis available through a single interface.
+
+### Reactive, Not Predictive
+
+Traditional NEM dashboards show what happened. Energy Copilot adds predictive layers:
+- **Price forecasting**: XGBoost models produce 30-minute and 24-hour price forecasts for all 5 NEM regions
+- **Asset failure prediction**: ML classifiers identify distribution assets at elevated risk of failure before they fail
+- **Vegetation risk scoring**: ML models flag high-risk spans before bushfire season
+- **Demand forecasting**: Prophet + XGBoost models provide 18-month workforce demand forecasts for DNSP planning
+
+### Manual Analysis Bottlenecks
+
+Energy Copilot automates tasks that previously required specialist analysts:
+- **Daily NEM Market Brief**: Claude generates a structured daily market summary every morning at 05:30 AEST
+- **AIO Draft Generation**: Claude drafts Annual Information Obligation submissions from structured DNSP data
+- **DAPR Assembly**: Automated compliance report builder for Distribution Annual Planning Reports
+- **Settlement Reconciliation**: Automated true-up analysis against AEMO settlement statements
+
+## Key Capabilities
+
+### Front Office
+Real-time and historical NEM market data: spot prices, 5-minute dispatch, regional interconnectors, FCAS prices and enablement, generation by fuel type, rooftop solar, wind forecasts, battery dispatch, gas hub prices, and demand-weather correlation.
+
+### Middle Office
+Energy Trading and Risk Management (ETRM): deal capture for swaps, caps, floors, collars, PPAs, and spot; MtM portfolio valuation; VaR (Historical Simulation and Monte Carlo); forward curve construction from ASX energy futures; algorithmic trading signals; DUID bid stack analysis.
+
+### Back Office
+Settlement workflow management (PRELIM → FINAL → R1–R4); AER enforcement register monitoring; NER obligation compliance calendar; LGC registry tracking; Safeguard Mechanism reporting; outage management; DER and hosting capacity.
+
+### DNSP Intelligence
+Ten sub-groups covering the full regulatory and operational lifecycle of Distribution Network Service Providers: AER regulatory compliance, AIO/STPIS obligations, asset health intelligence, RAB roll-forward modelling, vegetation risk, hosting capacity, workforce analytics, AER benchmarking, and DAPR assembly.
+
+### AI & ML
+- Claude Sonnet 4.5 copilot with 51 domain-specific tools
+- 12 Genie AI/BI spaces for natural language SQL
+- XGBoost asset failure prediction (AUC 0.961)
+- XGBoost vegetation risk classifier (F1-macro 86.3%)
+- Prophet + XGBoost workforce demand forecasting (MAPE 4.2%)
+- Isolation Forest STPIS anomaly detection (93.4% detection rate)
+- LightGBM NEM price forecasting (5 regions, 6 horizons)
+
+## Target Users
+
+| Persona | Organisation Type | Primary Modules |
+|---------|------------------|-----------------|
+| NEM Trader | Retailer, Generator, C&I | Front Office, Middle Office |
+| Portfolio Analyst | Trading house, Retailer | Middle Office, Back Office |
+| DNSP Operator | AusNet, Ergon, Ausgrid, etc. | DNSP Intelligence |
+| Market Analyst | Consultant, Regulator | Front Office, AI Copilot, Genie |
+| Compliance Officer | Any NEM participant | Back Office, DNSP Compliance |
+| Data Scientist | Any organisation | Data Platform, AI & ML |
+
+## Competitive Advantage vs NemSight
+
+NemSight and similar tools are excellent read-only market dashboards. Energy Copilot goes further by combining:
+
+1. **Unified ETRM + market data** — deal capture and portfolio management alongside live market data in one platform
+2. **AI-native** — conversational copilot with 51 tools, not just a chart interface
+3. **DNSP-specific intelligence** — a full suite of regulatory compliance, asset management, and planning tools that NemSight doesn't address
+4. **Predictive ML** — forecasting and anomaly detection built in, not bolted on
+5. **Fully open and customisable** — built on Databricks, everything is accessible: Delta tables, MLflow experiments, Genie spaces, pipeline notebooks
+
+<Aside type="tip">
+  The app is live at [https://energy-copilot-7474645691011751.aws.databricksapps.com](https://energy-copilot-7474645691011751.aws.databricksapps.com). No login required for read-only market data views.
+</Aside>

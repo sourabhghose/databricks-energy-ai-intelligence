@@ -1,0 +1,197 @@
+---
+title: Genie AI/BI Spaces
+description: 12 Genie spaces for natural language SQL — how Genie works, sample questions, space IDs, and how to add new spaces.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+Databricks Genie AI/BI provides a natural language interface directly to Delta tables. Users type a question in plain English; Genie translates it to SQL, executes it against the Gold tables, and returns results as a table or chart — with the generated SQL visible for transparency.
+
+Energy Copilot configures 12 Genie spaces, each optimised for a specific domain with curated semantic metadata (table and column descriptions, glossary terms, and benchmark questions).
+
+## How Genie Works
+
+```
+User Question (natural language)
+        │
+        ▼
+Genie NL-to-SQL model
+        │  (Uses table/column metadata + glossary)
+        ▼
+Generated SQL
+        │
+        ▼ Execute
+Databricks SQL Warehouse
+        │
+        ▼
+Results (table + auto-chart)
+```
+
+Genie uses the Unity Catalog table and column COMMENT annotations as context for SQL generation. Columns with well-documented COMMENTs produce more accurate SQL. All 108+ Gold tables have column-level COMMENT annotations specifically to improve Genie accuracy.
+
+## The 12 Genie Spaces
+
+### 1. NEM Prices & Demand
+
+**Primary tables**: `gold.nem_prices_5min`, `gold.nem_prices_30min`, `gold.weather_nem_regions`
+
+Sample questions:
+- "What was the average spot price in SA1 last week?"
+- "Show me the top 10 highest price intervals in VIC1 this year"
+- "Compare demand-weighted average prices across all regions today"
+- "How many times did QLD1 prices exceed $500/MWh in the past 30 days?"
+- "What is the correlation between SA1 prices and temperature?"
+
+### 2. Generation & Fuel Mix
+
+**Primary tables**: `gold.nem_generation_by_fuel`
+
+Sample questions:
+- "What percentage of NEM generation came from renewables yesterday?"
+- "Show coal generation declining trend over the past 2 years"
+- "Which regions have the highest battery generation?"
+- "What was the peak wind output in SA1 this month?"
+
+### 3. Interconnectors & Constraints
+
+**Primary tables**: `gold.nem_interconnectors`
+
+Sample questions:
+- "When was Basslink last at full capacity?"
+- "Show interconnector flows between QLD1 and NSW1 for the past week"
+- "How often does V-SA reach its import limit during summer?"
+
+### 4. FCAS Markets
+
+**Primary tables**: `gold.nem_fcas_prices`
+
+Sample questions:
+- "What was the average RAISEREG price this month?"
+- "Show FCAS price spikes during the October 2024 contingency event"
+- "Compare Regulation Raise vs Regulation Lower prices over the past year"
+- "Which 5-minute intervals had the highest RAISE6SEC prices?"
+
+### 5. Settlement & Finance
+
+**Primary tables**: `gold.settlement_statements`, `gold.settlement_true_up`
+
+Sample questions:
+- "What was our net settlement position for March 2025?"
+- "Show the PRELIM to FINAL true-up for February 2025"
+- "List all settlement runs published for Q1 2025"
+
+### 6. DNSP Compliance
+
+**Primary tables**: `gold.dnsp_aio_metrics`, `gold.dnsp_stpis_metrics`
+
+Sample questions:
+- "Which feeders have the highest SAIDI contribution this year?"
+- "Show SAIDI trend for Ausgrid over the past 5 years"
+- "Which AIO obligations are overdue for Essential Energy?"
+
+### 7. Asset Intelligence
+
+**Primary tables**: `gold.dnsp_asset_register`
+
+Sample questions:
+- "List all transformers with health index below 40"
+- "How many Ausgrid assets are scheduled for replacement this year?"
+- "Show asset failure predictions by zone for SA Power Networks"
+
+### 8. Vegetation Risk
+
+**Primary tables**: `gold.dnsp_vegetation_risk`
+
+Sample questions:
+- "Which spans are in BMO zones with risk score above 0.7?"
+- "How many spans have not been inspected in over 18 months?"
+- "Show vegetation risk trend by zone for Ergon Energy"
+
+### 9. Workforce Analytics
+
+**Primary tables**: `gold.dnsp_workforce_metrics`
+
+Sample questions:
+- "What is the forecast HV linesperson demand for the next 6 months?"
+- "Which contractors have the best job completion rates?"
+- "Compare crew productivity by work type for Energex"
+
+### 10. Environmental & LGCs
+
+**Primary tables**: `gold.lgc_registry`, `gold.emissions_factors`
+
+Sample questions:
+- "What is our current LGC registry balance vs this year's obligation?"
+- "Show NEM emissions intensity trend over the past 3 years"
+- "Which regions have the lowest carbon intensity generation?"
+
+### 11. Forward Curves
+
+**Primary tables**: `gold.asx_futures_eod`, `gold.forward_curves`
+
+Sample questions:
+- "What are the current NSW1 calendar year futures prices?"
+- "Show Q3 2025 SA1 futures settlement price history"
+- "Compare VIC1 and NSW1 forward curves for the next 12 months"
+
+### 12. Gas Markets
+
+**Primary tables**: `gold.gas_hub_prices`
+
+Sample questions:
+- "What was the average Sydney STTM commodity price last month?"
+- "Compare Adelaide vs Brisbane STTM prices over the past 6 months"
+- "When was the highest STTM price recorded at Wallumbilla?"
+
+## Space Configuration
+
+Each Genie space is configured with:
+
+```python
+# From setup/04_create_genie_spaces.py
+space_config = {
+    "displayName": "NEM Prices & Demand",
+    "description": "Query NEM spot prices, demand, and weather data for all 5 regions",
+    "tables": [
+        {
+            "catalog": "energy_copilot",
+            "schema": "gold",
+            "table": "nem_prices_5min",
+            "description": "5-minute NEM dispatch prices for all regions. ...",
+            "columns": [...]
+        }
+    ],
+    "sampleQuestions": [
+        "What was the average spot price in SA1 last week?",
+        ...
+    ],
+    "glossary": {
+        "RRP": "Regional Reference Price — the wholesale spot price for a NEM region",
+        "SAIDI": "System Average Interruption Duration Index",
+        ...
+    }
+}
+```
+
+## Adding New Genie Spaces
+
+To add a new Genie space:
+
+1. Identify the Gold tables to include
+2. Ensure all table and column COMMENTs are comprehensive
+3. Prepare 15 sample benchmark questions
+4. Prepare a domain glossary (10+ terms)
+5. Add the space configuration to `setup/04_create_genie_spaces.py`
+6. Run the setup script:
+
+```bash
+databricks jobs run-now --job-id <SETUP_JOB_ID> \
+  --python-params '["create_genie_only"]' \
+  --profile=my-profile
+```
+
+<Aside type="note">
+  Genie space creation uses the Databricks SDK. If the SDK method is not yet GA in your workspace version, the script falls back to the REST API: `POST /api/2.0/genie/spaces`. Genie space permissions require specifying the `applicationId` UUID of the App service principal (not the numeric SP ID) — see `feedback_genie_permissions.md` in the memory files.
+</Aside>

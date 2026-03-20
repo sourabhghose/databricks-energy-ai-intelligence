@@ -1,0 +1,114 @@
+---
+title: Gas Market
+description: STTM hub prices, East Coast gas supply, pipeline flows, and gas-electricity price nexus analytics.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+Natural gas plays a dual role in the Australian energy market: it is both a fuel for gas-fired electricity generation (peakers and base load CCGTs) and a commodity traded in its own right through the Short Term Trading Market (STTM). Energy Copilot tracks the gas-electricity nexus to help traders and analysts understand cross-commodity price drivers.
+
+## Short Term Trading Market (STTM)
+
+The STTM is AEMO's gas trading platform for three East Coast hubs:
+
+| Hub | Location | Daily Volume | Key Pipelines |
+|-----|---------|-------------|--------------|
+| **Sydney Hub** | Horsley Park (NSW) | ~700 TJ/day | MAPS, SEA Gas, CityGate |
+| **Adelaide Hub** | Pelican Point (SA) | ~200 TJ/day | SEA Gas, Moomba to Adelaide |
+| **Brisbane Hub** | Wallumbilla (QLD) | ~1,500 TJ/day | Qld Gas Pipeline, SWQP |
+
+<Aside type="note">
+  The Wallumbilla Gas Supply Hub also operates alongside the STTM in Queensland. Wallumbilla is a wholesale market for gas from the Cooper Basin and Bowen Basin fields.
+</Aside>
+
+## Dashboard Pages
+
+### STTM Hub Prices (`/front-office/gas-prices`)
+
+- Daily STTM commodity prices for Sydney, Adelaide, and Brisbane hubs ($/GJ)
+- Price chart with configurable time range (7d, 30d, 90d, 1y)
+- Hub-to-hub price spreads — arbitrage opportunities between hubs
+- LNG export netback price comparison (JKM / TTF adjusted)
+
+### Pipeline Flows (`/front-office/gas-pipelines`)
+
+- East Coast pipeline network diagram with flow direction and volume
+- Major pipelines tracked:
+  - Moomba to Adelaide Pipeline (MAP): Cooper Basin → SA
+  - South East Australia Gas Pipeline (SEA Gas): VIC → SA
+  - Queensland Gas Pipeline (QGP): Roma → Brisbane/Gladstone
+  - Eastern Gas Pipeline (EGP): Longford → Sydney
+  - Tasmanian Gas Pipeline (TGP): VIC → TAS
+
+### Gas-Electricity Nexus (`/front-office/gas-electricity`)
+
+- Scatter plot: STTM gas price vs NEM spot price for gas-heavy regions (SA1, QLD1)
+- Heat rate calculator: implied gas price given current spot price and CCGT heat rate
+- Gas peaker dispatch cost curve: at what STTM price do OCGT units become economic?
+- Marginal cost of gas generation: `(Gas_price_$/GJ × Heat_rate_GJ/MWh) + Variable_O&M`
+
+## Gas-Electricity Price Driver Analysis
+
+Gas is often the marginal fuel in SA1 and QLD1, so the gas-electricity price relationship is tight:
+
+```python
+# Implied marginal cost of OCGT generation
+def ocgt_marginal_cost(gas_price_gj: float, heat_rate_gj_mwh: float = 10.5) -> float:
+    """
+    Typical OCGT heat rate: 9.5–11.5 GJ/MWh
+    Variable O&M: ~$3–5/MWh
+    Carbon cost: emissions_factor × carbon_price
+    """
+    fuel_cost = gas_price_gj * heat_rate_gj_mwh
+    variable_om = 4.0
+    return fuel_cost + variable_om
+```
+
+At a STTM gas price of $10/GJ, the marginal OCGT cost is approximately $109/MWh — this sets a soft ceiling on NEM spot prices in regions where OCGTs are the marginal generator.
+
+## LNG Export Impact
+
+Australia is one of the world's largest LNG exporters, with Queensland's Curtis Island LNG trains (APLNG, QCLNG, GLNG) consuming significant gas that would otherwise be available for domestic use. Energy Copilot tracks:
+
+- JKM (Japan Korea Marker) LNG price in $/GJ terms
+- LNG export terminal utilisation (quarterly AEMO data)
+- Domestic gas reservation policy status
+
+## API Endpoints
+
+```bash
+# Current STTM prices
+GET /api/gas/prices/latest
+
+# STTM price history
+GET /api/gas/prices/history?hub=sydney&start=2025-03-01&end=2025-03-21
+
+# Gas-electricity price correlation
+GET /api/gas/nexus?region=SA1&period=30d
+
+# Implied heat rate from current prices
+GET /api/gas/heat-rate?region=SA1
+```
+
+## Gold Table Schema
+
+```sql
+-- gold.gas_hub_prices
+SELECT
+    settlement_date,        -- DATE: STTM trading day
+    hub_name,               -- STRING: sydney, adelaide, brisbane
+    commodity_price_gj,     -- DOUBLE: $/GJ commodity component
+    uplift_price_gj,        -- DOUBLE: $/GJ uplift (system costs)
+    total_price_gj,         -- DOUBLE: $/GJ total (commodity + uplift)
+    allocated_quantity_tj,  -- DOUBLE: total volume allocated (TJ/day)
+    ingest_timestamp        -- TIMESTAMP: when loaded
+FROM energy_copilot.gold.gas_hub_prices
+WHERE settlement_date >= CURRENT_DATE() - INTERVAL '30 DAY'
+ORDER BY settlement_date DESC, hub_name;
+```
+
+<Aside type="tip">
+  The AI copilot can explain the gas-electricity nexus: "Why is SA1 spot price elevated today? Is it driven by gas prices?" The copilot will compare current STTM prices to historical context and OCGT dispatch cost thresholds.
+</Aside>

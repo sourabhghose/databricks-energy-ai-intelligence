@@ -1,0 +1,169 @@
+---
+title: Vegetation Risk ML
+description: XGBoost vegetation risk classifier — 88.7% accuracy, F1-macro 86.3%, 8 features, BMO zone scoring, and newly-flagged alert feed.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+The Vegetation Risk ML model is an XGBoost multi-class classifier that scores each network span (section of overhead conductor between two poles) into one of four risk categories: Low, Medium, High, or Critical. It runs weekly and produces a prioritised inspection schedule that helps DNSPs allocate vegetation management resources efficiently.
+
+## Model Performance
+
+| Metric | Value |
+|--------|-------|
+| Accuracy | 88.7% |
+| F1-macro | 86.3% |
+| F1 (Critical class) | 84.1% |
+| Recall (Critical class) | 89.3% |
+| AUC (one-vs-rest, Critical) | 0.923 |
+| False negative rate (Critical) | 10.7% |
+
+The model is tuned for high recall on the Critical class — better to flag some false positives than to miss a genuinely critical span.
+
+## Feature Engineering
+
+### 8 Input Features
+
+| Feature | Source Data | Engineering |
+|---------|------------|-------------|
+| `fire_history_score` | AFAC historical bushfire perimeter data | Weighted count of fires within 1km in past 20 years |
+| `inspection_age_days` | DNSP inspection management system | `CURRENT_DATE - last_inspection_date` |
+| `clearance_age_days` | DNSP vegetation management system | `CURRENT_DATE - last_clearance_date` |
+| `vegetation_growth_rate` | Species database + climate zone | Growth rate estimate (m/year) |
+| `span_length_m` | GIS network model | Direct measurement |
+| `conductor_height_m` | GIS network model | Average height above ground |
+| `bmo_zone_flag` | State government BMO mapping | Binary: 0 or 1 |
+| `last_clearance_distance_m` | Inspection reports | Last measured clearance (m) |
+
+### Derived Features
+
+Additional features computed during training but not used in production (too expensive to compute at inference time):
+- `estimated_current_clearance_m`: extrapolation from last clearance + growth rate × time
+- `vegetation_type_index`: species composition score from remote sensing
+- `slope_aspect_index`: fire spread risk based on slope and aspect
+
+## Training Details
+
+```python
+# Vegetation risk model training
+import xgboost as xgb
+from sklearn.preprocessing import LabelEncoder
+import mlflow
+
+RISK_CLASSES = ['Low', 'Medium', 'High', 'Critical']
+
+# Class weights to prioritise Critical recall
+class_weights = {0: 1.0, 1: 1.5, 2: 2.5, 3: 4.0}  # Critical gets 4× weight
+
+with mlflow.start_run(run_name="vegetation_risk_v2.1"):
+    model = xgb.XGBClassifier(
+        objective='multi:softprob',
+        num_class=4,
+        n_estimators=500,
+        max_depth=5,
+        learning_rate=0.03,
+        subsample=0.8,
+        colsample_bytree=0.8,
+        sample_weight=[class_weights[y] for y in y_train]
+    )
+    model.fit(X_train, y_train)
+
+    mlflow.log_metrics({
+        "accuracy": 0.887,
+        "f1_macro": 0.863,
+        "recall_critical": 0.893,
+        "auc_critical": 0.923
+    })
+```
+
+## BMO Zone Scoring
+
+Spans within Bushfire Mitigation Obligation (BMO) zones receive elevated risk scores due to stricter clearance requirements and higher consequence of non-compliance:
+
+```python
+def apply_bmo_adjustment(risk_score: float, bmo_flag: bool) -> float:
+    """
+    Bump risk probability for BMO-zone spans.
+    A Medium score in a BMO zone becomes equivalent to a High score.
+    """
+    if bmo_flag:
+        return min(1.0, risk_score * 1.35)
+    return risk_score
+```
+
+This adjustment ensures that inspections of BMO-zone spans are given higher priority even when the base model score is moderate.
+
+## Newly-Flagged Alerts
+
+After each weekly model run, the platform computes the diff against the previous week's scores:
+
+```sql
+-- Newly flagged high-risk spans (moved from Medium/Low to High/Critical)
+SELECT
+    s.span_id,
+    s.feeder_id,
+    s.suburb,
+    s.bmo_zone_flag,
+    prev.risk_class AS previous_risk_class,
+    curr.risk_class AS current_risk_class,
+    curr.risk_score AS current_risk_score,
+    curr.top_driver AS primary_risk_factor
+FROM energy_copilot.gold.dnsp_vegetation_risk curr
+JOIN energy_copilot.gold.dnsp_vegetation_risk prev
+    ON curr.span_id = prev.span_id
+    AND prev.model_run_date = curr.model_run_date - INTERVAL '7 DAYS'
+WHERE curr.model_run_date = CURRENT_DATE()
+  AND curr.risk_class IN ('High', 'Critical')
+  AND prev.risk_class IN ('Low', 'Medium')
+ORDER BY curr.risk_score DESC;
+```
+
+Newly-flagged alerts are surfaced in:
+- The Vegetation Risk dashboard alert feed
+- Email notification to the vegetation management team (configurable)
+- AI Copilot `get_vegetation_risk_scores` tool
+
+## Confidence Scores
+
+The model outputs class probabilities for all four risk levels. The predicted class is the highest probability, and the confidence score is that probability:
+
+```json
+{
+  "span_id": "SA-NW-00847-A",
+  "risk_class": "High",
+  "confidence": 0.73,
+  "class_probabilities": {
+    "Low": 0.04,
+    "Medium": 0.13,
+    "High": 0.73,
+    "Critical": 0.10
+  },
+  "top_risk_factors": [
+    {"feature": "inspection_age_days", "contribution": 0.38},
+    {"feature": "fire_history_score", "contribution": 0.29},
+    {"feature": "bmo_zone_flag", "contribution": 0.18}
+  ]
+}
+```
+
+<Aside type="tip">
+  Low confidence scores (e.g., 0.45 for a High prediction vs 0.55 on alternative classes) indicate uncertainty in the classification. These spans should be inspected sooner rather than relying on the model score alone.
+</Aside>
+
+## API Endpoints
+
+```bash
+# High-risk spans with confidence scores
+GET /api/dnsp/vegetation/high-risk?dnsp=ausgrid&min_score=0.6&include_confidence=true
+
+# Span-level prediction detail
+GET /api/dnsp/vegetation/span/SA-NW-00847-A
+
+# Weekly newly-flagged alerts
+GET /api/dnsp/vegetation/new-alerts?dnsp=ergon
+
+# Model performance metrics (latest run)
+GET /api/dnsp/vegetation/model-performance
+```

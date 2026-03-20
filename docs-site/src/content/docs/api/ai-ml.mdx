@@ -1,0 +1,221 @@
+---
+title: AI & ML APIs
+description: ML model endpoints, AI generation APIs, request/response schemas, and error handling.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## AI Copilot (SSE Streaming)
+
+### POST /api/chat
+
+The copilot endpoint streams responses via Server-Sent Events.
+
+**Request**:
+```bash
+POST /api/chat
+Content-Type: application/json
+
+{
+  "messages": [
+    {"role": "user", "content": "What are the current FCAS prices?"}
+  ],
+  "session_id": "sess_abc123"  // Optional: for conversation continuity
+}
+```
+
+**SSE Response Stream**:
+```
+data: {"type": "tool_call", "tool": "get_fcas_prices", "input": {}}
+
+data: {"type": "tool_result", "tool": "get_fcas_prices", "result": {"RAISEREG": 32.5, ...}}
+
+data: {"type": "text", "delta": "The current FCAS prices are:"}
+
+data: {"type": "text", "delta": " Regulation Raise is at $32.50/MW/h"}
+
+data: {"type": "done", "usage": {"input_tokens": 342, "output_tokens": 187}}
+```
+
+**React Frontend Example**:
+```typescript
+const response = await fetch('/api/chat', {
+  method: 'POST',
+  headers: {'Content-Type': 'application/json'},
+  body: JSON.stringify({ messages })
+});
+
+const reader = response.body!.getReader();
+const decoder = new TextDecoder();
+
+while (true) {
+  const { done, value } = await reader.read();
+  if (done) break;
+
+  const lines = decoder.decode(value).split('\n');
+  for (const line of lines) {
+    if (line.startsWith('data: ')) {
+      const event = JSON.parse(line.slice(6));
+      if (event.type === 'text') setPartialResponse(prev => prev + event.delta);
+      if (event.type === 'tool_call') setToolCalls(prev => [...prev, event.tool]);
+    }
+  }
+}
+```
+
+<Aside type="note">
+  If `ANTHROPIC_API_KEY` is not configured (using Databricks FMAPI routing instead), the endpoint will still work. FMAPI routing is the default. Only set `ANTHROPIC_API_KEY` if you want to route directly to Anthropic's API rather than through Databricks.
+</Aside>
+
+## Price Forecasts
+
+### GET /api/forecasts/prices
+
+ML price forecast for a NEM region.
+
+```bash
+GET /api/forecasts/prices?region=SA1&horizon=4h&include_interval=true
+
+# Response
+{
+  "data": {
+    "region_id": "SA1",
+    "horizon": "4h",
+    "generated_at": "2025-03-21T05:30:00Z",
+    "forecast_intervals": [
+      {
+        "datetime": "2025-03-21T05:30:00Z",
+        "forecast_price": 215.4,
+        "p10_price": 145.2,
+        "p90_price": 412.8,
+        "spike_probability_300": 0.18
+      },
+      {
+        "datetime": "2025-03-21T06:00:00Z",
+        "forecast_price": 189.2,
+        ...
+      }
+    ]
+  }
+}
+```
+
+### GET /api/forecasts/demand
+
+ML demand forecast.
+
+```bash
+GET /api/forecasts/demand?region=NSW1&horizon=24h
+
+# Returns hourly demand forecast with P10/P50/P90 intervals
+```
+
+### GET /api/forecasts/spike-probability
+
+Probability of price exceeding a threshold in the next N hours.
+
+```bash
+GET /api/forecasts/spike-probability?region=SA1&threshold=300&horizon=4h
+
+# Response
+{
+  "region": "SA1",
+  "threshold_aud_mwh": 300,
+  "horizon": "4h",
+  "spike_probability": 0.23,
+  "confidence_level": "medium",
+  "supporting_factors": [
+    "Wind ramp event detected in forecast",
+    "Temperature forecast 38°C (high AC load)"
+  ]
+}
+```
+
+## ML Model Endpoints
+
+### GET /api/ml/asset-failure/predict
+
+Real-time asset failure prediction for a single asset.
+
+```bash
+POST /api/ml/asset-failure/predict
+Content-Type: application/json
+
+{
+  "features": {
+    "age_years": 45,
+    "health_index": 28,
+    "fault_count_5yr": 3,
+    "peak_load_ratio": 0.87,
+    "days_since_maintenance": 820,
+    "insulation_condition_score": 31,
+    "weather_exposure_index": 0.72
+  }
+}
+
+# Response
+{
+  "failure_probability_12m": 0.834,
+  "risk_class": "Critical",
+  "confidence": 0.89,
+  "top_risk_factors": [
+    {"feature": "health_index", "shap_value": 0.42, "direction": "increases_risk"},
+    {"feature": "days_since_maintenance", "shap_value": 0.28, "direction": "increases_risk"}
+  ]
+}
+```
+
+### GET /api/ml/vegetation/predict
+
+Vegetation risk classification for a network span.
+
+```bash
+POST /api/ml/vegetation/predict
+Content-Type: application/json
+
+{
+  "features": {
+    "fire_history_score": 0.85,
+    "inspection_age_days": 420,
+    "clearance_age_days": 385,
+    "vegetation_growth_rate": 1.2,
+    "span_length_m": 85,
+    "conductor_height_m": 9.5,
+    "bmo_zone_flag": true,
+    "last_clearance_distance_m": 1.8
+  }
+}
+
+# Response
+{
+  "risk_class": "High",
+  "risk_score": 0.74,
+  "confidence": 0.73,
+  "class_probabilities": {"Low": 0.04, "Medium": 0.13, "High": 0.73, "Critical": 0.10}
+}
+```
+
+## Error Handling
+
+ML endpoints can return these specific errors:
+
+| Status | Error Code | Description |
+|--------|-----------|-------------|
+| `503` | `MODEL_UNAVAILABLE` | Model Serving endpoint not running |
+| `422` | `INVALID_FEATURES` | Feature values out of expected range |
+| `504` | `MODEL_TIMEOUT` | Inference took longer than 30 seconds |
+| `500` | `PREDICTION_ERROR` | Unexpected error in model inference |
+
+Error response format:
+
+```json
+{
+  "error": "MODEL_UNAVAILABLE",
+  "detail": "The asset-failure-predictor endpoint is currently stopped. Restart via Databricks Model Serving UI.",
+  "fallback": "Cached predictions from last run (2025-03-20) are available at /api/dnsp/assets/failure-prediction"
+}
+```
+
+<Aside type="tip">
+  If Model Serving endpoints are stopped (to save cost), the `/api/dnsp/assets/failure-prediction` endpoint falls back to the last batch-scored predictions stored in `gold.dnsp_asset_register`. These are updated monthly by the scheduled batch scoring job even when the serving endpoint is stopped.
+</Aside>

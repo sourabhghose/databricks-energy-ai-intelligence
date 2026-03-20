@@ -1,0 +1,143 @@
+---
+title: Renewables
+description: Solar (rooftop and utility), wind, hydro, and AEMO ISP 2024 renewable project pipeline analytics.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+Australia leads the world in per-capita rooftop solar installation and is rapidly expanding utility-scale renewable capacity. The Renewables section of Energy Copilot provides detailed analytics across rooftop solar, utility solar, wind farms, hydro, and the forward-looking project pipeline from AEMO's Integrated System Plan (ISP) 2024.
+
+## Rooftop Solar
+
+Rooftop solar is the largest single distributed energy resource in the NEM, with more than 4 million installations totalling over 25 GW of capacity. AEMO estimates aggregate output from the Australian Photovoltaic Institute (APVI) data.
+
+### Key Metrics
+
+- **Current aggregate output**: NEM-wide rooftop solar generation (MW), updated every 30 minutes
+- **State-level breakdown**: NSW, QLD, SA, VIC, TAS output estimates
+- **Capacity factor**: current output vs installed capacity by state
+- **Diurnal profile**: typical daily generation curve for current season
+
+### Data Source
+
+Pipeline `04_solar_ingest.py` fetches APVI rooftop solar data and maps ACT output to NSW1:
+
+```python
+# ACT → NSW1 region mapping in silver transform
+df = df.withColumn(
+    "region_id",
+    when(col("state") == "ACT", "NSW1").otherwise(col("region_id"))
+)
+```
+
+## Utility-Scale Solar
+
+Large-scale solar farms (LSS) are registered as individual DUIDs and dispatched through AEMO's central dispatch mechanism.
+
+### Dashboard Features (`/front-office/solar-utility`)
+
+- **Top 20 solar farms** by nameplate capacity
+- **Current output vs forecast**: actual vs BOM NWP forecast
+- **Cloud shadow events**: periods where output drops >20% in &lt;30 minutes
+- **Curtailment tracking**: when solar farms are dispatched below their physical output capability due to network constraints
+
+Key large-scale solar facilities:
+- Darlington Point Solar Farm (VIC, 275 MW)
+- Western Downs Green Power Hub (QLD, 460 MW)
+- Bungala Solar Farm (SA, 220 MW)
+- Limondale Sun Farm (NSW, 249 MW)
+
+## Wind Generation
+
+Australia has over 50 operating wind farms contributing ~10–20% of NEM demand. Energy Copilot tracks both individual farm output and aggregate wind generation.
+
+### Dashboard Features (`/front-office/wind`)
+
+- **NEM-wide wind output**: current and historical (MW and %)
+- **Regional wind**: QLD, NSW, SA, VIC aggregate wind curves
+- **Wind ramp events**: rapid changes in wind output (>200 MW in 30 minutes)
+- **Forecast vs actual**: AEMO's wind forecast vs real SCADA data
+
+Major wind regions:
+- **SA**: Hornsdale (315 MW), Snowtown (270 MW), Canunda (46 MW)
+- **VIC**: Macarthur (420 MW), Ararat (240 MW), Waubra (192 MW)
+- **NSW**: Sapphire (270 MW), Bodangora (113 MW)
+- **QLD**: MacIntyre (923 MW — one of Australia's largest)
+
+### Wind Ramp Events
+
+Wind ramp events are a key driver of price spikes in SA and VIC. The platform flags ramp events when:
+- Wind output changes by >200 MW in any 30-minute window
+- Change in any single 5-minute interval exceeds 100 MW
+
+## Hydro Generation
+
+Tasmania is Australia's hydro heartland, with approximately 2,400 MW of hydro capacity. Snowy Hydro (NSW/VIC) provides pumped storage and peaking capacity.
+
+### Key Hydro Assets
+
+| Asset | State | Capacity | Type |
+|-------|-------|---------|------|
+| Snowy 2.0 (under construction) | NSW/VIC | 2,000 MW | Pumped Storage |
+| Gordon-Pedder Complex | TAS | 432 MW | Run of river + storage |
+| Basslink-dependent TAS hydro | TAS | ~2,400 MW total | Multiple stations |
+| Tumut 3 | NSW | 1,500 MW | Pumped Storage |
+| Wivenhoe | QLD | 570 MW | Pumped Storage |
+
+## AEMO ISP 2024 Project Pipeline
+
+The Integrated System Plan 2024 maps Australia's path to a high-renewable NEM. Energy Copilot displays the ISP project pipeline with:
+
+- **Project list**: 200+ new generation, storage, and transmission projects
+- **Timeline view**: committed, anticipated, and contingent projects by year
+- **Renewable Energy Zones (REZ)**: 10 zones with hosting capacity and connection costs
+- **Capacity by technology**: solar, wind, storage, hydrogen by year
+
+```sql
+-- Query ISP projects by REZ and technology
+SELECT
+    rez_id,
+    rez_name,
+    technology_type,
+    project_name,
+    capacity_mw,
+    expected_commissioning_year,
+    project_status
+FROM energy_copilot.gold.isp_projects
+WHERE project_status IN ('Committed', 'Anticipated')
+ORDER BY expected_commissioning_year, capacity_mw DESC;
+```
+
+## Renewable Penetration Tracking
+
+The platform calculates renewable penetration on a real-time basis:
+
+```
+Renewable Penetration % = (Wind + Solar_Utility + Solar_Rooftop + Hydro) / Operational_Demand * 100
+```
+
+SA regularly exceeds 100% renewable penetration, meaning renewables are exporting via interconnectors while still serving local demand.
+
+*Screenshot: SA1 renewable penetration chart showing moments of 100%+ penetration and corresponding negative price events.*
+
+<Aside type="tip">
+  The AI copilot can provide context on renewable penetration: "When was the last time SA1 hit 100% renewable penetration and what did prices do?" The `explain_price_event` tool cross-references generation and price data to produce a coherent narrative.
+</Aside>
+
+## API Endpoints
+
+```bash
+# Rooftop solar by state
+GET /api/generation/solar-rooftop?state=SA&interval=30min
+
+# Wind generation by region
+GET /api/generation/wind?region=SA1&start=2025-03-14
+
+# ISP project list
+GET /api/isp/projects?technology=wind&status=committed
+
+# REZ hosting capacity
+GET /api/isp/rez?rez_id=REZ_N1
+```

@@ -1,0 +1,131 @@
+---
+title: Forward Curves
+description: ASX Energy Futures-derived forward curves for all 5 NEM regions, curve construction methodology, and seasonal shapes.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+Forward electricity prices are essential for MtM valuation, deal pricing, and hedging strategy. Energy Copilot builds forward price curves from ASX Energy Futures daily settlement prices, supplemented with seasonal shape calibration for interpolating between quoted tenors.
+
+## ASX Energy Futures
+
+ASX operates electricity futures markets for the NEM's five regions. The primary instruments are:
+
+| Product | Tenor | Frequency | Settlement |
+|---------|-------|-----------|-----------|
+| **Base Load Futures** | Quarterly | Q1–Q8 (2 years forward) | Arithmetic average of all 30-min intervals |
+| **Peak Period Futures** | Quarterly | Q1–Q8 | 7am–10pm Mon–Fri intervals |
+| **Cap Futures** ($300 cap) | Quarterly | Q1–Q4 | Payoff when 30-min price > $300/MWh |
+| **Strip Futures** | Annual | Cal+1, Cal+2 | Annual average spot |
+
+Data is sourced from ASX's Market Data API (end-of-day) and stored in `gold.asx_futures_eod`.
+
+## Curve Construction
+
+The forward curve is constructed through a bootstrapping process:
+
+### Step 1 — Load ASX EOD Data
+
+```python
+# Fetch latest ASX futures settlement prices
+futures = spark.sql("""
+    SELECT
+        settlement_date,
+        product_code,
+        region_id,
+        tenor_start,
+        tenor_end,
+        settlement_price
+    FROM energy_copilot.gold.asx_futures_eod
+    WHERE settlement_date = CURRENT_DATE()
+    ORDER BY region_id, tenor_start
+""")
+```
+
+### Step 2 — Fill Quarterly Gaps
+
+ASX only quotes specific tenors. A cubic spline interpolates between quarterly anchors to produce a daily forward curve:
+
+```python
+from scipy.interpolate import CubicSpline
+import numpy as np
+
+def build_forward_curve(anchor_dates, anchor_prices):
+    """
+    Build a daily forward curve via cubic spline interpolation.
+    Anchor points: ASX quarterly settlement prices.
+    """
+    x = np.array([(d - anchor_dates[0]).days for d in anchor_dates])
+    cs = CubicSpline(x, anchor_prices, bc_type='natural')
+    daily_x = np.arange(0, x[-1] + 1)
+    return cs(daily_x)
+```
+
+### Step 3 — Apply Seasonal Shape
+
+Quarterly ASX prices are flat within the quarter. To reflect intra-quarter seasonality (summer peaks, winter heating, spring shoulder), a seasonal shape calibrated from historical 30-minute spot prices is applied:
+
+```
+Daily_Forward = Quarterly_ASX_Price × Shape_Factor(day_of_year, region)
+```
+
+Seasonal shape factors are stored in `gold.seasonal_shapes` and updated quarterly from the prior 3 years of spot data.
+
+### Step 4 — Peak / Off-Peak Decomposition
+
+For products that distinguish peak and off-peak, the curve decomposes:
+
+```
+Off_Peak_Price = (24h_average × 24 - Peak_Price × 15) / 9
+```
+
+Where 15 hours per day are defined as peak (7am–10pm on business days).
+
+## Dashboard Pages
+
+### Forward Curve Viewer (`/middle-office/forward-curves`)
+
+- Interactive chart: base load forward curve for selected region (0–24 months)
+- Toggle: base load vs peak vs off-peak
+- Comparison overlay: today vs 1 month ago, 3 months ago
+- Confidence band: implied volatility bands around the forward curve
+
+*Screenshot: Forward curve chart for NSW1 showing 24-month curve with seasonal shape and ±1σ band.*
+
+### ASX Futures Table (`/middle-office/asx-futures`)
+
+- Raw ASX EOD settlement prices by quarter and product
+- Open interest and daily volume where available
+- Change from prior day settlement
+
+## Regional Curve Characteristics
+
+| Region | Summer Premium | Winter Premium | Volatility Skew |
+|--------|---------------|---------------|----------------|
+| NSW1 | Moderate (AC load) | Low | Symmetric |
+| QLD1 | High (AC + solar) | Low | Right-skewed (rare spikes) |
+| SA1 | High (renewable gap risk) | Low | Strong right skew |
+| TAS1 | Low | Moderate (hydro) | Left-skewed (hydro glut) |
+| VIC1 | Moderate | Low | Moderate right skew |
+
+## API Endpoints
+
+```bash
+# Current forward curve for region
+GET /api/forward-curves/latest?region=SA1&tenor=24months
+
+# ASX futures EOD prices
+GET /api/forward-curves/asx-futures?region=NSW1&product=base
+
+# Historical curve comparison
+GET /api/forward-curves/history?region=VIC1&date=2025-02-21
+
+# Seasonal shape factors
+GET /api/forward-curves/seasonal-shapes?region=QLD1
+```
+
+<Aside type="note">
+  Forward curve data is stored in `gold.forward_curves` and refreshed daily after ASX EOD prices are published (typically after 18:00 AEST). The Lakebase-synced version of `gold.asx_futures_eod` ensures MtM calculations always use the latest settled prices.
+</Aside>

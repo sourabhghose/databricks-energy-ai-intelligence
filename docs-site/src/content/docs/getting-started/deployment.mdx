@@ -1,0 +1,335 @@
+---
+title: Deployment Guide
+description: Complete guide to deploying Energy Copilot on a Databricks workspace using Databricks Asset Bundles.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+## Overview
+
+Energy Copilot is deployed using **Databricks Asset Bundles (DAB)**, which manages all resources declaratively via YAML. The deployment creates jobs, pipelines, MLflow experiments, and the Databricks App in a single command.
+
+The confirmed working deployment workflow is:
+
+1. Build the React frontend with Vite
+2. Import the built files to the Databricks workspace
+3. Deploy the app with `databricks apps deploy`
+
+## Prerequisites
+
+### Databricks Workspace Requirements
+
+| Requirement | Notes |
+|-------------|-------|
+| Databricks Workspace | Serverless-enabled (AWS, Azure, or GCP) |
+| Unity Catalog | Enabled on the metastore |
+| SQL Warehouse | At least one warehouse (Serverless Starter is sufficient) |
+| Databricks Apps | Enabled on the workspace |
+| Lakebase | Provisioned (optional — falls back to SQL Warehouse if absent) |
+
+### Local Tools
+
+| Tool | Install Command | Required Version |
+|------|----------------|-----------------|
+| Databricks CLI | `brew tap databricks/tap && brew install databricks` | v0.209.0+ |
+| Node.js + npm | `brew install node` | v18+ |
+| Python | `brew install python@3.11` | 3.10+ |
+
+Verify your CLI version:
+
+```bash
+databricks version
+# Databricks CLI v0.209.0
+```
+
+## Environment Variables
+
+The backend reads these environment variables at runtime. Set them via the Databricks Apps configuration or the bundle variables.
+
+| Variable | Description | Required |
+|----------|-------------|----------|
+| `DATABRICKS_HOST` | Workspace URL (e.g. `https://myworkspace.cloud.databricks.com`) | Yes |
+| `DATABRICKS_TOKEN` | Personal access token or M2M OAuth token | Yes |
+| `DATABRICKS_WAREHOUSE_ID` | SQL Warehouse ID for fallback queries | Yes |
+| `DATABRICKS_CATALOG` | Unity Catalog name (default: `energy_copilot`) | Yes |
+| `LAKEBASE_INSTANCE_NAME` | Lakebase instance name | Optional |
+| `LAKEBASE_HOST` | Lakebase Postgres hostname | Optional |
+| `LAKEBASE_PASSWORD` | Lakebase Postgres password | Optional |
+| `ANTHROPIC_API_KEY` | Only needed if NOT using Databricks FMAPI routing | Optional |
+
+<Aside type="note">
+  When deploying as a Databricks App, environment variables are injected from the bundle's `resources/app.yml`. You do not need to set them manually in `app/app.yaml`.
+</Aside>
+
+## Step-by-Step Deployment
+
+### Step 1 — Authenticate
+
+```bash
+databricks auth login https://your-workspace.cloud.databricks.com --profile=my-profile
+```
+
+Verify authentication:
+
+```bash
+databricks current-user me --profile=my-profile
+# {
+#   "user_name": "you@company.com",
+#   "display_name": "Your Name"
+# }
+```
+
+### Step 2 — Clone the Repository
+
+```bash
+git clone https://github.com/sourabhghose/databricks-energy-copilot.git
+cd energy-copilot
+```
+
+### Step 3 — Validate the Bundle
+
+Before deploying, validate that all YAML is correct and all variable references resolve:
+
+```bash
+databricks bundle validate --target dev --profile=my-profile
+```
+
+Expected output: no errors. Warnings about missing experiments or models are normal on first deploy.
+
+### Step 4 — Deploy All Resources
+
+```bash
+databricks bundle deploy --target dev --profile=my-profile
+```
+
+This command creates or updates:
+
+| Resource Type | What Is Created |
+|---------------|----------------|
+| **Jobs** | 14 serverless jobs: setup, ingest (NEMWEB, OpenElec, Weather, Solar, AER, CER LGC, ISP), ML forecast, market summary, data quality, simulator, snapshots |
+| **DLT Pipelines** | 4 serverless Delta Live Tables pipelines |
+| **MLflow Experiments** | 5 experiments: price, demand, wind, solar, anomaly |
+
+Deployment typically takes 2–5 minutes.
+
+<Aside type="tip">
+  The `--target dev` flag prefixes all resource names with `[dev]` to avoid conflicts with production resources. Use `--target prod` for production deployments.
+</Aside>
+
+### Step 5 — Run the Setup Job
+
+```bash
+databricks bundle run job_00_setup --target dev --profile=my-profile
+```
+
+This job runs 8 tasks:
+
+| Task | Description | Duration |
+|------|-------------|----------|
+| `create_schemas` | Creates bronze, silver, gold, ml, tools schemas | ~30s |
+| `create_tables` | Creates all Delta tables + grants SP permissions | ~2 min |
+| `seed_isp_data` | AEMO ISP 2024 projects and capacity outlook | ~1 min |
+| `seed_lgc_data` | CER LGC registry + spot prices | ~1 min |
+| `seed_tariff_data` | AER CDR retail tariffs + components | ~1 min |
+| `seed_facility_data` | OpenNEM facility generation timeseries | ~1 min |
+| `seed_deal_data` | 5 counterparties, 3 portfolios, 50 sample trades | ~1 min |
+| `backfill` | 90 days of synthetic NEM data (~130K rows) | 15–30 min |
+
+Monitor progress:
+
+```bash
+databricks jobs get-run <RUN_ID> --profile=my-profile
+```
+
+### Step 6 — Build the Frontend
+
+```bash
+cd app/frontend
+npx vite build
+# ✓ built in 45.2s
+# dist/ created with index.html + assets/
+```
+
+The build output goes to `app/frontend/dist/`.
+
+### Step 7 — Import Frontend to Workspace
+
+```bash
+# Import the built frontend to the Databricks workspace
+databricks workspace import-dir app/frontend/dist \
+  /Workspace/Users/you@company.com/energy-copilot/frontend \
+  --profile=my-profile \
+  --overwrite
+```
+
+### Step 8 — Deploy the App
+
+```bash
+databricks apps deploy energy-copilot \
+  --source-code-path /Workspace/Users/you@company.com/energy-copilot \
+  --profile=my-profile
+```
+
+The app URL is shown in the output:
+
+```
+App deployed: https://energy-copilot-<workspace-id>.aws.databricksapps.com
+```
+
+### Step 9 — Run Post-Deploy Setup
+
+The post-deploy script handles resources that require the App to be deployed first:
+
+```bash
+./post_deploy.sh my-profile dev
+```
+
+This script:
+
+| Step | Description | Duration |
+|------|-------------|----------|
+| Get App SP UUID | Looks up the Service Principal assigned to the App | ~5s |
+| Grant Lakebase Perms | Grants the App SP `SELECT` on Lakebase gold schema | ~2 min |
+| Create Synced Tables | Sets up continuous Delta-to-Postgres sync | ~3 min |
+| Create Genie Spaces | Creates 12 AI/BI Genie spaces | ~2 min |
+
+### Step 10 — Start the Simulator
+
+```bash
+databricks bundle run job_09_simulator --target dev --profile=my-profile
+```
+
+The simulator writes fresh NEM market data every 30 seconds to all Gold tables. It runs continuously until cancelled.
+
+### Step 11 — Verify the Deployment
+
+```bash
+# Check app health
+curl https://<app-url>/health
+
+# Check data source
+curl https://<app-url>/api/health/datasource
+
+# Check latest prices
+curl https://<app-url>/api/prices/latest
+```
+
+Expected health response:
+
+```json
+{
+  "status": "ok",
+  "sql_connected": true,
+  "lakebase_connected": true,
+  "lakebase_fresh": true
+}
+```
+
+## Production Deployment
+
+For production:
+
+```bash
+databricks bundle deploy --target prod --profile=prod-profile \
+  --var="notification_email=ops@mycompany.com"
+```
+
+The `prod` target uses:
+- `mode: production` (no `[dev]` prefixes on resource names)
+- `catalog: energy_copilot` (production catalog name)
+
+## Managing the Deployment
+
+### Check Deployed Resources
+
+```bash
+# List all bundle resources
+databricks bundle summary --target dev --profile=my-profile
+
+# Check app status
+databricks apps get energy-copilot --profile=my-profile
+
+# List jobs
+databricks jobs list --profile=my-profile | grep energy-copilot
+```
+
+### Update After Code Changes
+
+```bash
+# Rebuild frontend (if UI changed)
+cd app/frontend && npx vite build && cd ../..
+
+# Redeploy (idempotent)
+databricks bundle deploy --target dev --profile=my-profile
+```
+
+### Stop the Simulator
+
+```bash
+databricks jobs list --profile=my-profile | grep "Simulator"
+databricks jobs cancel-all-runs <JOB_ID> --profile=my-profile
+```
+
+### Destroy All Resources
+
+```bash
+databricks bundle destroy --target dev --profile=my-profile
+```
+
+This removes all bundle-managed resources. Data in Unity Catalog tables is preserved.
+
+## Troubleshooting
+
+### `bundle validate` fails with "warehouse not found"
+
+The `warehouse_id` variable uses a name lookup: `"Serverless Starter Warehouse"`. If your warehouse has a different name, override it:
+
+```bash
+databricks bundle deploy --target dev --var="warehouse_id=<your-warehouse-id>"
+```
+
+Find your warehouse ID:
+
+```bash
+databricks warehouses list --profile=my-profile
+```
+
+### App shows mock data instead of live data
+
+1. Check `/health` — verify `sql_connected: true`
+2. Check `/api/health/datasource` — verify queries hit real backends
+3. Verify the SQL warehouse is running: `databricks warehouses list --profile=my-profile`
+4. Check app logs in the Databricks Apps UI → Logs tab
+
+### Lakebase returns stale data
+
+1. Check synced table status: Unity Catalog > Tables > [table name] > Sync Status
+2. Re-run synced table creation: `./post_deploy.sh my-profile dev`
+3. Verify the App SP has `SELECT` on the Lakebase gold schema
+
+### Post-deploy script can't find App SP
+
+The `service_principal_id` field is only populated after the App is fully deployed and active. Wait 2–3 minutes after `databricks apps deploy` completes before running `post_deploy.sh`.
+
+### Genie spaces not appearing
+
+Genie Spaces API is in preview. The `setup/04_create_genie_spaces.py` script includes a REST API fallback. If the SDK method fails:
+
+```bash
+python setup/04_create_genie_spaces.py --use-rest-api --profile=my-profile
+```
+
+### Notebook import fails with "already exists"
+
+```bash
+databricks workspace import /path/to/notebook.py \
+  --file=local.py \
+  --format=SOURCE \
+  --language=PYTHON \
+  --overwrite \
+  --profile=my-profile
+```
+
+<Aside type="caution">
+  Never run `databricks bundle destroy` in production without first confirming with your team. While table data is preserved, all jobs, pipelines, and Genie spaces will be deleted and need to be recreated.
+</Aside>

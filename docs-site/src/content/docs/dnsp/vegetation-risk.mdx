@@ -1,0 +1,141 @@
+---
+title: Vegetation Risk
+description: ELC compliance, BMO zone assessment, ML span risk scoring (XGBoost, F1 86.3%), inspection scheduling, and bushfire mitigation analytics.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+Vegetation management is a critical safety and compliance obligation for DNSPs. Overhead powerlines contacting vegetation is one of the leading causes of bushfire ignition in Australia. DNSPs are required to maintain minimum clearances under the **Electricity Line Clearance (ELC) specification** and manage vegetation within **Bushfire Mitigation Obligation (BMO)** zones.
+
+Energy Copilot's Vegetation Risk module combines ML classification with regulatory compliance tracking to help DNSPs prioritise inspection and clearance programs.
+
+## Regulatory Framework
+
+### Electricity Line Clearance (ELC)
+
+Each state has an ELC specification that defines minimum clearance distances between powerlines and vegetation:
+
+| State | ELC Standard | Bushfire Season Clearance | Non-Bushfire Season |
+|-------|-------------|--------------------------|-------------------|
+| VIC | AS 4373-2016 | 2.5m (distribution) | 1.0m |
+| NSW | ELS Act 2004 | 2.0m (distribution) | 0.5m |
+| SA | Electricity Act 1996 | 2.5m (distribution) | 0.5m |
+
+DNSPs must demonstrate ELC compliance via Annual Compliance Reports to the state electrical safety regulator.
+
+### Bushfire Mitigation Obligation (BMO) Zones
+
+BMO zones are areas designated as high bushfire risk where additional clearance requirements apply. Vegetation in BMO zones must be cleared more frequently and to greater clearance margins.
+
+## ML Vegetation Risk Model
+
+The XGBoost vegetation risk classifier scores every network span (section of conductor between two poles) on a risk scale from 0 (low risk) to 1 (high risk).
+
+### Model Features
+
+| Feature | Description | Weight |
+|---------|-------------|--------|
+| `days_since_inspection` | Days since last vegetation inspection | High |
+| `days_since_clearance` | Days since last clearance work | High |
+| `fire_history_score` | Historical fire ignition score for span location | High |
+| `vegetation_growth_rate` | Estimated growth rate from species and climate data | Medium |
+| `span_length_m` | Span length (longer spans have more vegetation exposure) | Medium |
+| `conductor_height_m` | Average conductor height above ground | Medium |
+| `bmo_zone_flag` | Whether the span is in a BMO zone | Medium |
+| `last_known_clearance_m` | Last measured clearance distance | Medium |
+
+### Model Performance
+
+| Metric | Value |
+|--------|-------|
+| Accuracy | 88.7% |
+| Precision (High Risk) | 84.1% |
+| Recall (High Risk) | 89.3% |
+| F1-macro | 86.3% |
+| AUC | 0.923 |
+
+See [Vegetation Risk ML Model](/databricks-energy-copilot/ai-ml/vegetation-ml) for technical details.
+
+## Dashboard Pages
+
+### Risk Map (`/dnsp/vegetation-risk/map`)
+
+- Geographic map of all network spans colour-coded by risk score
+- Filter by risk band (Critical/High/Medium/Low)
+- BMO zone overlay
+- Click span to view detailed risk factors and inspection history
+
+*Screenshot: Vegetation risk map showing spans coloured red (critical), orange (high), yellow (medium), green (low) with BMO zone overlay.*
+
+### Inspection Scheduler (`/dnsp/vegetation-risk/scheduler`)
+
+Prioritised inspection schedule based on:
+1. Risk score (highest risk first)
+2. Time since last inspection (longest overdue first)
+3. Geographic clustering (minimise crew travel time)
+4. BMO zone compliance deadline
+
+```sql
+-- Top 50 spans prioritised for inspection
+SELECT
+    span_id,
+    feeder_id,
+    suburb,
+    bmo_zone_flag,
+    risk_score,
+    days_since_inspection,
+    last_known_clearance_m,
+    estimated_current_clearance_m,
+    risk_class,
+    priority_score
+FROM energy_copilot.gold.dnsp_vegetation_risk
+WHERE dnsp_id = 'AUSGRID'
+ORDER BY priority_score DESC
+LIMIT 50;
+```
+
+### Newly Flagged Alerts
+
+When the model runs (weekly), newly-flagged spans (those moving from Medium to High risk since last run) are surfaced in an alert feed:
+
+- Span ID and location
+- Previous and current risk class
+- Key driver of risk increase
+- Recommended action (inspect immediately / schedule within 30 days)
+
+## ELC Compliance Reporting
+
+The platform generates ELC compliance reports for state electrical safety regulators:
+
+- Total spans in network by risk category
+- Percentage of spans with clearances within ELC requirements
+- Non-compliant spans: locations, measured clearances, remediation timeline
+- BMO zone compliance status
+
+## API Endpoints
+
+```bash
+# High-risk spans for DNSP
+GET /api/dnsp/vegetation/high-risk?dnsp=ausgrid&min_score=0.7
+
+# Span risk details
+GET /api/dnsp/vegetation/span/{span_id}
+
+# Inspection schedule (prioritised)
+GET /api/dnsp/vegetation/inspection-schedule?dnsp=ergon&zone=BMO
+
+# ELC compliance summary
+GET /api/dnsp/vegetation/elc-compliance?dnsp=sa_power_networks
+
+# Newly flagged alerts (since last model run)
+GET /api/dnsp/vegetation/new-alerts?dnsp=essential_energy
+
+# Risk score history for span
+GET /api/dnsp/vegetation/history/{span_id}?months=12
+```
+
+<Aside type="caution">
+  The ML risk score is a decision-support tool. It does not replace physical inspection of spans. Spans with high model scores must be physically inspected before clearance work can be deprioritised. The model has a false negative rate of ~10.7% — some high-risk spans may be scored as medium risk.
+</Aside>

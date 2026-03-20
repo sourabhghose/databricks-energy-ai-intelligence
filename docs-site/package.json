@@ -1,0 +1,14 @@
+{
+  "name": "energy-copilot-docs",
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "0.37.7",
+    "astro": "^5.18.0"
+  }
+}

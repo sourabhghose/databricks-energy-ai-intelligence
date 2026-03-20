@@ -1,0 +1,119 @@
+---
+title: Environmental & LGCs
+description: LGC registry tracking, Safeguard Mechanism reporting, carbon emissions, and environmental obligation management.
+---
+
+## Overview
+
+Environmental obligations are a growing compliance burden for Australian energy market participants. Energy Copilot tracks three primary environmental frameworks: the Renewable Energy Target (LGC/STC markets), the Safeguard Mechanism, and voluntary carbon markets (ACCUs).
+
+## Large-scale Generation Certificates (LGCs)
+
+LGCs are created by accredited renewable energy power stations that generate electricity above a baseline. One LGC is issued for each megawatt-hour (MWh) of eligible renewable electricity generated.
+
+### LGC Obligations
+
+Registered Electricity Liable Entities (RELEs) must surrender LGCs in proportion to their electricity acquisitions each year:
+
+```
+LGC_obligation = Annual_acquisitions_MWh × LRET_charge_rate_for_year
+```
+
+LRET charge rates are set annually by the CER. The final target under the Renewable Energy Target is 33,000 GWh/year.
+
+### LGC Dashboard (`/back-office/environmentals/lgcs`)
+
+- **Registry balance**: LGCs held, surrendered, and required for current year
+- **Spot price tracker**: current LGC spot market price ($/LGC)
+- **Surrender progress**: percentage of annual obligation fulfilled
+- **Acquisition strategy**: if holding fewer LGCs than needed, forward price analysis suggests optimal timing to buy
+- **Registry movements**: detailed transaction history from the CER National Registry
+
+```sql
+-- LGC registry balance and obligation status
+SELECT
+    reporting_year,
+    lgc_held,
+    lgc_surrendered,
+    estimated_obligation,
+    (lgc_held + lgc_surrendered) - estimated_obligation AS surplus_deficit,
+    current_lgc_spot_price_aud,
+    estimated_cost_to_cover_aud
+FROM energy_copilot.gold.lgc_registry
+WHERE reporting_year = YEAR(CURRENT_DATE())
+ORDER BY reporting_year DESC;
+```
+
+## Safeguard Mechanism
+
+The Safeguard Mechanism requires large industrial facilities (including some electricity generators and large industrials) to keep net emissions at or below a baseline.
+
+### Key Parameters (2024–2030)
+
+| Parameter | Value |
+|-----------|-------|
+| Facility threshold | >100,000 tCO2-e/year |
+| Baseline decline rate | 4.9% per year |
+| Compliance options | Reduce emissions OR surrender ACCUs/SMCs |
+| Penalty | $275/tCO2-e (2025) |
+
+### Safeguard Dashboard (`/back-office/environmentals/safeguard`)
+
+- Covered facility list and current baseline
+- Estimated actual emissions vs baseline
+- Projected shortfall/surplus under different production scenarios
+- ACCU spot price and estimated compliance cost
+- Baseline determination history
+
+## Carbon Emissions Tracking
+
+Energy Copilot calculates scope 2 carbon emissions from electricity consumption using NEM regional emissions factors:
+
+```
+Scope_2_emissions_tCO2e = Electricity_MWh × Emissions_Factor_kgCO2e_MWh / 1000
+```
+
+Regional grid emissions factors are updated annually from the Department of Climate Change, Energy, the Environment and Water (DCCEEW) National Greenhouse Accounts Factors.
+
+### Emissions Dashboard (`/back-office/environmentals/emissions`)
+
+- Portfolio scope 2 emissions: total and by region
+- Carbon intensity trends: declining as renewables penetration increases
+- Emissions factor comparison: current vs prior year vs 2005 baseline
+- Net emissions position: gross emissions minus LGC surrenders
+
+## ACCU Market
+
+Australian Carbon Credit Units (ACCUs) are issued by the Clean Energy Regulator for carbon abatement projects. ACCUs can be used to:
+- Surrender under the Safeguard Mechanism
+- Voluntary offset claims
+- Sell into the spot or forward market
+
+The platform tracks:
+- ACCU spot prices ($/ACCU)
+- Method issuance rates (by project type: avoided deforestation, vegetation, landfill gas)
+- Government ACCU purchase price (Australian Carbon Exchange)
+
+## API Endpoints
+
+```bash
+# LGC balance and obligation
+GET /api/environmentals/lgc/balance?year=2025
+
+# LGC spot price history
+GET /api/environmentals/lgc/prices?start=2025-01-01
+
+# Safeguard Mechanism status
+GET /api/environmentals/safeguard/status
+
+# Carbon emissions calculation
+POST /api/environmentals/emissions/calculate
+{
+  "electricity_mwh": 150000,
+  "region_id": "VIC1",
+  "period": "2025"
+}
+
+# ACCU spot prices
+GET /api/environmentals/accu/prices?period=90d
+```

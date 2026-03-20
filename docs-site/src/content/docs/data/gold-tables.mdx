@@ -1,0 +1,262 @@
+---
+title: Gold Tables Reference
+description: Key Gold Delta tables — schemas, partition strategies, and query examples for the most important tables in the medallion lakehouse.
+---
+
+## Overview
+
+The Gold layer contains 84+ curated Delta tables optimised for analytical queries. All Gold tables are:
+- Partitioned by `interval_date` (or equivalent date column)
+- Auto-optimised and auto-compacted
+- Annotated with COMMENT on every column for Genie
+- Synced to Lakebase for high-traffic tables
+
+## Market Data Tables
+
+### `gold.nem_prices_5min`
+
+5-minute NEM dispatch prices for all regions. The most queried table in the platform.
+
+```sql
+DESCRIBE energy_copilot.gold.nem_prices_5min;
+-- interval_datetime  TIMESTAMP  'Dispatch interval end time (UTC)'
+-- interval_date      DATE       'Partition key'
+-- region_id          STRING     'NEM region: NSW1, QLD1, SA1, TAS1, VIC1'
+-- rrp                DOUBLE     'Regional Reference Price ($/MWh)'
+-- demand             DOUBLE     'Scheduled demand (MW)'
+-- net_interchange    DOUBLE     'Net interconnector import (+) or export (-) (MW)'
+-- is_price_capped    BOOLEAN    'True when CPT is active and price is capped'
+-- ingest_timestamp   TIMESTAMP  'When this row was loaded by the pipeline'
+```
+
+Lakebase synced: Yes (`gold.nem_prices_5min_dedup_synced`)
+
+```sql
+-- Latest prices for all regions
+SELECT region_id, rrp, demand
+FROM energy_copilot.gold.nem_prices_5min
+WHERE interval_datetime = (SELECT MAX(interval_datetime) FROM energy_copilot.gold.nem_prices_5min);
+```
+
+### `gold.nem_prices_30min`
+
+30-minute NEM trading interval prices (settlement prices). Derived from 5-minute prices.
+
+```sql
+-- interval_datetime  TIMESTAMP  '30-min trading interval end time (UTC)'
+-- interval_date      DATE
+-- region_id          STRING
+-- rrp                DOUBLE     '30-min average spot price ($/MWh)'
+-- demand             DOUBLE     'Average demand over 30-min interval (MW)'
+```
+
+### `gold.nem_generation_by_fuel`
+
+Aggregated generation by fuel type and region.
+
+```sql
+-- interval_datetime  TIMESTAMP
+-- interval_date      DATE
+-- region_id          STRING
+-- fuel_type          STRING     'black_coal, brown_coal, gas_ccgt, gas_ocgt, hydro, wind, solar_utility, solar_rooftop, battery, pumped_hydro, biomass'
+-- generation_mw      DOUBLE     'Total generation for this fuel type in this region (MW)'
+-- duid_count         INT        'Number of DUIDs contributing to this total'
+-- capacity_mw        DOUBLE     'Total registered capacity for this fuel/region bucket (MW)'
+-- utilisation_pct    DOUBLE     'generation_mw / capacity_mw * 100'
+```
+
+Lakebase synced: Yes
+
+### `gold.nem_interconnectors`
+
+5-minute interconnector flows.
+
+```sql
+-- interval_datetime     TIMESTAMP
+-- interval_date         DATE
+-- interconnector_id     STRING     'QNI, VIC1-NSW1, V-SA, BASSLINK, T-V-MNSP1'
+-- mw_flow               DOUBLE     'Power flow (positive = export direction)'
+-- export_limit          DOUBLE     'Export limit (MW)'
+-- import_limit          DOUBLE     'Import limit (MW)'
+-- utilisation_export_pct DOUBLE    'mw_flow / export_limit * 100 (when positive)'
+-- utilisation_import_pct DOUBLE    'abs(mw_flow) / import_limit * 100 (when negative)'
+```
+
+Lakebase synced: Yes
+
+### `gold.nem_fcas_prices`
+
+FCAS market prices in long format (one row per interval per service).
+
+```sql
+-- interval_datetime  TIMESTAMP
+-- interval_date      DATE
+-- service            STRING     'RAISEREG, LOWERREG, RAISE1SEC, LOWER1SEC, RAISE6SEC, LOWER6SEC, RAISE60SEC, LOWER60SEC'
+-- price              DOUBLE     '$/MW/h'
+-- enablement_mw      DOUBLE     'Total MW enabled for this service'
+-- requirement_mw     DOUBLE     'AEMO procurement requirement for this service'
+```
+
+## Weather Tables
+
+### `gold.weather_nem_regions`
+
+Weather observations and NWP forecasts for NEM regions.
+
+```sql
+-- observation_datetime  TIMESTAMP
+-- interval_date         DATE
+-- region_id             STRING
+-- temperature_c         DOUBLE
+-- humidity_pct          DOUBLE
+-- wind_speed_ms         DOUBLE
+-- wind_direction_deg    DOUBLE
+-- solar_irradiance_wm2  DOUBLE
+-- precipitation_mm      DOUBLE
+-- is_forecast           BOOLEAN    'True for NWP forecast periods'
+-- forecast_horizon_h    INT        'Hours ahead (NULL for observed)'
+```
+
+## AI Content Tables
+
+### `gold.market_briefs`
+
+Daily AI-generated NEM market summaries.
+
+```sql
+-- brief_date         DATE       'Trading date the brief covers'
+-- generated_at       TIMESTAMP  'When Claude generated the brief'
+-- brief_text         STRING     'Full markdown text of the brief'
+-- word_count         INT
+-- quality_score      INT        '0-100 automated quality assessment'
+-- model_version      STRING     'Claude model used (e.g. claude-sonnet-4-5)'
+```
+
+### `gold.daily_market_summary`
+
+Structured JSON summary (for API consumption) generated alongside the market brief.
+
+```sql
+-- summary_date       DATE
+-- max_price_rrp      DOUBLE     'Maximum 5-min price across all regions'
+-- max_price_region   STRING
+-- min_price_rrp      DOUBLE
+-- nem_renewables_pct DOUBLE     'Renewable penetration % (daily average)'
+-- carbon_intensity   DOUBLE     'gCO2/kWh (daily average)'
+-- significant_events ARRAY      'List of notable events from the day'
+```
+
+## DNSP Tables
+
+### `gold.dnsp_asset_register`
+
+DNSP network asset register with health scores.
+
+```sql
+-- asset_id            STRING     'Internal asset identifier'
+-- dnsp_name           STRING     'ausnet, ergon, energex, ausgrid, essential, sapn'
+-- asset_type          STRING     'transformer, switchgear, cable, overhead, pole, relay'
+-- substation          STRING
+-- feeder_id           STRING
+-- age_years           DOUBLE
+-- health_index        DOUBLE     '0-100 composite health score'
+-- failure_prob_12m    DOUBLE     'ML failure probability next 12 months (0-1)'
+-- risk_class          STRING     'Low, Medium, High, Critical'
+-- last_inspection     DATE
+-- last_maintenance    DATE
+-- registered_capacity_mva DOUBLE
+-- ingest_timestamp    TIMESTAMP
+```
+
+### `gold.dnsp_stpis_metrics`
+
+SAIDI/SAIFI/MAIFI metrics by feeder and financial year.
+
+```sql
+-- financial_year      INT        '2025 = FY2024-25'
+-- dnsp_name           STRING
+-- feeder_id           STRING
+-- feeder_name         STRING
+-- zone_substation     STRING
+-- saidi_ytd_minutes   DOUBLE     'SAIDI year-to-date'
+-- saifi_ytd           DOUBLE     'SAIFI year-to-date'
+-- maifi_ytd           DOUBLE     'MAIFI year-to-date'
+-- saidi_target        DOUBLE     'AER STPIS target'
+-- saifi_target        DOUBLE
+-- customer_count      INT
+-- load_mw             DOUBLE
+```
+
+### `gold.dnsp_vegetation_risk`
+
+Weekly ML vegetation risk scores by network span.
+
+```sql
+-- span_id             STRING
+-- dnsp_id             STRING
+-- feeder_id           STRING
+-- suburb              STRING
+-- bmo_zone_flag       BOOLEAN
+-- risk_score          DOUBLE     'ML classifier output (0-1)'
+-- risk_class          STRING     'Low, Medium, High, Critical'
+-- inspection_age_days INT        'Days since last inspection'
+-- clearance_age_days  INT
+-- confidence          DOUBLE     'Model prediction confidence (0-1)'
+-- model_run_date      DATE       'When model last scored this span'
+```
+
+## Finance Tables
+
+### `gold.asx_futures_eod`
+
+ASX Energy Futures end-of-day settlement prices.
+
+```sql
+-- settlement_date     DATE
+-- product_code        STRING     'NSW1_CAL25_BASE, SA1_Q1_2026_CAP, etc.'
+-- region_id           STRING
+-- product_type        STRING     'base, peak, cap, strip'
+-- tenor_start         DATE
+-- tenor_end           DATE
+-- settlement_price    DOUBLE     '$/MWh'
+-- volume_lots         INT
+-- open_interest_lots  INT
+```
+
+Lakebase synced: Yes
+
+### `gold.deals`
+
+Energy derivative deal register.
+
+```sql
+-- deal_id             BIGINT     'Unique deal identifier'
+-- portfolio_id        INT
+-- counterparty_id     INT
+-- deal_type           STRING     'swap, cap, floor, collar, ppa, spot, basis'
+-- region_id           STRING
+-- direction           STRING     'buy, sell'
+-- volume_mw           DOUBLE
+-- start_date          DATE
+-- end_date            DATE
+-- strike_price        DOUBLE     '$/MWh'
+-- status              STRING     'active, expired, cancelled'
+-- trade_date          DATE
+-- trader_id           STRING
+```
+
+### `gold.settlement_statements`
+
+AEMO settlement statement data by run.
+
+```sql
+-- trading_date        DATE
+-- settlement_run      STRING     'PRELIM, FINAL, R1, R2, R3, R4'
+-- region_id           STRING
+-- participant_id      STRING
+-- energy_aud          DOUBLE     'Energy settlement component (AUD)'
+-- fcas_aud            DOUBLE     'FCAS settlement component (AUD)'
+-- market_fees_aud     DOUBLE     'AEMO market fees (AUD)'
+-- total_aud           DOUBLE     'Net settlement amount (AUD)'
+-- published_at        TIMESTAMP  'When AEMO published this run'
+```

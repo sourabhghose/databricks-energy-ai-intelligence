@@ -1,0 +1,169 @@
+---
+title: Genie API
+description: Genie space configuration, the 12 space IDs, querying via conversation API, and sample question format.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+Databricks Genie AI/BI spaces can be queried programmatically via the Databricks Genie Conversation API. Energy Copilot's 12 Genie spaces are accessible both through the embedded UI and via API.
+
+## Genie Space IDs
+
+The following Genie spaces are created by `setup/04_create_genie_spaces.py`. Space IDs are UUIDs assigned by Databricks at creation time:
+
+| Space Name | Environment Variable | Primary Tables |
+|-----------|---------------------|----------------|
+| NEM Prices & Demand | `GENIE_SPACE_NEM_PRICES` | `nem_prices_5min`, `weather_nem_regions` |
+| Generation & Fuel Mix | `GENIE_SPACE_GENERATION` | `nem_generation_by_fuel` |
+| Interconnectors & Constraints | `GENIE_SPACE_INTERCONNECTORS` | `nem_interconnectors` |
+| FCAS Markets | `GENIE_SPACE_FCAS` | `nem_fcas_prices` |
+| Settlement & Finance | `GENIE_SPACE_SETTLEMENT` | `settlement_statements`, `deals` |
+| DNSP Compliance | `GENIE_SPACE_DNSP_COMPLIANCE` | `dnsp_aio_metrics`, `dnsp_stpis_metrics` |
+| Asset Intelligence | `GENIE_SPACE_ASSETS` | `dnsp_asset_register` |
+| Vegetation Risk | `GENIE_SPACE_VEGETATION` | `dnsp_vegetation_risk` |
+| Workforce Analytics | `GENIE_SPACE_WORKFORCE` | `dnsp_workforce_metrics` |
+| Environmental & LGCs | `GENIE_SPACE_ENVIRONMENTAL` | `lgc_registry`, `emissions_factors` |
+| Forward Curves | `GENIE_SPACE_FORWARD_CURVES` | `asx_futures_eod`, `forward_curves` |
+| Gas Markets | `GENIE_SPACE_GAS` | `gas_hub_prices` |
+
+<Aside type="note">
+  Space IDs are workspace-specific and are generated when the `setup/04_create_genie_spaces.py` script runs. The actual UUIDs are not hardcoded in the codebase — they are stored as environment variables in the App configuration after the post-deploy setup.
+</Aside>
+
+## Querying Genie via API
+
+Genie uses a conversation model: start a conversation, then send messages.
+
+### Step 1 — Start a Conversation
+
+```bash
+POST https://{workspace_host}/api/2.0/genie/spaces/{space_id}/start-conversation
+Authorization: Bearer {DATABRICKS_TOKEN}
+Content-Type: application/json
+
+{
+  "content": "What was the average spot price in SA1 last week?"
+}
+
+# Response
+{
+  "conversation_id": "conv_01HXYZ123ABC",
+  "message_id": "msg_01HXYZ123DEF",
+  "status": "EXECUTING"
+}
+```
+
+### Step 2 — Poll for Results
+
+```bash
+GET https://{workspace_host}/api/2.0/genie/spaces/{space_id}/conversations/{conversation_id}/messages/{message_id}
+Authorization: Bearer {DATABRICKS_TOKEN}
+
+# When complete:
+{
+  "id": "msg_01HXYZ123DEF",
+  "status": "COMPLETED",
+  "query_result": {
+    "statement_id": "stmt_01HXYZ456",
+    "statement_text": "SELECT AVG(rrp) as avg_price FROM energy_copilot.gold.nem_prices_30min WHERE region_id = 'SA1' AND interval_date >= CURRENT_DATE() - INTERVAL 7 DAYS",
+    "rows": [
+      {"avg_price": 187.42}
+    ],
+    "schema": [
+      {"name": "avg_price", "type_text": "DOUBLE", "type_name": "DOUBLE"}
+    ]
+  }
+}
+```
+
+### Continuation Questions
+
+Send a follow-up question in the same conversation context:
+
+```bash
+POST https://{workspace_host}/api/2.0/genie/spaces/{space_id}/conversations/{conversation_id}/messages
+Authorization: Bearer {DATABRICKS_TOKEN}
+Content-Type: application/json
+
+{
+  "content": "Now show me the breakdown by day of the week"
+}
+```
+
+## Energy Copilot Genie Proxy
+
+Energy Copilot provides a proxy endpoint that wraps the Databricks Genie API, handling authentication and conversation management:
+
+```bash
+# Start a Genie query (proxied through Energy Copilot backend)
+POST /api/genie/query
+Content-Type: application/json
+
+{
+  "space": "nem_prices",  // Space name (resolves to space ID internally)
+  "question": "What was the average spot price in SA1 last week?",
+  "conversation_id": null  // null to start new; provide ID to continue
+}
+
+# Response (when complete)
+{
+  "conversation_id": "conv_01HXYZ123ABC",
+  "question": "What was the average spot price in SA1 last week?",
+  "sql": "SELECT AVG(rrp) as avg_price FROM ...",
+  "result": {
+    "rows": [{"avg_price": 187.42}],
+    "schema": [{"name": "avg_price", "type": "DOUBLE"}],
+    "chart_type": "bar"  // Genie's suggested chart type
+  }
+}
+```
+
+## Available Space Names (for Proxy)
+
+| Proxy `space` Parameter | Resolves To |
+|------------------------|-------------|
+| `nem_prices` | NEM Prices & Demand space |
+| `generation` | Generation & Fuel Mix space |
+| `interconnectors` | Interconnectors & Constraints space |
+| `fcas` | FCAS Markets space |
+| `settlement` | Settlement & Finance space |
+| `dnsp_compliance` | DNSP Compliance space |
+| `assets` | Asset Intelligence space |
+| `vegetation` | Vegetation Risk space |
+| `workforce` | Workforce Analytics space |
+| `environmental` | Environmental & LGCs space |
+| `forward_curves` | Forward Curves space |
+| `gas` | Gas Markets space |
+
+## Sample Questions by Space
+
+### NEM Prices & Demand
+```
+"What was the average spot price in SA1 over the last 7 days?"
+"Show me the top 10 highest price intervals in VIC1 this month"
+"How many times did QLD1 prices exceed $500/MWh in the past 30 days?"
+"Compare demand-weighted average prices across all regions for today"
+"What is the hourly average price for NSW1 on weekdays vs weekends this year?"
+```
+
+### Generation & Fuel Mix
+```
+"What percentage of NEM generation came from renewables yesterday?"
+"Show coal generation declining trend over the past 2 years"
+"What was the highest wind output recorded in SA1?"
+"Compare solar penetration by state for the past month"
+```
+
+### DNSP Compliance
+```
+"Which feeders have the highest SAIDI contribution this financial year?"
+"Show SAIDI trend for Ausgrid over the past 5 years"
+"Which AIO obligations are overdue for Essential Energy?"
+"List feeders where SAIDI is within 10% of the AER target"
+```
+
+<Aside type="tip">
+  Genie is most effective with specific, data-oriented questions. For open-ended analytical questions that require multi-step reasoning (e.g., "Why did prices spike this afternoon?"), the AI Copilot is more appropriate as it can use multiple tools and synthesise a narrative response.
+</Aside>

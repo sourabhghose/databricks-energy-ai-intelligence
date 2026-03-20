@@ -1,0 +1,196 @@
+---
+title: API Overview
+description: FastAPI backend with 64 routers and 636+ REST endpoints — authentication, base URL, response format, and data source headers.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+Energy Copilot's backend is a FastAPI application with 64 modular routers serving 636+ REST endpoints. The API follows REST conventions with JSON request and response bodies.
+
+## Base URL
+
+```
+https://energy-copilot-7474645691011751.aws.databricksapps.com
+```
+
+All API endpoints are prefixed with `/api/`:
+
+```
+https://energy-copilot-7474645691011751.aws.databricksapps.com/api/prices/latest
+```
+
+## Authentication
+
+The Energy Copilot API runs as a Databricks App. Authentication is handled by the Databricks platform:
+
+- **Browser access**: Authenticated via Databricks workspace SSO
+- **Programmatic access**: Use a Databricks Personal Access Token (PAT) or M2M OAuth token:
+
+```bash
+curl -H "Authorization: Bearer <DATABRICKS_TOKEN>" \
+  https://energy-copilot-7474645691011751.aws.databricksapps.com/api/prices/latest
+```
+
+<Aside type="note">
+  Databricks App authentication is managed at the platform level. If you're accessing the API from within a Databricks notebook or job (same workspace), you can use `dbutils.secrets.get()` to retrieve the workspace token, or use the Databricks SDK's automatic authentication.
+</Aside>
+
+## Response Format
+
+All API responses follow a consistent format:
+
+```json
+{
+  "data": {...},       // The actual response payload
+  "meta": {
+    "timestamp": "2025-03-21T05:30:00Z",
+    "data_source": "lakebase",
+    "query_ms": 12.3,
+    "cache_hit": true,
+    "cache_age_seconds": 8
+  }
+}
+```
+
+Error responses:
+
+```json
+{
+  "error": "Resource not found",
+  "detail": "No data available for region 'XX1' — valid regions are NSW1, QLD1, SA1, TAS1, VIC1",
+  "request_id": "req_3f7a9b2c"
+}
+```
+
+## HTTP Status Codes
+
+| Status | Meaning |
+|--------|---------|
+| `200 OK` | Success |
+| `201 Created` | Resource created (e.g., new deal) |
+| `204 No Content` | Success, no response body (e.g., DELETE) |
+| `400 Bad Request` | Invalid parameters |
+| `404 Not Found` | No data for the specified filter |
+| `422 Unprocessable Entity` | Request body validation error |
+| `503 Service Unavailable` | Database connectivity failure |
+
+## Response Headers
+
+Every API response includes observability headers:
+
+| Header | Example | Description |
+|--------|---------|-------------|
+| `X-Data-Source` | `lakebase` | Which backend served the data |
+| `X-Query-Ms` | `12.3` | Query execution time in milliseconds |
+| `X-Cache-Hit` | `true` | Whether the in-memory cache was used |
+| `X-Cache-Age-Seconds` | `8` | Age of cached data in seconds |
+| `X-Request-Id` | `req_3f7a9b2c` | Unique request identifier for log correlation |
+
+## Router Groups
+
+### Market Data (Front Office)
+
+```
+/api/prices/          # Spot prices (5-min and 30-min)
+/api/generation/      # Generation by fuel type and DUID
+/api/interconnectors/ # Interconnector flows
+/api/fcas/            # FCAS prices and enablement
+/api/weather/         # Weather data and forecasts
+/api/gas/             # STTM gas hub prices
+/api/battery/         # BESS dispatch and economics
+/api/solar/           # Rooftop and utility solar
+/api/market-brief/    # AI-generated daily market briefs
+/api/isp/             # AEMO ISP 2024 project pipeline
+```
+
+### Middle Office (ETRM)
+
+```
+/api/deals/           # Deal CRUD operations
+/api/portfolio/       # Portfolio positions and P&L
+/api/forward-curves/  # Forward price curves
+/api/risk/            # VaR, Greeks, limit monitoring
+/api/trading-signals/ # Algorithmic trading signals
+/api/battery-opt/     # Battery optimisation engine
+/api/bidding/         # Bid stack and rebid analysis
+```
+
+### Back Office
+
+```
+/api/settlement/      # Settlement statements and true-up
+/api/compliance/      # Compliance calendar and obligations
+/api/environmentals/  # LGCs, carbon, Safeguard Mechanism
+/api/network/         # Outages, constraints, DER
+/api/reporting/       # Report generation and export
+```
+
+### DNSP Intelligence
+
+```
+/api/dnsp/aio/        # Annual Information Obligations
+/api/dnsp/stpis/      # STPIS reliability metrics
+/api/dnsp/assets/     # Asset intelligence
+/api/dnsp/rab/        # RAB roll-forward
+/api/dnsp/vegetation/ # Vegetation risk
+/api/dnsp/hosting/    # Hosting capacity
+/api/dnsp/workforce/  # Workforce analytics
+/api/dnsp/benchmarks/ # AER benchmarking
+/api/dnsp/dapr/       # DAPR assembly
+```
+
+### AI & ML
+
+```
+/api/chat             # AI Copilot (SSE streaming)
+/api/forecasts/       # ML price and demand forecasts
+/api/genie/           # Genie space queries
+/api/ml/              # ML model endpoints
+```
+
+### Health
+
+```
+/health               # Application health check
+/api/health/datasource # Data source connectivity
+```
+
+## In-Memory Caching
+
+The API implements per-endpoint TTL caching:
+
+| Endpoint | Cache TTL | Notes |
+|----------|----------|-------|
+| `/api/prices/latest` | 10 seconds | Short TTL — data updates every 5 min |
+| `/api/generation/latest` | 30 seconds | Generation changes less rapidly |
+| `/api/interconnectors/latest` | 30 seconds | |
+| `/api/forecasts/*` | 60 seconds | ML forecasts are computationally expensive |
+| `/api/fcas/latest` | 10 seconds | FCAS can change rapidly |
+| `/api/market-brief/latest` | 300 seconds | Generated once per day |
+
+Cache keys include all query parameters (region, date range, etc.) to avoid cross-parameter cache collisions.
+
+## Rate Limits
+
+The application does not currently implement explicit rate limits (it relies on Databricks App resource limits). As a guideline, keep request rates below:
+- 60 requests/minute for real-time endpoints (`/api/prices/latest` etc.)
+- 10 requests/minute for ML inference endpoints (`/api/forecasts/*`)
+- 2 requests/minute for AI generation endpoints (`/api/chat`, `/api/dnsp/aio/generate-draft`)
+
+## OpenAPI Specification
+
+The full API specification is available at:
+
+```
+https://energy-copilot-7474645691011751.aws.databricksapps.com/docs
+```
+
+(FastAPI auto-generated interactive Swagger UI)
+
+```
+https://energy-copilot-7474645691011751.aws.databricksapps.com/openapi.json
+```
+
+(Raw OpenAPI 3.0 JSON spec)

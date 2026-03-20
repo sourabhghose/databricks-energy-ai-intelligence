@@ -1,0 +1,132 @@
+---
+title: Quick Start
+description: Step-by-step guide for first-time users — navigate the app, try the AI copilot, and run a Genie query.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+## Before You Begin
+
+Energy Copilot is deployed at:
+
+**[https://energy-copilot-7474645691011751.aws.databricksapps.com](https://energy-copilot-7474645691011751.aws.databricksapps.com)**
+
+The application runs as a Databricks App. Authentication is managed by your Databricks workspace SSO — if you have access to the workspace, you have access to the app.
+
+<Aside type="tip">
+  First visit? The app may take 5–10 seconds to start if the Databricks App instance has been idle. This is normal — the platform auto-suspends after inactivity to save cost.
+</Aside>
+
+## Step 1 — Explore the Home Dashboard
+
+When you open the app, you land on the **Home Dashboard**. This gives you a live snapshot of the NEM:
+
+- **Current spot prices** for all 5 regions (NSW1, QLD1, SA1, TAS1, VIC1)
+- **Generation mix** as a donut chart — coal, gas, wind, solar, hydro, battery
+- **FCAS price summary** — regulation raise/lower and contingency services
+- **Latest price alerts** — spike and separation events in the last hour
+- **Market brief** — today's AI-generated NEM summary (generated at 05:30 AEST)
+
+*Screenshot: Home dashboard showing 5-region spot prices, generation mix chart, and latest market brief card.*
+
+## Step 2 — Explore Live Market Data
+
+Click **Front Office → Live Market & NEM Prices** in the left sidebar.
+
+This page shows:
+- A live 5-minute price chart for all 5 regions
+- Regional price table with current, 30-minute average, and daily average
+- Interconnector flow diagram (hover over arrows for MW and % utilisation)
+- Active constraint flags from the AEMO constraint set
+
+Try filtering by **region** using the region selector in the top-right. The chart and table update instantly from cached Gold table data (typically 10–38ms via Lakebase).
+
+## Step 3 — Try the AI Copilot
+
+Click **AI Copilot** (or the robot icon) in the top navigation bar to open the chat interface.
+
+The copilot uses Claude Sonnet 4.5 with 51 domain-specific tools. Try these starter questions:
+
+```
+What are the current spot prices across all NEM regions?
+```
+
+```
+Why is SA1 price spiking? Explain the likely drivers.
+```
+
+```
+Show me the generation mix for Queensland for the last 24 hours.
+```
+
+```
+What are the current FCAS raise regulation prices?
+```
+
+Watch the **tool call stream** on the right side — you can see which tools Claude is invoking in real time:
+- `get_latest_prices` — fetches current regional prices
+- `get_generation_mix` — retrieves fuel-type generation data
+- `explain_price_event` — cross-references constraints, weather, and demand data
+- `get_fcas_prices` — retrieves ancillary service prices
+
+<Aside type="note">
+  The copilot streams responses via Server-Sent Events (SSE). Tool calls are shown as they execute — you don't need to wait for the full response before seeing intermediate results.
+</Aside>
+
+## Step 4 — Run a Genie Query
+
+Navigate to **AI Copilot → Genie Spaces** and select **NEM Prices & Demand**.
+
+Genie provides a natural language interface directly to the Gold Delta tables. Type a question like:
+
+```
+What was the average spot price in SA1 over the last 7 days?
+```
+
+```
+Show me the top 10 highest price intervals in VIC1 this month.
+```
+
+```
+Compare demand-weighted average prices across all regions for today.
+```
+
+Genie translates your question to SQL, executes it against the Gold tables, and returns the results as a table or chart. You can view the generated SQL by clicking **Show SQL** under the results.
+
+## Step 5 — Navigate the DNSP Section
+
+If you work for or with a Distribution Network Service Provider, navigate to **DNSP Intelligence → Overview**.
+
+From there, explore:
+
+- **AIO Hub** (`/dnsp/aio`) — Annual Information Obligation tracking and Claude-generated draft submissions
+- **Asset Intelligence Hub** (`/dnsp/asset-intelligence`) — asset health scores, failure prediction, risk matrix
+- **Vegetation Risk** (`/dnsp/vegetation-risk`) — ML-scored span risk, BMO zone mapping, inspection scheduling
+- **RAB Roll-Forward** (`/dnsp/rab`) — regulatory asset base modelling with 5-year waterfall
+- **STPIS Compliance** (`/dnsp/stpis`) — SAIDI/SAIFI/MAIFI tracking with revenue incentive impact
+
+## Step 6 — Explore the Data Platform
+
+For data engineers and scientists, navigate to:
+
+- **Data → Pipeline Jobs** — status of all 30 ingestion jobs
+- **AI & ML → NEM Price Forecasting** — current model performance metrics from MLflow
+- **API Reference → Overview** — full list of 636+ REST endpoints
+
+## Common Navigation Tips
+
+| Action | How |
+|--------|-----|
+| Switch dark/light theme | Click the sun/moon icon in the top-right |
+| Filter by NEM region | Use the region chip selector (top-right on most pages) |
+| Set date range | Use the date range picker on historical charts |
+| Download chart data | Right-click chart → Export CSV |
+| View API response | Append `?format=json` to any dashboard URL |
+| Check data freshness | Look for the "Last updated" timestamp in the page footer |
+
+## Getting Help
+
+- **In-app**: Click the **?** icon to open contextual help
+- **Copilot**: Ask the AI copilot — it understands the app structure and can navigate you to relevant pages
+- **GitHub**: [github.com/sourabhghose/databricks-energy-copilot](https://github.com/sourabhghose/databricks-energy-copilot)
+- **Docs**: You're reading them — use the sidebar to explore

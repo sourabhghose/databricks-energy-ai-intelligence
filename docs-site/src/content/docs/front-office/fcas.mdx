@@ -1,0 +1,146 @@
+---
+title: FCAS & Ancillary Services
+description: All 8 FCAS services, prices, enablement quantities, and contingency event analysis for the Australian NEM.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+Frequency Control Ancillary Services (FCAS) are procured by AEMO to maintain the NEM's 50 Hz frequency standard. The NEM procures eight distinct FCAS services in a co-optimised dispatch process alongside energy. FCAS prices can be extremely high during contingency events, making FCAS markets a critical revenue stream for flexible assets like batteries, hydro, and gas peakers.
+
+## The 8 FCAS Services
+
+| Service | Abbreviation | Response Time | Purpose |
+|---------|-------------|--------------|---------|
+| Regulation Raise | RAISEREG | Continuous | Frequency deviation above 50 Hz |
+| Regulation Lower | LOWERREG | Continuous | Frequency deviation below 50 Hz |
+| 1-Second Contingency Raise | RAISE1SEC | 1 second | Major contingency recovery |
+| 1-Second Contingency Lower | LOWER1SEC | 1 second | Major contingency recovery |
+| 6-Second Contingency Raise | RAISE6SEC | 6 seconds | Contingency stabilisation |
+| 6-Second Contingency Lower | LOWER6SEC | 6 seconds | Contingency stabilisation |
+| 60-Second Contingency Raise | RAISE60SEC | 60 seconds | Contingency arrest |
+| 60-Second Contingency Lower | LOWER60SEC | 60 seconds | Contingency arrest |
+
+<Aside type="note">
+  AEMO introduced the 1-second FCAS services (RAISE1SEC and LOWER1SEC) in October 2023 to improve frequency resilience as the NEM's renewable penetration increases and synchronous inertia declines.
+</Aside>
+
+## FCAS Price Dynamics
+
+FCAS prices are co-optimised with energy in AEMO's central dispatch algorithm (NEMDE). This means:
+
+1. Offering energy at a high price can free up a generator to provide FCAS instead
+2. A binding FCAS constraint can raise energy prices significantly
+3. During contingency events, FCAS prices can spike to the Market Price Cap ($16,600/MWh for energy) or even higher for FCAS (no separate cap per service)
+
+### Typical Price Ranges
+
+| Service | Normal | Elevated | Spike |
+|---------|--------|---------|-------|
+| RAISEREG | $5–50/MW/h | $50–500 | >$500 |
+| LOWERREG | $2–30/MW/h | $30–200 | >$200 |
+| RAISE6SEC | $0.10–5/MW/h | $5–100 | >$1,000 |
+| LOWER6SEC | $0.05–2/MW/h | $2–50 | >$500 |
+| RAISE1SEC | $0.50–10/MW/h | $10–500 | >$5,000 |
+
+## Dashboard Pages
+
+### FCAS Price Dashboard (`/front-office/fcas-prices`)
+
+- Live FCAS prices for all 8 services
+- 24-hour price history chart — stacked bar showing price contribution by service
+- FCAS price vs energy price correlation chart
+- Enablement quantities by technology type (battery, hydro, gas, VPP)
+
+### FCAS Market Depth (`/front-office/fcas-market-depth`)
+
+- Total procurement quantities for each FCAS service (MW enabled)
+- Technology breakdown of FCAS providers
+- Trapezium constraints showing effective FCAS capability under dispatch conditions
+
+### Contingency Event History (`/front-office/fcas-contingency`)
+
+- Log of all contingency events (frequency deviations >±0.25 Hz)
+- Event duration, maximum frequency deviation, response time
+- FCAS price spike correlation with each event
+- Post-contingency analysis: which assets responded and how quickly
+
+## FCAS Enablement
+
+A generator or battery is *enabled* for FCAS when NEMDE co-optimises it to provide that service. Enablement:
+
+- Must comply with the trapezium bid structure
+- Is limited by FCAS availability offers
+- Changes every 5-minute dispatch interval
+
+```sql
+-- Query FCAS enablement for batteries in last hour
+SELECT
+    duid,
+    interval_datetime,
+    raise6sec_enablement_mw,
+    lower6sec_enablement_mw,
+    raisereg_enablement_mw,
+    lowerreg_enablement_mw,
+    raise1sec_enablement_mw,
+    lower1sec_enablement_mw
+FROM energy_copilot.gold.nem_fcas_enablement
+WHERE fuel_type = 'Battery'
+  AND interval_datetime >= CURRENT_TIMESTAMP() - INTERVAL '1 HOUR'
+ORDER BY interval_datetime DESC;
+```
+
+## API Examples
+
+### Fetch Current FCAS Prices
+
+```bash
+GET /api/fcas/latest
+
+# Response
+{
+  "timestamp": "2025-03-21T05:30:00Z",
+  "prices": {
+    "RAISEREG":  {"price": 32.50, "enablement_mw": 890},
+    "LOWERREG":  {"price": 18.20, "enablement_mw": 890},
+    "RAISE1SEC": {"price": 5.80,  "enablement_mw": 420},
+    "LOWER1SEC": {"price": 2.10,  "enablement_mw": 350},
+    "RAISE6SEC": {"price": 0.95,  "enablement_mw": 1240},
+    "LOWER6SEC": {"price": 0.45,  "enablement_mw": 980},
+    "RAISE60SEC":{"price": 0.12,  "enablement_mw": 2100},
+    "LOWER60SEC":{"price": 0.08,  "enablement_mw": 1850}
+  }
+}
+```
+
+### FCAS Price History
+
+```bash
+GET /api/fcas/history?service=RAISE6SEC&start=2025-03-14&end=2025-03-21
+```
+
+## Gold Table Schema
+
+```sql
+-- gold.nem_fcas_prices (pivoted from 8 raw columns to long format)
+-- interval_datetime TIMESTAMP
+-- service           STRING   -- RAISEREG, LOWERREG, RAISE6SEC, etc.
+-- price             DOUBLE   -- $/MW/h
+-- enablement_mw     DOUBLE   -- MW enabled
+-- interval_date     DATE     -- partition key
+```
+
+<Aside type="tip">
+  FCAS prices in the long (pivoted) format enable straightforward time-series analysis across all 8 services. The raw AEMO data has one row per interval with 8 price columns — the Silver pipeline pivots this to one row per interval per service for query flexibility.
+</Aside>
+
+## FCAS Revenue Calculator
+
+The platform includes a FCAS revenue calculator for BESS operators:
+
+```
+FCAS Revenue = Σ (EnabledMW_service × Price_service × Hours_enabled_service)
+```
+
+Navigate to **Front Office → Battery Dispatch → FCAS Revenue** to run the calculator for any DUID over a configurable period.

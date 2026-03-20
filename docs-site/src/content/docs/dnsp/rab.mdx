@@ -1,0 +1,138 @@
+---
+title: RAB Roll-Forward
+description: Regulatory Asset Base modelling — capex additions, depreciation, inflation indexing, WACC sensitivity, and 5-year waterfall projections.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+The **Regulatory Asset Base (RAB)** is the AER's estimate of the value of a DNSP's network assets for regulatory purposes. The RAB forms the basis for calculating the allowed return on capital (WACC × RAB) — the largest single component of the building block revenue model.
+
+Modelling the RAB roll-forward accurately is critical for DNSPs preparing for regulatory reset submissions and for understanding expected revenue over the regulatory period.
+
+## RAB Roll-Forward Formula
+
+The RAB moves each year through this formula:
+
+```
+RAB_end = RAB_start × (1 + CPI%) + Capex_additions - Depreciation - Disposals
+```
+
+Where:
+- **RAB_start**: opening RAB for the year
+- **CPI%**: CPI indexation rate (set by AER, usually current-year CPI forecast)
+- **Capex_additions**: prudent and efficient capex added during the year
+- **Depreciation**: straight-line depreciation based on asset life
+- **Disposals**: assets removed from the regulated network
+
+## Dashboard Pages
+
+### RAB Roll-Forward Model (`/dnsp/rab/rollforward`)
+
+- Interactive 5-year RAB waterfall chart
+- Configurable inputs: capex profile, CPI scenario (low/base/high), asset disposal assumptions
+- Year-by-year breakdown: CPI uplift, capex additions, depreciation, disposals
+- Comparison: proposed vs AER-determined capex scenarios
+
+*Screenshot: RAB roll-forward waterfall chart showing 5-year projection with CPI uplift (green), capex additions (blue), and depreciation (red) components.*
+
+### WACC Sensitivity Analysis (`/dnsp/rab/wacc-sensitivity`)
+
+The allowed return on capital = WACC × RAB. Small changes in WACC have large revenue impacts:
+
+| WACC Change | Revenue Impact (per $1B RAB) |
+|------------|------------------------------|
+| +0.1% | +$1M/year |
+| +0.5% | +$5M/year |
+| +1.0% | +$10M/year |
+
+The WACC sensitivity tool models revenue across a range of WACC scenarios (±200bps) and shows the impact on allowed revenue, customer bills, and return on assets.
+
+### Depreciation Schedule
+
+The platform maintains a detailed depreciation schedule by asset class:
+
+```sql
+-- RAB depreciation by asset class
+SELECT
+    asset_class,
+    opening_rab_aud,
+    new_additions_aud,
+    annual_depreciation_aud,
+    depreciation_rate_pct,
+    remaining_life_years,
+    closing_rab_aud
+FROM energy_copilot.gold.dnsp_rab_schedule
+WHERE financial_year = 2025
+  AND dnsp_name = 'Ausgrid'
+ORDER BY opening_rab_aud DESC;
+```
+
+Standard asset lives used in the model:
+
+| Asset Class | Standard Life (Years) |
+|------------|----------------------|
+| Transmission connections | 50 |
+| Zone substations | 50 |
+| Distribution transformers | 40 |
+| Underground cables | 50 |
+| Overhead conductors | 40 |
+| Wood poles | 50 |
+| Steel poles | 65 |
+| Switchgear (HV) | 30 |
+| Meters (smart) | 15 |
+
+## CPI Indexation
+
+RAB is indexed annually to CPI to preserve the real value of regulated assets in real terms. The AER uses the June quarter CPI rate:
+
+```python
+# RAB indexation calculation
+def index_rab(rab_opening: float, cpi_rate: float) -> float:
+    """
+    Apply CPI indexation to opening RAB.
+    cpi_rate: annual CPI as a decimal (e.g., 0.034 for 3.4%)
+    """
+    return rab_opening * (1 + cpi_rate)
+```
+
+## 5-Year Waterfall Projection
+
+The RAB model projects the full regulatory period (typically 5 years):
+
+```
+Year 1: RAB_open × (1 + CPI_1) + Capex_1 - Dep_1
+Year 2: RAB_1 × (1 + CPI_2) + Capex_2 - Dep_2
+...
+Year 5: RAB_4 × (1 + CPI_5) + Capex_5 - Dep_5
+```
+
+Scenario modelling:
+- **Base case**: AER-approved capex, RBA CPI forecast
+- **High capex**: 20% above base (augmentation program)
+- **Low CPI**: 1% CPI (low inflation scenario)
+- **High CPI**: 5% CPI (inflationary scenario)
+
+## API Endpoints
+
+```bash
+# Current RAB by asset class
+GET /api/dnsp/rab/current?dnsp=sa_power_networks
+
+# 5-year roll-forward projection
+GET /api/dnsp/rab/projection?dnsp=ausgrid&years=5&scenario=base
+
+# WACC sensitivity
+GET /api/dnsp/rab/wacc-sensitivity?dnsp=ergon&wacc_range=0.05,0.09
+
+# Depreciation schedule
+GET /api/dnsp/rab/depreciation?dnsp=energex&year=2025
+
+# Capex vs RAB comparison
+GET /api/dnsp/rab/capex-impact?dnsp=essential_energy
+```
+
+<Aside type="note">
+  RAB data is sourced from AER annual reporting RINs and the determinations database (`pipelines/25_rab_determinations_ingest.py`). The model uses AER-published RAB values as the opening balance and rolls forward using user-configurable capex and CPI assumptions.
+</Aside>

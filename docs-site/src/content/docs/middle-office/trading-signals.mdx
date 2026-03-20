@@ -1,0 +1,156 @@
+---
+title: Trading Signals
+description: Eight algorithmic trading signal types for the NEM — momentum, mean reversion, weather-adjusted, renewable ramp, FCAS arbitrage, interconnector basis, demand shock, and time-of-day.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+The Trading Signals module generates eight distinct algorithmic signals derived from real-time and historical NEM data. These signals are informational — they highlight potential market opportunities based on quantitative rules — and are designed to support, not replace, trader judgement.
+
+<Aside type="caution">
+  Trading signals are not investment advice. They are derived from historical patterns and quantitative models. Past performance does not guarantee future results. Always apply professional judgement before acting on any signal.
+</Aside>
+
+## Signal Types
+
+### 1. Momentum Signal
+
+The momentum signal identifies regions where prices have sustained upward or downward movement:
+
+```
+Momentum_Score = (Price_now - Price_n_periods_ago) / Price_volatility_n_periods
+```
+
+Parameters:
+- Short window: 6 periods (30 minutes)
+- Long window: 48 periods (4 hours)
+- Signal trigger: |Momentum_Score| > 2 standard deviations
+
+**Interpretation**: A positive momentum score suggests continued price strength. A negative score suggests mean reversion may be due.
+
+### 2. Mean Reversion Signal
+
+Based on the historically strong mean-reverting behaviour of NEM spot prices:
+
+```
+Z_score = (Price_now - Rolling_mean_24h) / Rolling_std_24h
+Signal = "BUY" if Z_score < -2 else "SELL" if Z_score > 3 else "NEUTRAL"
+```
+
+The asymmetric thresholds (−2 vs +3) reflect the right-skewed distribution of NEM prices — spikes are more extreme than troughs.
+
+### 3. Weather-Adjusted Demand Signal
+
+Compares actual demand to weather-expected demand:
+
+```
+Expected_Demand = f(Temperature, DoW, PublicHoliday, Solar_Output)
+Demand_Anomaly = Actual_Demand - Expected_Demand
+Signal_Threshold = 1.5 × Residual_StdDev
+```
+
+When actual demand exceeds weather-adjusted expectations, it suggests an unmodelled demand driver (major event, forecast error) that could support elevated prices.
+
+### 4. Renewable Ramp Signal
+
+Identifies rapid changes in renewable output that historically precede price movements:
+
+```
+Wind_Ramp = Wind_Output_t - Wind_Output_(t-30min)   [MW]
+Solar_Ramp = Solar_Output_t - Solar_Output_(t-30min) [MW]
+
+Signal = "PRICE_RISE_RISK" if (Wind_Ramp < -300) or (Solar_Ramp < -150)
+Signal = "PRICE_FALL_RISK" if (Wind_Ramp > 500) or (Solar_Ramp > 300)
+```
+
+Rapid negative renewable ramps (wind dropping) in SA1 and VIC1 have historically preceded significant price spikes.
+
+### 5. FCAS Arbitrage Signal
+
+Identifies opportunities where FCAS prices are elevated relative to the cost of providing FCAS:
+
+```
+FCAS_Opp_Score = max(0, FCAS_Price_service - Opportunity_Cost_MWh)
+```
+
+For a battery providing RAISE6SEC:
+- FCAS revenue: enabled_mw × price ($/MW/h)
+- Opportunity cost: energy not dispatched × spot_price
+- Net: if FCAS_revenue > energy_opportunity_cost, FCAS preferred
+
+### 6. Interconnector Basis Signal
+
+Identifies price divergence between regions that share an interconnector, subject to congestion:
+
+```
+Basis = Price_Region_A - Price_Region_B
+Congestion_Flag = (Interconnector_Flow / Interconnector_Limit > 0.95)
+
+Signal = "ARBITRAGE_POSSIBLE" if (|Basis| > 50) and NOT Congestion_Flag
+Signal = "CONGESTION_PREMIUM" if (|Basis| > 100) and Congestion_Flag
+```
+
+### 7. Demand Shock Signal
+
+Detects sudden large demand changes not explained by weather or time-of-day patterns:
+
+```
+Demand_Change_30min = Demand_t - Demand_(t-6_intervals)  [MW]
+Normalised_Change = Demand_Change_30min / Region_Peak_Demand
+
+Signal = "DEMAND_SHOCK" if |Normalised_Change| > 0.05  (5% of peak demand in 30 min)
+```
+
+### 8. Time-of-Day Pattern Signal
+
+Exploits statistically significant intraday price patterns:
+
+- **Morning ramp**: 07:00–08:30 AEST — demand rise, solar not yet offsetting
+- **Solar trough**: 12:00–14:00 AEST in summer — rooftop solar suppresses prices
+- **Evening peak**: 17:30–19:00 AEST — solar drops, demand peaks
+- **Overnight trough**: 01:00–05:00 AEST — lowest demand, coal baseload excess
+
+## Signal Dashboard
+
+### Signals Feed (`/middle-office/trading-signals`)
+
+- Live feed of all active signals across all 8 types
+- Region filter to focus on specific market
+- Signal strength indicator (1–5 stars)
+- Historical hit rate: percentage of times this signal type was followed by the predicted price move
+
+*Screenshot: Trading signals feed showing 3 active signals with strength, region, signal type, and historical hit rate.*
+
+### Signal Backtesting (`/middle-office/signals-backtest`)
+
+- Test any signal's historical performance over configurable lookback period
+- P&L simulation: if you had traded every signal of a given type, what would the outcome be?
+- Risk-adjusted return: Sharpe ratio, maximum drawdown, win rate
+
+## API Endpoints
+
+```bash
+# All current signals
+GET /api/trading-signals/latest
+
+# Specific signal type
+GET /api/trading-signals?type=mean_reversion&region=SA1
+
+# Signal history
+GET /api/trading-signals/history?type=momentum&region=VIC1&start=2025-03-01
+
+# Backtest signal
+POST /api/trading-signals/backtest
+{
+  "signal_type": "renewable_ramp",
+  "region": "SA1",
+  "lookback_days": 90,
+  "trade_horizon_minutes": 30
+}
+```
+
+<Aside type="tip">
+  Ask the AI copilot: "Are there any active trading signals in SA1 right now?" The copilot uses the `get_trading_signals` tool to retrieve current signals and provides qualitative context about the market conditions that generated them.
+</Aside>

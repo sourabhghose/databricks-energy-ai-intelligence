@@ -1,0 +1,272 @@
+---
+title: DNSP APIs
+description: DNSP router endpoints grouped by area — AIO, assets, vegetation, workforce, RAB, benchmarking, hosting capacity, and DAPR.
+---
+
+## AIO Compliance
+
+### GET /api/dnsp/aio/status
+
+AIO filing status for a DNSP and year.
+
+```bash
+GET /api/dnsp/aio/status?dnsp=ausgrid&year=2025
+
+# Response
+{
+  "dnsp": "ausgrid",
+  "year": 2025,
+  "total_obligations": 42,
+  "complete": 35,
+  "in_progress": 5,
+  "not_started": 2,
+  "overdue": 0,
+  "obligations": [
+    {
+      "id": "AIO-2025-REL-001",
+      "name": "SAIDI/SAIFI Annual Report",
+      "due_date": "2025-10-31",
+      "status": "complete",
+      "section": "reliability_performance"
+    }
+  ]
+}
+```
+
+### POST /api/dnsp/aio/generate-draft
+
+Generate a Claude AI draft for an AIO section.
+
+```bash
+POST /api/dnsp/aio/generate-draft
+Content-Type: application/json
+
+{
+  "dnsp": "ausgrid",
+  "section": "reliability_performance",
+  "year": 2025,
+  "data": {
+    "saidi_actual": 112.4,
+    "saidi_target": 120.0,
+    "saifi_actual": 1.142,
+    "saifi_target": 1.250,
+    "worst_feeder": "CAMPBELLTOWN_11KV_F07"
+  }
+}
+
+# Response (streaming or complete)
+{
+  "draft_text": "Ausgrid achieved a SAIDI of 112.4 minutes per customer...",
+  "word_count": 487,
+  "generation_time_ms": 8420,
+  "model": "databricks-claude-sonnet-4-5"
+}
+```
+
+## Asset Intelligence
+
+### GET /api/dnsp/assets/summary
+
+Asset health summary by DNSP.
+
+```bash
+GET /api/dnsp/assets/summary?dnsp=ausgrid
+
+# Response
+{
+  "dnsp": "ausgrid",
+  "total_assets": 48234,
+  "by_risk_class": {
+    "Critical": 124,
+    "Very High": 892,
+    "High": 3241,
+    "Medium": 12840,
+    "Low": 31137
+  },
+  "average_health_index": 68.4,
+  "assets_due_for_inspection": 2341
+}
+```
+
+### GET /api/dnsp/assets/high-risk
+
+Assets above a failure probability threshold.
+
+```bash
+GET /api/dnsp/assets/high-risk?dnsp=ergon&threshold=0.3&horizon_months=12
+
+# Returns array of assets with failure_probability > 0.3
+```
+
+### GET /api/dnsp/assets/\{asset_id\}
+
+Individual asset details with health score and failure prediction.
+
+```bash
+GET /api/dnsp/assets/TXF-NW-0847
+
+# Response includes:
+# - asset attributes (age, type, substation)
+# - health_index, risk_class
+# - failure_probability_12m
+# - top_risk_factors (SHAP-derived)
+# - maintenance history
+# - feeder connectivity
+```
+
+## Vegetation Risk
+
+### GET /api/dnsp/vegetation/high-risk
+
+High-risk network spans.
+
+```bash
+GET /api/dnsp/vegetation/high-risk?dnsp=ausgrid&min_score=0.7
+
+# Returns array of spans with risk_score > 0.7
+```
+
+### GET /api/dnsp/vegetation/new-alerts
+
+Spans newly flagged as high-risk since last model run.
+
+```bash
+GET /api/dnsp/vegetation/new-alerts?dnsp=sa_power_networks
+
+# Response
+{
+  "model_run_date": "2025-03-17",
+  "newly_flagged": [
+    {
+      "span_id": "SA-NW-00847-A",
+      "suburb": "Gawler East",
+      "previous_risk_class": "Medium",
+      "current_risk_class": "High",
+      "risk_score": 0.74,
+      "primary_driver": "inspection_age_days",
+      "bmo_zone": true
+    }
+  ]
+}
+```
+
+## Workforce Analytics
+
+### GET /api/dnsp/workforce/forecast
+
+18-month workforce demand forecast.
+
+```bash
+GET /api/dnsp/workforce/forecast?dnsp=ausgrid&horizon=18m&include_intervals=true
+
+# Response includes monthly forecast by skill category
+# with P10/P50/P90 prediction intervals
+```
+
+### GET /api/dnsp/workforce/skills-gap
+
+Skills gap analysis comparing forecast demand vs current capacity.
+
+```bash
+GET /api/dnsp/workforce/skills-gap?dnsp=ergon&horizon=12m
+
+# Response
+{
+  "skill_gaps": [
+    {
+      "skill": "hv_linesperson",
+      "current_headcount": 85,
+      "forecast_peak_demand_fte": 92,
+      "gap": -7,
+      "gap_type": "shortage",
+      "peak_month": "2025-12"
+    }
+  ]
+}
+```
+
+## RAB Modelling
+
+### GET /api/dnsp/rab/projection
+
+5-year RAB roll-forward projection.
+
+```bash
+GET /api/dnsp/rab/projection?dnsp=ausgrid&years=5&scenario=base
+
+# Response
+{
+  "opening_rab_aud": 8420000000,
+  "projection": [
+    {
+      "year": 2025,
+      "cpi_uplift": 0.034,
+      "capex_additions_aud": 620000000,
+      "depreciation_aud": -380000000,
+      "disposals_aud": -15000000,
+      "closing_rab_aud": 8860000000
+    }
+  ]
+}
+```
+
+### GET /api/dnsp/rab/wacc-sensitivity
+
+WACC sensitivity analysis for RAB return.
+
+```bash
+GET /api/dnsp/rab/wacc-sensitivity?dnsp=sa_power_networks&wacc_range=0.05,0.09
+
+# Returns revenue impact at each WACC point (1bps increments)
+```
+
+## Benchmarking
+
+### GET /api/dnsp/benchmarking/peer-comparison
+
+Full peer group comparison.
+
+```bash
+GET /api/dnsp/benchmarking/peer-comparison?year=2024
+
+# Returns opex/capex metrics for all 6 DNSPs with rankings
+```
+
+## Hosting Capacity
+
+### GET /api/dnsp/hosting/capacity
+
+Hosting capacity by zone.
+
+```bash
+GET /api/dnsp/hosting/capacity?dnsp=ausgrid&voltage=LV
+
+# Returns zones with available_mw and utilisation_pct
+```
+
+## DAPR Assembly
+
+### GET /api/dnsp/dapr/status
+
+DAPR completion status.
+
+```bash
+GET /api/dnsp/dapr/status?dnsp=ausgrid&year=2025
+
+# Returns section-level completion status and compliance checklist
+```
+
+### POST /api/dnsp/dapr/export
+
+Export compiled DAPR document.
+
+```bash
+POST /api/dnsp/dapr/export
+{
+  "dnsp": "ausgrid",
+  "year": 2025,
+  "format": "docx"
+}
+
+# Returns download URL for compiled document
+```

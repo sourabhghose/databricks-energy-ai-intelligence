@@ -1,0 +1,127 @@
+---
+title: Demand & Weather
+description: BOM weather feeds, temperature-demand correlation, cooling/heating degree days, and demand forecasting by NEM region.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+Weather is the primary driver of electricity demand in Australia — air conditioning load on hot summer days can push NEM demand to record highs, while mild autumn days produce demand troughs. Energy Copilot integrates Bureau of Meteorology (BOM) weather data for all NEM regions with demand data from AEMO to provide comprehensive demand-weather analytics.
+
+## Weather Data Sources
+
+Energy Copilot uses the **Open-Meteo BOM ACCESS-G** weather model, which provides:
+
+- **Historical weather**: observed temperature, humidity, wind speed, irradiance (1 year lookback)
+- **Short-term NWP forecasts**: +72 hours at 1-hour resolution
+- **Medium-term forecasts**: +7 days at 3-hour resolution
+
+Weather stations are mapped to NEM regions using population-weighted averages:
+
+| NEM Region | Primary Weather Location | Population Centre |
+|-----------|------------------------|------------------|
+| NSW1 | Sydney (Observatory Hill) | Greater Sydney |
+| QLD1 | Brisbane (RAAF Amberley) | South East QLD |
+| SA1 | Adelaide (Kent Town) | Greater Adelaide |
+| TAS1 | Hobart (Ellerslie Road) | Greater Hobart |
+| VIC1 | Melbourne (Olympic Park) | Greater Melbourne |
+
+## Dashboard Pages
+
+### Weather Overview (`/front-office/weather`)
+
+- Current temperature map: colour-coded by temperature for all 5 regions
+- Temperature forecast chart: next 7 days with min/max/mean
+- BOM ACCESS-G model parameters: temperature, humidity, cloud cover, wind speed, solar irradiance
+
+### Temperature-Demand Correlation (`/front-office/demand-weather-correlation`)
+
+- Scatter plot: temperature vs demand for each region (historical 90 days)
+- R² coefficient displayed for each region's temperature-demand relationship
+- Breakpoint detection: temperature threshold where cooling load activates
+- Heating vs cooling asymmetry: demand response is typically larger for cooling
+
+### Demand Forecasting (`/front-office/demand-forecast`)
+
+The ML demand forecast uses LightGBM with weather features:
+
+- **Inputs**: temperature forecast, day-of-week, public holiday flag, season, lag features (demand at t-1, t-7, t-48 periods)
+- **Output**: 30-minute demand forecast for each region, 24-hour horizon
+- **MAPE target**: &lt;3% for operational planning horizon
+
+*Screenshot: Demand forecast chart for NSW1 showing actual demand (solid) vs ML forecast (dashed) with 90% prediction interval band.*
+
+## Cooling and Heating Degree Days
+
+**Cooling Degree Days (CDD)** and **Heating Degree Days (HDD)** are standard energy sector metrics:
+
+```
+CDD = max(0, Daily_Mean_Temp - 18°C)
+HDD = max(0, 18°C - Daily_Mean_Temp)
+```
+
+Energy Copilot calculates and displays:
+- Weekly and monthly CDD/HDD by region
+- Cumulative CDD/HDD for the current summer/winter season
+- Comparison to 5-year historical average
+
+## Demand Records and Extremes
+
+The platform tracks demand records:
+
+| Region | Summer Peak Record | Date | MW |
+|--------|-------------------|------|-----|
+| NSW1 | All-time peak | Jan 2011 | 14,846 |
+| QLD1 | All-time peak | Feb 2004 | 9,673 |
+| SA1 | All-time peak | Jan 2009 | 3,442 |
+| VIC1 | All-time peak | Jan 2009 | 10,854 |
+| NEM Total | All-time peak | Jan 2011 | ~35,000 |
+
+<Aside type="note">
+  These historical peak records pre-date significant rooftop solar uptake. Operational demand (excluding rooftop solar) has been declining even as population and economic activity grow.
+</Aside>
+
+## Gold Table Schema
+
+```sql
+-- gold.weather_nem_regions
+SELECT
+    observation_datetime,  -- TIMESTAMP: UTC observation time
+    interval_date,         -- DATE: partition key
+    region_id,             -- STRING: NEM region
+    temperature_c,         -- DOUBLE: temperature (°C)
+    humidity_pct,          -- DOUBLE: relative humidity (%)
+    wind_speed_ms,         -- DOUBLE: wind speed (m/s)
+    wind_direction_deg,    -- DOUBLE: wind direction (degrees)
+    solar_irradiance_wm2,  -- DOUBLE: global horizontal irradiance (W/m²)
+    precipitation_mm,      -- DOUBLE: precipitation (mm)
+    is_forecast,           -- BOOLEAN: true for NWP forecast periods
+    forecast_horizon_h     -- INT: hours ahead (NULL for observed)
+FROM energy_copilot.gold.weather_nem_regions
+WHERE interval_date = CURRENT_DATE()
+ORDER BY observation_datetime DESC;
+```
+
+## API Endpoints
+
+```bash
+# Current weather for all regions
+GET /api/weather/latest
+
+# Weather history for specific region
+GET /api/weather/history?region=SA1&start=2025-03-01
+
+# Weather forecast (NWP)
+GET /api/weather/forecast?region=NSW1&horizon=72h
+
+# Demand forecast
+GET /api/demand/forecast?region=VIC1&horizon=24h
+
+# Demand-weather correlation stats
+GET /api/demand/weather-correlation?region=QLD1&period=90d
+```
+
+<Aside type="tip">
+  Ask the copilot: "Is there a heatwave forecast for SA this week and what is the expected demand impact?" The copilot will retrieve the weather forecast and apply demand-temperature correlation models to estimate peak demand and price risk.
+</Aside>

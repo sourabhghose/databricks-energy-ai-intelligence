@@ -1,0 +1,130 @@
+---
+title: Compliance & Regulatory
+description: NER obligations calendar, AER enforcement register, AEMC rule change tracker, and compliance monitoring for NEM participants.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Overview
+
+Compliance with the National Electricity Rules (NER) and associated regulatory instruments is a legal obligation for all NEM participants. Failure to comply can result in AER investigations, civil penalties, and licence suspension. Energy Copilot automates compliance tracking across the major obligation categories.
+
+## Compliance Calendar
+
+The compliance calendar (`/back-office/compliance/calendar`) aggregates all regulatory deadlines from multiple sources:
+
+| Source | Obligation Type | Update Frequency |
+|--------|----------------|-----------------|
+| NER Chapter 3 | Metering compliance | Based on NER schedule |
+| NER Chapter 4 | Generator compliance | Based on NER schedule |
+| AER annual reporting | Retail market reporting | Annual |
+| AER CDR | Consumer data reporting | Quarterly |
+| RET legislation | LGC surrender | Annual (31 Jan) |
+| Safeguard Mechanism | Carbon reporting | Annual (31 Oct) |
+| AEMO procedures | Technical compliance | Various |
+
+The calendar provides:
+- Due date countdown for each obligation
+- Responsible team assignment
+- Status tracking: not started → in progress → submitted → complete
+- Late flag: colour coded red when past due date
+
+```sql
+-- Upcoming compliance deadlines in next 30 days
+SELECT
+    obligation_id,
+    obligation_name,
+    regulatory_source,
+    due_date,
+    DATEDIFF(due_date, CURRENT_DATE()) AS days_remaining,
+    responsible_team,
+    status
+FROM energy_copilot.gold.compliance_calendar
+WHERE due_date BETWEEN CURRENT_DATE() AND CURRENT_DATE() + INTERVAL '30 DAY'
+ORDER BY due_date;
+```
+
+## AER Enforcement Register
+
+The AER publishes its enforcement activity (investigations, infringement notices, enforceable undertakings, and civil penalty proceedings) on its website. Energy Copilot ingests this data via `pipelines/17_aer_enforcement_ingest.py`:
+
+### Enforcement Dashboard (`/back-office/compliance/enforcement`)
+
+- Current enforcement register: all active and recently closed matters
+- Filter by participant type, issue type, and status
+- Trend analysis: number of enforcement actions by year and category
+- Sector benchmarking: how does your participant category compare?
+
+### Enforcement Categories Tracked
+
+| Category | Examples |
+|----------|---------|
+| **Market manipulation** | Rebidding to increase price; false scarcity |
+| **Retail compliance** | Overcharging, non-disclosure, poor disconnection practices |
+| **Metering non-compliance** | Incorrect metering data, reporting failures |
+| **Network compliance** | Access arrangement compliance, reliability obligations |
+| **Registration obligations** | Late registration, capacity declarations |
+
+## AEMC Rule Change Tracker
+
+The Australian Energy Market Commission (AEMC) manages proposed changes to the National Electricity Rules. Understanding proposed changes is important for compliance planning and market strategy.
+
+Energy Copilot ingests AEMC rule change data via `pipelines/23_aemc_rule_changes_ingest.py`:
+
+### Rule Change Dashboard (`/back-office/compliance/rule-changes`)
+
+- Current consultation papers and rule change proposals
+- Stage tracker: initiation → consultation → determination
+- Impact classification: which business functions are affected
+- Implementation timeline: when does the change take effect?
+
+Filterable by:
+- Rule change category (market, network, retail, consumer)
+- Status (in progress, determined, not made)
+- Effective date range
+
+## AEMO Procedures Library
+
+AEMO publishes hundreds of market procedures and guidelines that define operational requirements. The Procedures Library (`/back-office/compliance/procedures`) provides:
+
+- Searchable index of all current AEMO procedures
+- Version history: current vs superseded versions
+- Change summaries: what changed between versions
+- Obligation extraction: AI-assisted extraction of specific obligations from procedure text
+
+## Compliance Alerts
+
+The platform generates automated compliance alerts:
+
+| Alert Type | Trigger | Response |
+|-----------|---------|---------|
+| Deadline approaching | 14 days before due date | Dashboard notification + email |
+| Deadline tomorrow | 1 day before due date | Urgent alert all channels |
+| Overdue obligation | Past due date | Critical alert + escalation |
+| New enforcement action | Related to your participant category | Informational alert |
+| New rule change published | Any AEMC rule change | Informational alert |
+
+## API Endpoints
+
+```bash
+# Compliance calendar
+GET /api/compliance/calendar?days_ahead=30&status=open
+
+# AER enforcement register
+GET /api/compliance/enforcement?status=current&category=market_manipulation
+
+# Rule changes
+GET /api/compliance/rule-changes?status=in_progress
+
+# Update obligation status
+PATCH /api/compliance/calendar/{obligation_id}
+{
+  "status": "submitted",
+  "submitted_date": "2025-03-20",
+  "notes": "Submitted via AER portal"
+}
+```
+
+<Aside type="caution">
+  The compliance calendar is a tracking tool to support your compliance obligations. It does not constitute legal advice and should not be used as a substitute for specialist legal and regulatory counsel. Always verify obligation details against the authoritative regulatory instruments.
+</Aside>
