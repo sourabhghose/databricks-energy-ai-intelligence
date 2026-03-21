@@ -11,10 +11,10 @@
 
 # COMMAND ----------
 
-import uuid
 import math
 import random
-from datetime import datetime, timedelta
+import uuid
+from datetime import datetime
 
 random.seed(42)
 
@@ -524,7 +524,7 @@ if gas_hubs:
             "notes": f"Gas-indexed swap ({hub} ${gas_px:.2f}/GJ × {HEAT_RATE} HR)",
             "created_by": "seed_v2",
         })
-    print(f"Gas-indexed SWAP trades: 2")
+    print("Gas-indexed SWAP trades: 2")
 else:
     print("No gas hub data available — skipping gas swaps")
 
@@ -546,7 +546,7 @@ for tt, cnt in sorted(type_counts.items()):
 status_counts = {}
 for t in trades:
     status_counts[t["status"]] = status_counts.get(t["status"], 0) + 1
-print(f"\nStatus distribution:")
+print("\nStatus distribution:")
 for st, cnt in sorted(status_counts.items()):
     print(f"  {st}: {cnt}")
 

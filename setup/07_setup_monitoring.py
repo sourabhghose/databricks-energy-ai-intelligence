@@ -24,7 +24,7 @@ import logging
 import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from databricks.sdk import WorkspaceClient
 from databricks.sdk.errors import ResourceAlreadyExists
@@ -32,11 +32,9 @@ from databricks.sdk.service.catalog import (
     MonitorCronSchedule,
     MonitorCustomMetric,
     MonitorCustomMetricType,
-    MonitorDataClassificationConfig,
     MonitorInferenceLog,
     MonitorInferenceLogProblemType,
     MonitorSnapshot,
-    MonitorTimeSeries,
 )
 
 # COMMAND ----------
@@ -415,7 +413,7 @@ def setup_market_summary_monitor(w: WorkspaceClient) -> None:
         w=w,
         table_name=table_name,
         create_kwargs=dict(
-            assets_dir=f"/Shared/energy_copilot/monitors/market_summary",
+            assets_dir="/Shared/energy_copilot/monitors/market_summary",
             output_schema_name=output_schema,
             snapshot=MonitorSnapshot(),
             slicing_exprs=["CAST(summary_date AS STRING)"],

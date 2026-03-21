@@ -44,7 +44,7 @@ import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 # ---------------------------------------------------------------------------
 # Structured / JSON logging
@@ -389,7 +389,6 @@ def _normalise_xlsx_columns(df: "pd.DataFrame") -> "pd.DataFrame":
     Find the header row (first row containing 'DUID'), normalise column names,
     and return a clean DataFrame.
     """
-    import pandas as pd
 
     # Find the header row
     header_row_idx = None
@@ -467,7 +466,6 @@ def _transform_to_registry(raw_df: "pd.DataFrame") -> "pd.DataFrame":
     Returns a pandas DataFrame ready for writing to Delta.
     """
     import pandas as pd
-    import numpy as np
 
     now_utc = datetime.now(timezone.utc)
     rows = []
@@ -626,8 +624,8 @@ def _write_to_delta_local(
         return
 
     try:
-        from deltalake.writer import write_deltalake
         import pyarrow as pa
+        from deltalake.writer import write_deltalake
 
         pa_table = pa.Table.from_pandas(df)
         write_deltalake(path, pa_table, mode="overwrite")

@@ -446,7 +446,7 @@ FORECAST_EVERY_N = 10  # every 5 minutes
 rng = random.Random(42)
 iteration = 0
 
-print(f"=== NEM Simulator Started ===")
+print("=== NEM Simulator Started ===")
 print(f"Catalog: {CATALOG}")
 print(f"Interval: {INTERVAL_SECONDS}s | Forecasts every {FORECAST_EVERY_N * INTERVAL_SECONDS}s")
 print("=" * 50)

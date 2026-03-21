@@ -27,17 +27,12 @@
 
 from __future__ import annotations
 
-import os
 import json
 import logging
 from typing import Any
 
 # Databricks SDK — install with: pip install databricks-sdk>=0.25.0
 from databricks.sdk import WorkspaceClient
-from databricks.sdk.service.dashboards import (
-    GenieSpace,
-    GenieSpaceTable,
-)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger(__name__)
@@ -576,7 +571,7 @@ def _get_or_create_warehouse() -> str:
 
     # Create a new serverless warehouse for Genie Spaces
     log.info("Creating new Serverless SQL warehouse for Genie Spaces...")
-    from databricks.sdk.service.sql import CreateWarehouseRequest, SpotInstancePolicy
+    from databricks.sdk.service.sql import SpotInstancePolicy
     wh = w.warehouses.create(
         name="energy_copilot_genie",
         cluster_size="Small",

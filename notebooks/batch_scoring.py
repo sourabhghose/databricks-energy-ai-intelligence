@@ -10,12 +10,14 @@
 
 # COMMAND ----------
 
+from datetime import datetime
+
 import mlflow
-import pandas as pd
 import numpy as np
-from datetime import datetime, timedelta
-from pyspark.sql import functions as F, types as T
+import pandas as pd
 from mlflow.tracking import MlflowClient
+from pyspark.sql import functions as F
+from pyspark.sql import types as T
 
 CATALOG = spark.conf.get("spark.energy_copilot.catalog", "energy_copilot")
 REGIONS = ["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]
