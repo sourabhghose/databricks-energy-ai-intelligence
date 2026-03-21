@@ -910,103 +910,59 @@ def _dispatch_tool(name: str, arguments: dict) -> str:
     """Execute a tool call and return JSON result string."""
     try:
         if name == "query_spot_prices":
-            region = arguments.get("region")
-            hours = arguments.get("hours", 1)
-            where = f"AND region_id = '{region}'" if region else ""
+            region = arguments.get("region") or ""
+            hours = int(arguments.get("hours", 1))
             rows = _query_gold(
-                f"SELECT region_id, rrp, total_demand_mw, available_gen_mw, interval_datetime "
-                f"FROM {_CATALOG}.gold.nem_prices_5min "
-                f"WHERE interval_datetime >= current_timestamp() - INTERVAL {hours} HOURS {where} "
-                f"ORDER BY interval_datetime DESC LIMIT 50"
+                f"SELECT {_CATALOG}.ai_tools.query_spot_prices('{region}', {hours}) AS result"
             )
-            if rows:
-                for r in rows:
-                    r["interval_datetime"] = str(r["interval_datetime"])
-                return json.dumps(rows[:20], default=str)
+            if rows and rows[0].get("result"):
+                return rows[0]["result"]
             return json.dumps({"error": "No price data available"})
 
         elif name == "query_generation_mix":
-            region = arguments.get("region", "NSW1")
+            region = arguments.get("region") or "NSW1"
             rows = _query_gold(
-                f"SELECT fuel_type, is_renewable, total_mw, unit_count, capacity_factor, "
-                f"emissions_tco2e, emissions_intensity "
-                f"FROM {_CATALOG}.gold.nem_generation_by_fuel "
-                f"WHERE region_id = '{region}' "
-                f"AND interval_datetime = ("
-                f"  SELECT MAX(interval_datetime) FROM {_CATALOG}.gold.nem_generation_by_fuel"
-                f") ORDER BY total_mw DESC"
+                f"SELECT {_CATALOG}.ai_tools.query_generation_mix('{region}') AS result"
             )
-            if rows:
-                return json.dumps(rows, default=str)
+            if rows and rows[0].get("result"):
+                return rows[0]["result"]
             return json.dumps({"error": f"No generation data for {region}"})
 
         elif name == "query_interconnectors":
             rows = _query_gold(
-                f"SELECT interconnector_id, from_region, to_region, mw_flow, "
-                f"export_limit_mw, import_limit_mw, utilization_pct, is_congested "
-                f"FROM {_CATALOG}.gold.nem_interconnectors "
-                f"WHERE interval_datetime = ("
-                f"  SELECT MAX(interval_datetime) FROM {_CATALOG}.gold.nem_interconnectors"
-                f")"
+                f"SELECT {_CATALOG}.ai_tools.query_interconnectors() AS result"
             )
-            if rows:
-                return json.dumps(rows, default=str)
+            if rows and rows[0].get("result"):
+                return rows[0]["result"]
             return json.dumps({"error": "No interconnector data"})
 
         elif name == "query_price_forecasts":
-            region = arguments.get("region", "NSW1")
-            hours = arguments.get("hours", 4)
+            region = arguments.get("region") or "NSW1"
+            hours = int(arguments.get("hours", 4))
             rows = _query_gold(
-                f"SELECT interval_datetime, predicted_rrp, prediction_lower_80, "
-                f"prediction_upper_80, spike_probability, model_name "
-                f"FROM {_CATALOG}.gold.price_forecasts "
-                f"WHERE region_id = '{region}' "
-                f"AND forecast_run_at = ("
-                f"  SELECT MAX(forecast_run_at) FROM {_CATALOG}.gold.price_forecasts WHERE region_id = '{region}'"
-                f") "
-                f"AND interval_datetime <= current_timestamp() + INTERVAL {hours} HOURS "
-                f"ORDER BY interval_datetime LIMIT 50"
+                f"SELECT {_CATALOG}.ai_tools.query_price_forecasts('{region}', {hours}) AS result"
             )
-            if rows:
-                for r in rows:
-                    r["interval_datetime"] = str(r["interval_datetime"])
-                return json.dumps(rows, default=str)
+            if rows and rows[0].get("result"):
+                return rows[0]["result"]
             return json.dumps({"error": f"No price forecasts for {region}"})
 
         elif name == "query_weather":
-            region = arguments.get("region")
-            where = f"AND nem_region = '{region}'" if region else ""
+            region = arguments.get("region") or ""
             rows = _query_gold(
-                f"SELECT nem_region, forecast_datetime, temperature_c, "
-                f"wind_speed_100m_kmh, solar_radiation_wm2, cloud_cover_pct "
-                f"FROM {_CATALOG}.gold.weather_nem_regions "
-                f"WHERE forecast_datetime >= current_timestamp() - INTERVAL 2 HOURS {where} "
-                f"ORDER BY forecast_datetime DESC LIMIT 25"
+                f"SELECT {_CATALOG}.ai_tools.query_weather('{region}') AS result"
             )
-            if rows:
-                for r in rows:
-                    r["forecast_datetime"] = str(r["forecast_datetime"])
-                return json.dumps(rows, default=str)
+            if rows and rows[0].get("result"):
+                return rows[0]["result"]
             return json.dumps({"error": "No weather data available"})
 
         elif name == "query_demand_forecasts":
-            region = arguments.get("region", "NSW1")
-            hours = arguments.get("hours", 4)
+            region = arguments.get("region") or "NSW1"
+            hours = int(arguments.get("hours", 4))
             rows = _query_gold(
-                f"SELECT interval_datetime, predicted_demand_mw, prediction_lower_80, "
-                f"prediction_upper_80, model_name "
-                f"FROM {_CATALOG}.gold.demand_forecasts "
-                f"WHERE region_id = '{region}' "
-                f"AND forecast_run_at = ("
-                f"  SELECT MAX(forecast_run_at) FROM {_CATALOG}.gold.demand_forecasts WHERE region_id = '{region}'"
-                f") "
-                f"AND interval_datetime <= current_timestamp() + INTERVAL {hours} HOURS "
-                f"ORDER BY interval_datetime LIMIT 50"
+                f"SELECT {_CATALOG}.ai_tools.query_demand_forecasts('{region}', {hours}) AS result"
             )
-            if rows:
-                for r in rows:
-                    r["interval_datetime"] = str(r["interval_datetime"])
-                return json.dumps(rows, default=str)
+            if rows and rows[0].get("result"):
+                return rows[0]["result"]
             return json.dumps({"error": f"No demand forecasts for {region}"})
 
         elif name == "search_market_rules":
@@ -1202,29 +1158,8 @@ def _dispatch_tool(name: str, arguments: dict) -> str:
             return json.dumps(result, default=str)
 
         elif name == "get_constraint_forecast":
-            region = arguments.get("region", "NSW1")
-            days = arguments.get("days", 7)
-            rows = _query_gold(
-                f"SELECT HOUR(interval_datetime) AS hour_of_day, "
-                f"DAYOFWEEK(interval_datetime) AS day_of_week, "
-                f"COUNT(*) AS total_intervals, "
-                f"SUM(CASE WHEN is_congested = true THEN 1 ELSE 0 END) AS binding_count "
-                f"FROM {_CATALOG}.gold.nem_interconnectors "
-                f"WHERE (from_region = '{region}' OR to_region = '{region}') "
-                f"AND interval_datetime >= current_timestamp() - INTERVAL {days} DAYS "
-                f"GROUP BY HOUR(interval_datetime), DAYOFWEEK(interval_datetime) "
-                f"ORDER BY binding_count DESC LIMIT 20"
-            )
-            if rows:
-                lines = [f"Constraint binding heatmap for {region} (last {days} days):"]
-                lines.append(f"{'Hour':>4} {'Day':>4} {'Binding%':>9} {'Count':>6}")
-                for r in rows:
-                    total = int(r.get("total_intervals", 1))
-                    binding = int(r.get("binding_count", 0))
-                    pct = binding / max(total, 1) * 100
-                    lines.append(f"{r['hour_of_day']:>4} {r['day_of_week']:>4} {pct:>8.1f}% {binding:>6}")
-                return json.dumps({"text": "\n".join(lines), "data": rows}, default=str)
-            return json.dumps({"message": f"No constraint data for {region} in last {days} days"})
+            from ._settlement_dispatch import dispatch as _sd
+            return _sd(name, arguments)
 
         elif name == "get_portfolio_pnl":
             from .risk import _run_mtm_core
@@ -1628,60 +1563,12 @@ def _dispatch_tool(name: str, arguments: dict) -> str:
             return json.dumps(result, default=str)
 
         # --- Phase 5 Settlement Tools ---
-        elif name == "get_settlement_runs":
-            from .shared import _query_gold, _CATALOG as _C, _sql_escape as _esc
-            where = []
-            if arguments.get("run_type"):
-                where.append(f"run_type = '{_esc(arguments['run_type'])}'")
-            if arguments.get("status"):
-                where.append(f"status = '{_esc(arguments['status'])}'")
-            if arguments.get("region"):
-                where.append(f"region = '{_esc(arguments['region'])}'")
-            if arguments.get("billing_period"):
-                where.append(f"billing_period = '{_esc(arguments['billing_period'])}'")
-            wc = ("WHERE " + " AND ".join(where)) if where else ""
-            runs = _query_gold(
-                f"SELECT * FROM {_C}.gold.settlement_runs {wc} ORDER BY run_date DESC LIMIT 20"
-            ) or []
-            for r in runs:
-                for k in ("run_date", "created_at", "updated_at"):
-                    if k in r and r[k] is not None:
-                        r[k] = str(r[k])
-            lines = [f"Settlement Runs ({len(runs)} found):"]
-            lines.append(f"{'Type':<8} {'Period':<8} {'Region':<6} {'Status':<12} {'AEMO AUD':>14} {'Variance':>14}")
-            lines.append("-" * 70)
-            for r in runs[:15]:
-                lines.append(
-                    f"{r.get('run_type',''):<8} {r.get('billing_period',''):<8} "
-                    f"{r.get('region',''):<6} {r.get('status',''):<12} "
-                    f"${float(r.get('aemo_total_aud',0)):>13,.2f} "
-                    f"${float(r.get('variance_aud',0)):>13,.2f}"
-                )
-            return json.dumps({"text": "\n".join(lines), "runs": runs}, default=str)
-
-        elif name == "get_settlement_trueup":
-            from .shared import _query_gold, _CATALOG as _C
-            threshold = arguments.get("threshold_aud", 5000)
-            material = _query_gold(
-                f"SELECT * FROM {_C}.gold.settlement_runs "
-                f"WHERE ABS(variance_aud) >= {threshold} AND status NOT IN ('ACCEPTED') "
-                f"ORDER BY ABS(variance_aud) DESC LIMIT 20"
-            ) or []
-            for r in material:
-                for k in ("run_date", "created_at", "updated_at"):
-                    if k in r and r[k] is not None:
-                        r[k] = str(r[k])
-            lines = [f"Material Variance Analysis (threshold: ${threshold:,.0f}):"]
-            lines.append(f"  Runs exceeding threshold: {len(material)}")
-            for r in material[:10]:
-                lines.append(
-                    f"  {r.get('run_type','')} {r.get('billing_period','')} {r.get('region','')}: "
-                    f"variance ${float(r.get('variance_aud',0)):,.2f} ({float(r.get('variance_pct',0)):.2f}%)"
-                )
-            return json.dumps({"text": "\n".join(lines), "material_runs": material}, default=str)
+        elif name in ("get_settlement_runs", "get_settlement_trueup"):
+            from ._settlement_dispatch import dispatch as _sd
+            return _sd(name, arguments)
 
         elif name == "get_settlement_finance_summary":
-            from .shared import _query_gold, _CATALOG as _C, _sql_escape as _esc
+            from .shared import _CATALOG as _C, _sql_escape as _esc
             where_parts = []
             if arguments.get("start_date"):
                 where_parts.append(f"run_date >= '{_esc(arguments['start_date'])}'")

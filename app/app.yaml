@@ -9,3 +9,7 @@ command:
   - "8000"
   - --workers
   - "1"
+
+env:
+  - name: PYTHONPYCACHEPREFIX
+    value: /tmp/pycache
