@@ -7,14 +7,16 @@ from __future__ import annotations
 
 import random as _r
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Query
-from fastapi.responses import JSONResponse
 
 from .shared import (
-    _CATALOG, _NEM_REGIONS, _AEST,
-    _query_gold, _cache_get, _cache_set, logger,
+    _CATALOG,
+    _NEM_REGIONS,
+    _cache_get,
+    _cache_set,
+    _query_gold,
 )
 
 router = APIRouter()
@@ -144,7 +146,7 @@ def _core_loading_alerts(threshold: float = 80) -> Dict[str, Any]:
 
 def _core_voltage_events(region: Optional[str] = None) -> Dict[str, Any]:
     """Voltage excursion events."""
-    where = f"AND v.excursion_flag = true" + (f" AND a.region = '{region}'" if region else "")
+    where = "AND v.excursion_flag = true" + (f" AND a.region = '{region}'" if region else "")
     rows = _query_gold(f"""
         SELECT v.monitoring_point_id, v.interval_datetime, v.voltage_kv,
                v.nominal_kv, v.excursion_type

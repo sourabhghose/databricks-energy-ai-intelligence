@@ -8,17 +8,25 @@ from __future__ import annotations
 import csv
 import io
 import uuid
-from datetime import datetime, date, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Query, UploadFile, File
+from fastapi import APIRouter, File, Query, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
 from .shared import (
-    _CATALOG, _NEM_REGIONS, _query_gold, _query_with_fallback,
-    _insert_gold, _insert_gold_batch, _update_gold, _execute_gold,
-    _invalidate_cache, _query_lakebase_fresh, _sql_escape, logger,
+    _CATALOG,
+    _NEM_REGIONS,
+    _execute_gold,
+    _insert_gold,
+    _insert_gold_batch,
+    _invalidate_cache,
+    _query_gold,
+    _query_lakebase_fresh,
+    _sql_escape,
+    _update_gold,
+    logger,
 )
 
 router = APIRouter()

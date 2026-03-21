@@ -11,7 +11,6 @@
 
 import json
 from datetime import datetime, timezone
-from pyspark.sql import functions as F
 
 try:
     CATALOG = dbutils.widgets.get("catalog")

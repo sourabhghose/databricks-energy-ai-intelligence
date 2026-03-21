@@ -79,7 +79,7 @@ export default function SolarPVSoilingAnalytics() {
       if (recs.length > 0) {
         const avg = recs.reduce((s: number, r: SPSLSoilingRecord) => s + r.soiling_ratio, 0) / recs.length
         const farm = farms.find((f: SPSLFarmRecord) => f.farm_id === fid)
-        row[farm?.farm_name.split(' ')[0] + ' ' + fid.slice(-2) ?? fid] = parseFloat(avg.toFixed(4))
+        row[(farm?.farm_name?.split(' ')[0] ?? fid) + ' ' + fid.slice(-2)] = parseFloat(avg.toFixed(4))
       }
     })
     soilingChartData.push(row)

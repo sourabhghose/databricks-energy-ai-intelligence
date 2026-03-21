@@ -8,14 +8,13 @@ from __future__ import annotations
 import os
 import random as _r
 from datetime import date, datetime, timedelta
-from typing import Optional
 
 import httpx
-from fastapi import APIRouter, Query
+from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from .shared import _query_gold, logger
+from .shared import logger
 
 router = APIRouter()
 

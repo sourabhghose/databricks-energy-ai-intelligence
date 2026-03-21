@@ -109,7 +109,7 @@ export default function WemOverview() {
       })
       const ds = dashRes.demand_summary || {}
       setDemandSummary({ avg_demand: ds.avg_demand ?? 0, peak_demand: ds.peak_demand ?? 0, min_demand: ds.min_demand ?? 0 })
-      setGenMix(dashRes.generation_mix || [])
+      setGenMix((dashRes.generation_mix || []) as Array<{ fuel_type: string; avg_mw: number; total_mw: number }>)
       setPrices(pricesRes.prices || [])
       setGeneration(genRes.generation || [])
       setDemand(demandRes.demand || [])

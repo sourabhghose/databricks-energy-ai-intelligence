@@ -12,7 +12,15 @@ Schedule: Monthly (1st Monday, 9am AEST)
 
 import hashlib
 from datetime import datetime, timezone
-from pyspark.sql.types import StructType, StructField, StringType, DoubleType, IntegerType, TimestampType
+
+from pyspark.sql.types import (
+    DoubleType,
+    IntegerType,
+    StringType,
+    StructField,
+    StructType,
+    TimestampType,
+)
 
 # COMMAND ----------
 

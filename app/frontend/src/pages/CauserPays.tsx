@@ -50,7 +50,7 @@ interface KpiCardProps {
   title: string
   value: string
   sub?: string
-  Icon: React.FC<{ size?: number; className?: string }>
+  Icon: React.ElementType
   iconClass?: string
 }
 

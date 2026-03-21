@@ -12,9 +12,10 @@ dbutils.library.restartPython()
 
 # COMMAND ----------
 
-import psycopg
 import socket
 import uuid
+
+import psycopg
 from databricks.sdk import WorkspaceClient
 
 try:

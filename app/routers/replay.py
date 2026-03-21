@@ -2,12 +2,12 @@
 from __future__ import annotations
 
 import random
-from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict
 
 from fastapi import APIRouter, Query
 
-from .shared import _NEM_REGIONS, _CATALOG, _query_gold, _sql_escape, logger
+from .shared import _CATALOG, _NEM_REGIONS, _query_gold, _sql_escape, logger
 
 router = APIRouter()
 

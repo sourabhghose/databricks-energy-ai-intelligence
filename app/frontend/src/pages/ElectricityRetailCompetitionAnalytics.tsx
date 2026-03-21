@@ -21,7 +21,7 @@ import {
   PolarRadiusAxis,
 } from 'recharts'
 import { getERCADashboard } from '../api/client'
-import type { ERCADashboard } from '../api/client'
+import type { ERCARetailCompDashboard } from '../api/client'
 
 // ---------------------------------------------------------------------------
 // Colour palettes
@@ -113,7 +113,7 @@ function affordabilityBadge(idx: number) {
 // Main Page
 // ---------------------------------------------------------------------------
 export default function ElectricityRetailCompetitionAnalytics() {
-  const [data, setData] = useState<ERCADashboard | null>(null)
+  const [data, setData] = useState<ERCARetailCompDashboard | null>(null)
 
   useEffect(() => {
     getERCADashboard().then(setData).catch(console.error)

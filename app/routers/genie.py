@@ -1,5 +1,5 @@
 from __future__ import annotations
-import json
+
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
@@ -848,6 +848,7 @@ def list_genie_spaces():
 def _genie_headers():
     """Get auth headers for Genie API calls using the app's service principal."""
     import os
+
     from databricks.sdk import WorkspaceClient
     w = WorkspaceClient()
     auth = w.config.authenticate()

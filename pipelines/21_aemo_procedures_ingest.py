@@ -14,10 +14,11 @@ Target: energy_copilot_catalog.gold.aemo_procedures
 Schedule: Monthly (1st Monday, 9am AEST) — procedures updated infrequently
 """
 
-import requests
-import re
 import hashlib
+import re
 from datetime import datetime, timezone
+
+import requests
 from bs4 import BeautifulSoup
 
 # COMMAND ----------
@@ -213,7 +214,8 @@ for proc in AEMO_PROCEDURES:
         "ingested_at": now,
     })
 
-from pyspark.sql.types import StructType, StructField, StringType
+from pyspark.sql.types import StringType, StructField, StructType
+
 schema = StructType([
     StructField("procedure_id", StringType()),
     StructField("procedure_code", StringType()),

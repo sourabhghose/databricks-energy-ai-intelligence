@@ -1,13 +1,14 @@
 from __future__ import annotations
+
 import math
 import random
-from datetime import datetime, timezone, date, timedelta
-from typing import Any, Dict, List, Optional
+from datetime import date, datetime, timedelta, timezone
+from typing import Dict, List, Optional
 
 from fastapi import APIRouter
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
-from .shared import _cache_get, _cache_set, _query_gold, _CATALOG, _NEM_REGIONS, logger
+from .shared import _CATALOG, _cache_get, _cache_set, _query_gold, logger
 
 router = APIRouter()
 

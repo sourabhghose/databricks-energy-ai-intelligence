@@ -381,14 +381,14 @@ export default function EnergyMarketCreditRiskAnalytics() {
             />
             <Scatter
               data={chart5Data}
-              shape={(props: Record<string, unknown>) => {
+              shape={((props: Record<string, unknown>) => {
                 const cx = Number(props.cx ?? 0)
                 const cy = Number(props.cy ?? 0)
                 const payload = props.payload as typeof chart5Data[0]
                 const r = Math.max(4, Math.min(20, (payload.total_exposure_m / 5000) * 20))
                 const fill = SCENARIO_COLOURS[payload.scenario] ?? '#6b7280'
                 return <circle cx={cx} cy={cy} r={r} fill={fill} fillOpacity={0.7} stroke={fill} strokeWidth={1} />
-              }}
+              }) as any}
             />
           </ScatterChart>
         </ResponsiveContainer>

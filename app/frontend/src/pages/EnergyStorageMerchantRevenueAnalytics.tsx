@@ -103,7 +103,7 @@ export default function EnergyStorageMerchantRevenueAnalytics() {
   const spreadRegions = ['NSW1', 'QLD1', 'VIC1', 'SA1', 'TAS1']
   const spreadByMonth: Record<string, Record<string, number>> = {}
   for (const s of data.price_spreads) {
-    if (!spreadByMonth[s.month]) spreadByMonth[s.month] = { month: s.month } as Record<string, number>
+    if (!spreadByMonth[s.month]) spreadByMonth[s.month] = { month: s.month } as unknown as Record<string, number>
     spreadByMonth[s.month][s.region] = s.spread_per_mwh
   }
   const spreadChartData = Object.values(spreadByMonth).sort((a, b) =>

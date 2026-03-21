@@ -162,7 +162,7 @@ export default function SolarFarmOperationsAnalytics() {
   })
   const monthlyTrendData = Object.entries(monthlyMap)
     .map(([label, vals]) => ({ label, ...vals }))
-    .sort((a, b) => (a.month as number) - (b.month as number))
+    .sort((a, b) => ((a as any).month as number) - ((b as any).month as number))
 
   // Fault events by category and severity (stacked bar)
   const faultCats = ["Inverter", "String", "Panel", "Tracker", "SCADA", "Grid Connection", "Weather", "Vegetation", "Bird Strike"]

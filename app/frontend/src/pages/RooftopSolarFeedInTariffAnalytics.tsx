@@ -120,7 +120,7 @@ export default function RooftopSolarFeedInTariffAnalytics() {
   const exportMap: Record<string, ExportPoint> = {}
   for (const ei of export_impact) {
     const key = `${ei.year} ${quarterLabels[ei.month] ?? `M${ei.month}`}`
-    if (!exportMap[key]) exportMap[key] = { key, _year: ei.year, _month: ei.month } as ExportPoint
+    if (!exportMap[key]) exportMap[key] = { key, _year: ei.year, _month: ei.month } as unknown as ExportPoint
     exportMap[key][ei.region] = ei.solar_export_gwh
   }
   const exportChartData = Object.values(exportMap).sort((a, b) => {

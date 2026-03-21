@@ -885,10 +885,13 @@ def promote_champion(results: List[Dict]) -> None:
         status    = "PASS" if r["passed_dod"] else "FAIL"
         spike_mae = spike.get("spike_mae_aud_mwh", float("nan"))
         spike_rcl = spike.get("spike_recall_pct",  float("nan"))
+        reg = r["region"]
+        mae = core["mae_aud_mwh"]
+        mape = core["mape_pct"]
         print(
-            f"{r["region"]:<8}"
-            f" {core["mae_aud_mwh"]:>7.2f}"
-            f" {core["mape_pct"]:>6.2f}%"
+            f"{reg:<8}"
+            f" {mae:>7.2f}"
+            f" {mape:>6.2f}%"
             f" {spike_mae:>8.2f}"
             f" {spike_rcl:>7.1f}%"
             f" {status:>6}"

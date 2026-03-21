@@ -15,10 +15,10 @@ Target: energy_copilot_catalog.gold.esv_regulations
 Schedule: Monthly (1st Monday, 8am AEST) — legislation changes infrequently
 """
 
-import requests
-import re
 import hashlib
 from datetime import datetime, timezone
+
+import requests
 from bs4 import BeautifulSoup
 
 # COMMAND ----------

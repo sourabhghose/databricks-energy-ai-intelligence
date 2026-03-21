@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone
 from typing import List, Optional
 
 from databricks import sql as dbsql
@@ -606,7 +605,6 @@ def get_model_health(model_type: Optional[str] = None) -> dict:
     Returns:
         dict with keys: models (list of model status dicts), healthy_count, total_count
     """
-    import mlflow
     from mlflow.tracking import MlflowClient
 
     CATALOG = os.getenv("DATABRICKS_CATALOG", "energy_copilot")

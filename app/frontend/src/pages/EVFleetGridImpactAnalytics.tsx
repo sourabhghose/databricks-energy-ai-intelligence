@@ -440,11 +440,11 @@ function EmissionsChart({ records }: { records: EFGEmissionRecord[] }) {
               contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: 8 }}
               labelStyle={{ color: '#f9fafb' }}
               itemStyle={{ color: '#d1d5db' }}
-              formatter={(v: unknown, name: string) => {
-                if (name === 'net_abatement') return [`${Number(v).toFixed(2)} Mt CO2`]
-                if (name === 'ev_count_k') return [`${v}k EVs`]
-                return [v]
-              }}
+              formatter={((v: unknown, name: string) => {
+                if (name === 'net_abatement') return [`${Number(v).toFixed(2)} Mt CO2`, name]
+                if (name === 'ev_count_k') return [`${v}k EVs`, name]
+                return [v, name]
+              }) as any}
             />
             <Legend wrapperStyle={{ color: '#9ca3af', fontSize: 12 }} />
             <Line

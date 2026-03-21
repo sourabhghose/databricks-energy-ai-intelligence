@@ -574,8 +574,7 @@ print("✓ capex_opex_analysis")
 # ============================================================
 
 import random
-import uuid
-from datetime import datetime, timedelta, date
+from datetime import date, datetime, timedelta
 
 random.seed(42)
 now = datetime.utcnow()

@@ -136,7 +136,6 @@ function EmissionFactorsSection({ data }: { data: ECAEmissionFactorRecord[] }) {
             <button
               key={r}
               onClick={() => setSelectedRegion(r)}
-              style={{ borderColor: REGION_COLORS[r] }}
               className={`px-3 py-1 rounded border text-xs font-semibold transition-colors ${
                 selectedRegion === r
                   ? 'text-white'

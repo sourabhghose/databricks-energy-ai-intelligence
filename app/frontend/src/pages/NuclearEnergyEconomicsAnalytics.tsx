@@ -190,12 +190,12 @@ export default function NuclearEnergyEconomicsAnalytics() {
           <ResponsiveContainer width="100%" height={320}>
             <BarChart data={scenarioChartData} margin={{ top: 5, right: 10, left: 0, bottom: 60 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-              <XAxis dataKey="name" tick={{ fill: '#9ca3af', fontSize: 11 }} angle={-30} textAnchor="end" interval={0} />
+              <XAxis dataKey="name" tick={{ fill: '#9ca3af', fontSize: 11 }} {...({ angle: -30 } as any)} textAnchor="end" interval={0} />
               <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} />
               <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', color: '#fff' }} />
               <Legend wrapperStyle={{ color: '#9ca3af', paddingTop: 8 }} />
               <Bar dataKey="Capacity (GW)" fill={SCENARIO_COLORS.capacity} />
-              <Bar dataKey="Cost ($bn ÷10)" fill={SCENARIO_COLORS.oppose} />
+              <Bar dataKey="Cost ($bn ÷10)" fill={SCENARIO_COLORS.cost} />
               <Bar dataKey="CO₂ Abatement (Mt/yr)" fill={SCENARIO_COLORS.co2} />
             </BarChart>
           </ResponsiveContainer>

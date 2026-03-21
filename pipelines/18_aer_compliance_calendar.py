@@ -12,11 +12,10 @@ Target: energy_copilot_catalog.gold.compliance_obligations
 Schedule: Weekly (Monday 8am AEST)
 """
 
-import requests
-import re
 import hashlib
-import uuid
-from datetime import datetime, timezone, date
+from datetime import date, datetime, timezone
+
+import requests
 from bs4 import BeautifulSoup
 
 # COMMAND ----------

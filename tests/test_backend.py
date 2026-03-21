@@ -34,7 +34,7 @@ os.environ.setdefault("ANTHROPIC_API_KEY", "sk-ant-dummy-key")
 # will then use the mock data helpers rather than attempting a real Postgres
 # connection.
 
-from unittest.mock import MagicMock, patch  # noqa: E402
+from unittest.mock import patch  # noqa: E402
 
 from fastapi.testclient import TestClient  # noqa: E402
 
@@ -6117,7 +6117,7 @@ class TestEnergyAffordabilityAnalytics:
         assert by_state_2024["WA"] == min(by_state_2024.values()), "WA should have lowest 2024 bill"
 
         # --- income_affordability: 30 records (6 states × 5 cohorts) ---
-        assert len(d["income_affordability"]) == 30, f"Expected 30 income affordability records"
+        assert len(d["income_affordability"]) == 30, "Expected 30 income affordability records"
         valid_cohorts = {"BOTTOM_20PCT", "LOWER_MIDDLE", "MIDDLE", "UPPER_MIDDLE", "TOP_20PCT"}
         cohorts_seen: set = set()
         for rec in d["income_affordability"]:
@@ -6150,7 +6150,7 @@ class TestEnergyAffordabilityAnalytics:
             "SA bottom-20% energy burden should be the highest"
 
         # --- solar_impact: 24 records (6 states × 4 household types) ---
-        assert len(d["solar_impact"]) == 24, f"Expected 24 solar impact records"
+        assert len(d["solar_impact"]) == 24, "Expected 24 solar impact records"
         valid_types = {"NO_SOLAR", "SOLAR_ONLY", "SOLAR_BATTERY", "VPP_PARTICIPANT"}
         types_seen: set = set()
         for rec in d["solar_impact"]:
@@ -6180,7 +6180,7 @@ class TestEnergyAffordabilityAnalytics:
                 f"{state}: VPP_PARTICIPANT should have the lowest net energy cost"
 
         # --- assistance_programs: 12 records ---
-        assert len(d["assistance_programs"]) == 12, f"Expected 12 assistance program records"
+        assert len(d["assistance_programs"]) == 12, "Expected 12 assistance program records"
         valid_program_types = {"REBATE", "CONCESSION", "PAYMENT_PLAN", "FREE_APPLIANCE"}
         program_types_seen: set = set()
         for prog in d["assistance_programs"]:
@@ -7952,7 +7952,7 @@ class TestRenewableAuctionAnalytics:
 
     def test_design_elements_count(self, client, auth_headers):
         d = client.get(self.endpoint, headers=auth_headers).json()
-        assert len(d["design_elements"]) >= 6, f"Expected >=6 design element records"
+        assert len(d["design_elements"]) >= 6, "Expected >=6 design element records"
 
     def test_design_element_fields(self, client, auth_headers):
         d = client.get(self.endpoint, headers=auth_headers).json()
@@ -7985,7 +7985,7 @@ class TestRenewableAuctionAnalytics:
 
     def test_govt_exposure_count(self, client, auth_headers):
         d = client.get(self.endpoint, headers=auth_headers).json()
-        assert len(d["govt_exposure"]) >= 12, f"Expected >=12 govt_exposure records"
+        assert len(d["govt_exposure"]) >= 12, "Expected >=12 govt_exposure records"
 
     def test_govt_exposure_scenarios(self, client, auth_headers):
         d = client.get(self.endpoint, headers=auth_headers).json()
@@ -8640,7 +8640,7 @@ class TestInterconnectorUpgradeAnalytics:
         for b in benefits:
             assert b["benefit_type"] in valid_benefit_types, f"Invalid benefit type: {b['benefit_type']}"
             assert b["confidence"] in valid_confidence, f"Invalid confidence: {b['confidence']}"
-            assert b["benefit_m_aud_yr"] > 0, f"benefit_m_aud_yr must be positive"
+            assert b["benefit_m_aud_yr"] > 0, "benefit_m_aud_yr must be positive"
             assert b["project_id"] in expected_ids, f"Unknown project_id in benefit: {b['project_id']}"
             assert len(b["quantification_method"]) > 0, "quantification_method must not be empty"
 
@@ -8658,7 +8658,7 @@ class TestInterconnectorUpgradeAnalytics:
         for s in scenarios:
             assert s["scenario"] in valid_scenarios, f"Invalid scenario: {s['scenario']}"
             assert s["project_id"] in expected_ids, f"Unknown project_id in scenario: {s['project_id']}"
-            assert s["bcr"] > 0, f"Scenario BCR must be positive"
+            assert s["bcr"] > 0, "Scenario BCR must be positive"
             assert s["renewable_firming_mw"] >= 0, "renewable_firming_mw must be non-negative"
             assert s["breakeven_price_aud_mwh"] > 0, "breakeven_price_aud_mwh must be positive"
 
@@ -8724,7 +8724,7 @@ class TestCspAnalytics:
         for t in technologies:
             assert t["name"] in valid_tech_names, f"Invalid tech name: {t['name']}"
             assert 0 < t["peak_efficiency_pct"] <= 100, f"peak_efficiency_pct out of range: {t['peak_efficiency_pct']}"
-            assert 0 < t["annual_capacity_factor_pct"] <= 100, f"annual_capacity_factor_pct out of range"
+            assert 0 < t["annual_capacity_factor_pct"] <= 100, "annual_capacity_factor_pct out of range"
             assert t["storage_hours"] >= 0, "storage_hours must be non-negative"
             assert t["capex_m_aud_mw"] > 0, "capex_m_aud_mw must be positive"
             assert t["lcoe_aud_mwh"] > 0, "lcoe_aud_mwh must be positive"
@@ -12680,7 +12680,7 @@ class TestConsumerEnergyAffordabilityDashboard:
 # Sprint 98c — Grid Forming Inverter Technology Analytics (GFIAX)
 # ---------------------------------------------------------------------------
 
-class TestGridFormingInverterDashboard:
+class TestGridFormingInverterXDashboard:
     URL = "/api/grid-forming-inverter-x/dashboard"
     HEADERS = {"x-api-key": "test-api-key"}
 
@@ -22189,7 +22189,7 @@ class TestACCUDashboard:
 # Sprint 149c — TestEVGIDashboard (EVGI Electric Vehicle Grid Integration)
 # ===========================================================================
 
-class TestEVGIDashboard:
+class TestElectricVehicleGridIntegrationDashboard:
     """9 tests for GET /api/electric-vehicle-grid-integration/dashboard."""
 
     URL = "/api/electric-vehicle-grid-integration/dashboard"

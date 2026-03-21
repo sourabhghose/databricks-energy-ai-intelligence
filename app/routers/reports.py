@@ -5,19 +5,18 @@ Generate, store, and retrieve structured reports (risk, market, compliance, envi
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, date, timezone
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import JSONResponse
 
 from .shared import (
     _CATALOG,
-    _query_gold,
     _insert_gold,
-    _sql_escape,
     _invalidate_cache,
-    logger,
+    _query_gold,
+    _sql_escape,
 )
 
 router = APIRouter()

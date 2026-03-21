@@ -41,8 +41,8 @@ TBLPROPERTIES ('delta.enableChangeDataFeed' = 'false')
 # COMMAND ----------
 
 # --- Fetch OpenNEM stations.json ---
+
 import requests
-import json
 
 url = "https://raw.githubusercontent.com/opennem/opennem/main/opennem/data/stations.json"
 try:
@@ -228,7 +228,7 @@ print(f"Total rows after supplemental: {len(rows)}")
 # COMMAND ----------
 
 # --- Write to Delta table ---
-from pyspark.sql.types import StructType, StructField, StringType, DoubleType
+from pyspark.sql.types import DoubleType, StringType, StructField, StructType
 
 schema = StructType([
     StructField("duid", StringType(), False),

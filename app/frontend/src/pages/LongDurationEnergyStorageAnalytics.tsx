@@ -192,7 +192,7 @@ export default function LongDurationEnergyStorageAnalytics() {
         />
         <KpiCard
           label="Total Pipeline"
-          value={`${(summary.total_pipeline_mwh / 1000).toFixed(1)} GWh`}
+          value={`${(Number(summary.total_pipeline_mwh) / 1000).toFixed(1)} GWh`}
           sub={`${summary.total_projects} projects`}
           icon={Zap}
           colour="bg-blue-500"

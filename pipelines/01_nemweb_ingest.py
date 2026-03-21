@@ -3,8 +3,9 @@
 # MAGIC # Pipeline 01 — NEMWEB Ingest (Bronze -> Silver -> Gold)
 # MAGIC DLT/SDP streaming pipeline. Autoloader reads CSVs from Volume.
 
-import dlt
 from functools import reduce
+
+import dlt
 from pyspark.sql import functions as F
 from pyspark.sql.types import DoubleType, StringType, TimestampType
 

@@ -248,10 +248,10 @@ export default function GridScaleBatteryDegradationAnalytics() {
               <Tooltip
                 contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: 6 }}
                 labelStyle={{ color: '#f9fafb' }}
-                formatter={(v: number, _n: string, entry: { payload: { chemistry: string } }) => [
+                formatter={((v: number, _n: string, entry: { payload: { chemistry: string } }) => [
                   `${v}%`,
                   `SoH (${entry.payload.chemistry})`,
-                ]}
+                ]) as any}
               />
               <Bar dataKey="soh" name="SoH %" radius={[4, 4, 0, 0]}>
                 {sohByBattery.map((entry, index) => (

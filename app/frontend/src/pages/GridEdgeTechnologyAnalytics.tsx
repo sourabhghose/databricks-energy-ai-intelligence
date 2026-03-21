@@ -317,10 +317,10 @@ export default function GridEdgeTechnologyAnalytics() {
               <Tooltip
                 contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: 8 }}
                 labelStyle={{ color: '#f9fafb' }}
-                formatter={(val: number, _name: string, entry: { payload: GEDSmartInverterRecord }) => [
+                formatter={((val: number, _name: string, entry: { payload: GEDSmartInverterRecord }) => [
                   `${val.toLocaleString()} units | ${entry.payload.model} | ${entry.payload.capacity_kva} kVA`,
                   'Installations',
-                ]}
+                ]) as any}
               />
               <Bar dataKey="australia_installs" name="AU Installs" fill="#22d3ee" radius={[0, 4, 4, 0]} />
             </BarChart>

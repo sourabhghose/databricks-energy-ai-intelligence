@@ -278,7 +278,7 @@ function CapexCategoriesChart({ capexCategories, businesses }: { capexCategories
     <ResponsiveContainer width="100%" height={340}>
       <BarChart data={chartData} margin={{ top: 10, right: 20, left: 0, bottom: 60 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-        <XAxis dataKey="name" stroke="#9CA3AF" tick={{ fill: '#9CA3AF', fontSize: 10, angle: -30, textAnchor: 'end' }} interval={0} />
+        <XAxis dataKey="name" stroke="#9CA3AF" tick={{ fill: '#9CA3AF', fontSize: 10, angle: -30, textAnchor: 'end' } as any} interval={0} />
         <YAxis stroke="#9CA3AF" tick={{ fill: '#9CA3AF', fontSize: 12 }} tickFormatter={(v) => `$${v}M`} />
         <Tooltip
           contentStyle={{ backgroundColor: '#1F2937', border: '1px solid #374151', borderRadius: 8 }}

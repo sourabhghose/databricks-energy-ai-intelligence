@@ -256,7 +256,7 @@ function SupplyChainSection({ records }: { records: HEASupplyChainRecord[] }) {
           <XAxis
             dataKey="component"
             stroke="#9ca3af"
-            tick={{ fill: '#9ca3af', fontSize: 10, angle: -25, textAnchor: 'end' }}
+            tick={{ fill: '#9ca3af', fontSize: 10, angle: -25, textAnchor: 'end' } as any}
           />
           <YAxis stroke="#9ca3af" tick={{ fill: '#9ca3af', fontSize: 11 }} />
           <Tooltip

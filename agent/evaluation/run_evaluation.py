@@ -55,10 +55,11 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(mess
 # ---------------------------------------------------------------------------
 
 import sys
+
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))  # project root
 
 from agent.copilot_agent import build_agent_executor
-from agent.evaluation.eval_dataset import ALL_EVAL_PAIRS, EvalPair, CATEGORY_COUNTS
+from agent.evaluation.eval_dataset import ALL_EVAL_PAIRS, CATEGORY_COUNTS, EvalPair
 
 # ---------------------------------------------------------------------------
 # Mock mode detection
@@ -168,7 +169,6 @@ Respond with ONLY a JSON object in this exact format:
 {{"score": <0-4 integer>, "reason": "<one sentence>"}}"""
 
     try:
-        import anthropic
         message = anthropic_client.messages.create(
             model="claude-sonnet-4-5",
             max_tokens=100,

@@ -677,7 +677,7 @@ function ScenarioLibrarySection() {
 
   const handleReverseStress = async () => {
     try {
-      const res = await advancedRiskApi.reverseStressTest(undefined, 1_000_000)
+      const res = await advancedRiskApi.reverseStressTest(1_000_000)
       setStressResult(res)
     } catch { /* */ }
   }

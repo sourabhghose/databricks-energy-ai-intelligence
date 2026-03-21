@@ -11,8 +11,6 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone
-from typing import Optional
 
 from databricks import sql as dbsql
 from langchain_core.tools import tool

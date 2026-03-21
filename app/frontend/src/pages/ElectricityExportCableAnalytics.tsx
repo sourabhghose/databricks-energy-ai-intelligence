@@ -97,7 +97,7 @@ export default function ElectricityExportCableAnalytics() {
   // Build scenario IRR data keyed by project
   type ScenarioIrrRow = { project: string } & Record<string, number>
   const irrByScenario: ScenarioIrrRow[] = top4Projects.map(proj => {
-    const row: ScenarioIrrRow = { project: proj.project_name.split('—')[0].trim().replace('Sun Cable ', 'Sun Cable') }
+    const row = { project: proj.project_name.split('—')[0].trim().replace('Sun Cable ', 'Sun Cable') } as unknown as ScenarioIrrRow
     scenarios.forEach(sc => {
       const rec = economics.find(e => e.project_id === proj.project_id && e.scenario === sc)
       row[sc] = rec ? rec.irr_pct : 0

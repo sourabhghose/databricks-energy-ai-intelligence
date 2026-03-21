@@ -15,18 +15,18 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
+from .curves import _build_forward_curve
 from .shared import (
     _CATALOG,
     _NEM_REGIONS,
-    _query_gold,
-    _query_lakebase_fresh,
+    _execute_gold,
     _insert_gold,
     _insert_gold_batch,
-    _execute_gold,
+    _query_gold,
+    _query_lakebase_fresh,
     _sql_escape,
     logger,
 )
-from .curves import _build_forward_curve
 
 router = APIRouter()
 

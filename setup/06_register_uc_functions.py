@@ -29,7 +29,6 @@
 from __future__ import annotations
 
 import logging
-from typing import Any
 
 from databricks.sdk import WorkspaceClient
 
@@ -958,7 +957,7 @@ ALL_TOOL_REGISTRATIONS = [
 
 
 def main() -> None:
-    '''Register all 14 Unity Catalog agent tools in energy_copilot.tools schema.'
+    '''Register all 14 Unity Catalog agent tools in energy_copilot.tools schema.'''
     log.info('Registering %d UC functions in %s.%s', len(ALL_TOOL_REGISTRATIONS), CATALOG, SCHEMA)
     log.info('Workspace: %s', w.config.host)
 

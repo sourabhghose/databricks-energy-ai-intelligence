@@ -36,6 +36,11 @@ select = ["E", "F", "W", "I"]
 ignore = [
     "E501",   # line too long — handled by black
     "F821",   # undefined name — needed for spark / dbutils in notebook context
+    "E402",   # module import not at top — many setup/pipeline scripts need sys.path tweaks first
+    "E701",   # multiple statements on one line (colon) — generated/dense code
+    "E702",   # multiple statements on one line (semicolon) — generated/dense code
+    "E741",   # ambiguous variable name — l used intentionally in some places
+    "F841",   # local variable assigned but never used — stubs/scaffolding code
 ]
 exclude = [
     ".databricks",

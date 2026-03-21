@@ -217,7 +217,7 @@ function RegionalCongestionCostChart({ financial }: { financial: ENCRFinancial[]
   quarters.sort()
 
   const dataMap: Record<string, Record<string, number>> = {}
-  for (const q of quarters) dataMap[q] = { label: q } as Record<string, number>
+  for (const q of quarters) dataMap[q] = { label: q } as unknown as Record<string, number>
   for (const f of financial) {
     const key = `${f.year}-${f.quarter}`
     dataMap[key][f.region] = f.total_congestion_cost_m_aud

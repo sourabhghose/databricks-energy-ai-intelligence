@@ -54,7 +54,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -71,8 +70,8 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler
 
 # PySpark imports are optional — wrap for graceful degradation in unit test mode
 try:
-    from pyspark.sql import SparkSession
     import pyspark.sql.functions as F
+    from pyspark.sql import SparkSession
     _SPARK_AVAILABLE = True
 except ImportError:
     _SPARK_AVAILABLE = False

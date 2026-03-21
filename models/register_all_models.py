@@ -46,7 +46,7 @@ import argparse
 import logging
 import os
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import List, Optional
 
 import mlflow
@@ -133,7 +133,7 @@ def _configure_mlflow() -> None:
     """Point MLflow at the Databricks workspace specified by env vars."""
     host  = os.environ["DATABRICKS_HOST"].rstrip("/")
     token = os.environ["DATABRICKS_TOKEN"]
-    mlflow.set_tracking_uri(f"databricks")
+    mlflow.set_tracking_uri("databricks")
     os.environ["MLFLOW_TRACKING_URI"] = "databricks"
     logger.info("MLflow tracking URI set to Databricks workspace: %s", host)
 

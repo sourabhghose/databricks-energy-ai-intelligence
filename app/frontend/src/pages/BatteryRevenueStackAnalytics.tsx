@@ -54,8 +54,8 @@ export default function BatteryRevenueStackAnalytics() {
   // ---------- KPI cards ----------
   const kpis = [
     { label: 'Fleet Capacity (MW)', value: `${summary.total_fleet_capacity_mw?.toLocaleString()}`, color: 'text-green-400' },
-    { label: 'Avg FCAS Share %', value: `${summary.avg_fcas_share_pct?.toFixed(1)}%`, color: 'text-blue-400' },
-    { label: 'Best IRR', value: `${summary.best_irr_pct?.toFixed(1)}%`, color: 'text-amber-400' },
+    { label: 'Avg FCAS Share %', value: `${Number(summary.avg_fcas_share_pct).toFixed(1)}%`, color: 'text-blue-400' },
+    { label: 'Best IRR', value: `${Number(summary.best_irr_pct).toFixed(1)}%`, color: 'text-amber-400' },
     { label: 'Total Annual Revenue ($M)', value: `$${Number(summary.total_annual_revenue_m).toFixed(2)}M`, color: 'text-purple-400' },
   ]
 

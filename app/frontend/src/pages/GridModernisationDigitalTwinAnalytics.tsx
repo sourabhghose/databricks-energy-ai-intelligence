@@ -254,7 +254,7 @@ export default function GridModernisationDigitalTwinAnalytics() {
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={chart2Data} margin={{ top: 10, right: 20, left: 10, bottom: 40 }}>
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="sensor_type" tick={{ fontSize: 11, angle: -25, textAnchor: 'end' }} />
+            <XAxis dataKey="sensor_type" tick={{ fontSize: 11, angle: -25, textAnchor: 'end' } as any} />
             <YAxis unit="k" tick={{ fontSize: 11 }} />
             <Tooltip formatter={(v: number) => `${v.toLocaleString()}k units`} />
             <Bar dataKey="deployed_count_k" name="Deployed Count (000s)" fill="#3b82f6" />
@@ -297,7 +297,7 @@ export default function GridModernisationDigitalTwinAnalytics() {
         <ResponsiveContainer width="100%" height={320}>
           <BarChart data={chart4Data} margin={{ top: 10, right: 20, left: 10, bottom: 40 }}>
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="threat_category" tick={{ fontSize: 11, angle: -20, textAnchor: 'end' }} />
+            <XAxis dataKey="threat_category" tick={{ fontSize: 11, angle: -20, textAnchor: 'end' } as any} />
             <YAxis tick={{ fontSize: 11 }} />
             <Tooltip />
             <Legend />
@@ -316,7 +316,7 @@ export default function GridModernisationDigitalTwinAnalytics() {
         <ResponsiveContainer width="100%" height={320}>
           <BarChart data={chart5Data} margin={{ top: 10, right: 20, left: 10, bottom: 40 }}>
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="platform_type" tick={{ fontSize: 11, angle: -20, textAnchor: 'end' }} />
+            <XAxis dataKey="platform_type" tick={{ fontSize: 11, angle: -20, textAnchor: 'end' } as any} />
             <YAxis unit=" TB" tick={{ fontSize: 11 }} />
             <Tooltip formatter={(v: number) => `${v.toFixed(3)} TB/day`} />
             <Legend />

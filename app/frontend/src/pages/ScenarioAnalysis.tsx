@@ -170,7 +170,7 @@ export default function ScenarioAnalysis() {
   React.useEffect(() => {
     setPresetsLoading(true)
     api.getScenarioPresets()
-      .then(data => setPresets(data as Preset[]))
+      .then(data => setPresets(data as unknown as Preset[]))
       .catch(() => {/* silently ignore preset load failure */})
       .finally(() => setPresetsLoading(false))
   }, [])
@@ -542,7 +542,7 @@ export default function ScenarioAnalysis() {
                         className="border-b border-gray-100 dark:border-gray-700 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
                       >
                         <td className="px-4 py-3 font-medium text-gray-700 dark:text-gray-300">
-                          {row['parameter'] as string}
+                          {String(row['parameter'])}
                         </td>
                         <td className="px-4 py-3 text-center font-mono text-blue-700 dark:text-blue-300">
                           {fmtPrice(low)}

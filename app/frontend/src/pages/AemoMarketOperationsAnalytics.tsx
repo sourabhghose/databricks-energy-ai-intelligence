@@ -100,7 +100,7 @@ export default function AemoMarketOperationsAnalytics() {
   // ── Chart 1: Stacked bar — renewable vs non-renewable dispatched GWh by month (all regions)
   const dispatchByMonth: Record<string, Record<string, number>> = {}
   for (const rec of data.dispatch) {
-    if (!dispatchByMonth[rec.month]) dispatchByMonth[rec.month] = { month: rec.month } as Record<string, number>
+    if (!dispatchByMonth[rec.month]) dispatchByMonth[rec.month] = { month: rec.month } as unknown as Record<string, number>
     dispatchByMonth[rec.month][`${rec.region}_renewable`] =
       (dispatchByMonth[rec.month][`${rec.region}_renewable`] ?? 0) + rec.renewable_dispatched_gwh
     dispatchByMonth[rec.month][`${rec.region}_nonrenewable`] =
@@ -124,7 +124,7 @@ export default function AemoMarketOperationsAnalytics() {
   // ── Chart 3: Stacked bar — total_energy_payments_m by quarter for 5 regions
   const settlementByQuarter: Record<string, Record<string, number>> = {}
   for (const rec of data.settlement) {
-    if (!settlementByQuarter[rec.quarter]) settlementByQuarter[rec.quarter] = { quarter: rec.quarter } as Record<string, number>
+    if (!settlementByQuarter[rec.quarter]) settlementByQuarter[rec.quarter] = { quarter: rec.quarter } as unknown as Record<string, number>
     settlementByQuarter[rec.quarter][rec.region] =
       (settlementByQuarter[rec.quarter][rec.region] ?? 0) + rec.total_energy_payments_m
   }
@@ -135,7 +135,7 @@ export default function AemoMarketOperationsAnalytics() {
   // ── Chart 4: Line — predispatch_mae_pct by month for 5 regions
   const predispatchByMonth: Record<string, Record<string, number>> = {}
   for (const rec of data.predispatch) {
-    if (!predispatchByMonth[rec.month]) predispatchByMonth[rec.month] = { month: rec.month } as Record<string, number>
+    if (!predispatchByMonth[rec.month]) predispatchByMonth[rec.month] = { month: rec.month } as unknown as Record<string, number>
     predispatchByMonth[rec.month][rec.region] = rec.predispatch_mae_pct
   }
   const predispatchChartData = Object.values(predispatchByMonth).sort((a, b) =>

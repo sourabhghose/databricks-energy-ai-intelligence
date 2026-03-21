@@ -224,7 +224,7 @@ function VolatilityByAssetTypeChart({ data }: { data: EPRODashboard }) {
           <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} unit="%" />
           <Tooltip contentStyle={{ backgroundColor: '#1f2937', border: 'none', color: '#f9fafb' }} formatter={(v: number) => [`${v.toFixed(1)}%`, 'Avg Volatility']} />
           {ASSET_TYPES.map((at, i) => (
-            <Bar key={at} dataKey="avg_volatility" data={chartData.filter(d => d.asset_type === at)} fill={ASSET_COLORS[i % ASSET_COLORS.length]} radius={[4, 4, 0, 0]} />
+            <Bar key={at} dataKey="avg_volatility" data={chartData.filter(d => d.asset_type === at) as any} fill={ASSET_COLORS[i % ASSET_COLORS.length]} radius={[4, 4, 0, 0]} />
           ))}
         </BarChart>
       </ResponsiveContainer>

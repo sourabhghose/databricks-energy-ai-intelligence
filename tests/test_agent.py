@@ -18,10 +18,9 @@ from __future__ import annotations
 
 import json
 import os
-import sys
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -513,6 +512,7 @@ class TestFastAPIEndpoints:
     async def test_health_check(self):
         """GET /health must return 200 with {status: 'ok'}."""
         import httpx
+
         from app.backend.main import app
 
         async with httpx.AsyncClient(
@@ -534,6 +534,7 @@ class TestFastAPIEndpoints:
         PriceRecord objects (non-empty).
         """
         import httpx
+
         from app.backend.main import app
 
         mock_rows = [
@@ -578,6 +579,7 @@ class TestFastAPIEndpoints:
         must return 422 Unprocessable Entity.
         """
         import httpx
+
         from app.backend.main import app
 
         async with httpx.AsyncClient(
@@ -597,6 +599,7 @@ class TestFastAPIEndpoints:
         response with Content-Type text/event-stream.
         """
         import httpx
+
         from app.backend.main import app
 
         async def _fake_stream(request):
@@ -627,6 +630,7 @@ class TestFastAPIEndpoints:
         return 422 Unprocessable Entity.
         """
         import httpx
+
         from app.backend.main import app
 
         async with httpx.AsyncClient(

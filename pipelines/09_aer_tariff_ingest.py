@@ -9,9 +9,10 @@
 
 # COMMAND ----------
 
-import requests
 import json
 from datetime import datetime, timezone
+
+import requests
 
 try:
     CATALOG = dbutils.widgets.get("catalog")

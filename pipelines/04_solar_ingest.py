@@ -3,9 +3,11 @@
 # MAGIC # Pipeline 04 — APVI Rooftop Solar Ingest (Bronze -> Silver -> Gold)
 # MAGIC Batch pipeline, 30-min. API: pv-map.apvi.org.au/api
 
+import os
+from datetime import datetime, timedelta, timezone
+
 import dlt
 import requests
-from datetime import datetime, timedelta, timezone
 from pyspark.sql import functions as F
 from pyspark.sql.types import DoubleType, StringType, StructField, StructType, TimestampType
 
@@ -16,7 +18,7 @@ STATE_TO_NEM = {"NSW": "NSW1", "ACT": "NSW1", "QLD": "QLD1", "VIC": "VIC1", "SA"
 
 def _api_key() -> str:
     try: return dbutils.secrets.get(scope=SECRET_SCOPE, key="apvi_api_key")
-    except Exception: import os; return os.environ.get("APVI_API_KEY", "")
+    except Exception: return os.environ.get("APVI_API_KEY", "")
 
 
 def _fetch_generation(since: datetime) -> list:

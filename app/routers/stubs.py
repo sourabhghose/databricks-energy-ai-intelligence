@@ -1,8 +1,11 @@
 from __future__ import annotations
+
 import random
 from datetime import datetime, timezone
+
 from fastapi import APIRouter
-from .shared import _query_gold, _CATALOG, logger
+
+from .shared import _CATALOG, _query_gold
 
 router = APIRouter()
 

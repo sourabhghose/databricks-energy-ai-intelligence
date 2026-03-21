@@ -38,6 +38,7 @@ Run integration tests:
 
 from __future__ import annotations
 
+import math
 import os
 import sys
 import unittest
@@ -45,7 +46,6 @@ from datetime import datetime, timedelta
 from typing import List
 from unittest.mock import MagicMock, patch
 
-import math
 import numpy as np
 import pandas as pd
 import pytest
@@ -666,7 +666,6 @@ class TestAnomalyDetection(unittest.TestCase):
         MLflow is fully patched so no remote server is contacted.  The function
         should generate synthetic data internally and complete training.
         """
-        import mlflow
         from models.anomaly_detection.train import train_anomaly_detector
 
         with patch("mlflow.set_experiment"), \
@@ -753,7 +752,6 @@ class TestFeatureStoreIntegration(unittest.TestCase):
 
     def test_feature_store_all_regions(self):
         """All 5 NEM regions must have at least one row in the feature store."""
-        from pyspark.sql import functions as F
         df = self.spark.table("energy_copilot.gold.feature_store_price")
         regions_present = [
             r["regionid"] for r in df.select("regionid").distinct().collect()
@@ -861,7 +859,7 @@ class TestRenewableEvaluate(unittest.TestCase):
 
         Uses compute_ramp_accuracy() from wind_forecast.evaluate directly.
         """
-        from models.wind_forecast.evaluate import compute_ramp_accuracy, RAMP_DEADBAND_MW
+        from models.wind_forecast.evaluate import RAMP_DEADBAND_MW, compute_ramp_accuracy
 
         # Construct a simple time series with known ramps
         y_true = np.array([100.0, 200.0, 300.0, 250.0, 100.0, 100.0, 110.0], dtype=float)
@@ -901,9 +899,9 @@ class TestRenewableEvaluate(unittest.TestCase):
           - Expected zero-compliance = 70%
         """
         from models.solar_forecast.evaluate import (
-            compute_zero_compliance,
             NIGHT_HOURS,
             ZERO_CLAMP_THRESHOLD_MW,
+            compute_zero_compliance,
         )
 
         n_rows     = 10

@@ -13,10 +13,8 @@ Runs: Daily (gas data published daily)
 """
 
 import dlt
-from pyspark.sql.functions import (
-    col, current_timestamp, to_date, to_timestamp, trim, lit, sum as _sum, avg
-)
-
+from pyspark.sql.functions import avg, col, current_timestamp, to_date
+from pyspark.sql.functions import sum as _sum
 
 try:
     CATALOG = dbutils.widgets.get("catalog")

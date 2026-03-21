@@ -6,8 +6,9 @@
 # COMMAND ----------
 
 catalog = "energy_copilot_catalog"
-import uuid, random
-from datetime import datetime, timedelta, date
+import random
+import uuid
+from datetime import date, datetime, timedelta
 
 random.seed(42)
 

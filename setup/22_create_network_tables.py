@@ -402,7 +402,6 @@ print("✓ ev_network_impact")
 import random
 import uuid
 from datetime import datetime, timedelta
-from pyspark.sql import types as T
 
 random.seed(42)
 now = datetime.utcnow()

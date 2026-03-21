@@ -25607,6 +25607,8 @@ export interface ERCARetailer {
   churn_rate_pct: number
   avg_bill_aud: number
   nps_score: number
+  avg_price_c_kwh?: number
+  complaint_rate_per_10k?: number
 }
 export interface ERCAChurnTrend {
   retailer_name: string
@@ -32649,7 +32651,7 @@ export interface ERCAHardshipRecord {
   affordability_index: number
 }
 
-export interface ERCADashboard {
+export interface ERCARetailCompDashboard {
   timestamp: string
   retailers: ERCARetailerRecord[]
   switching: ERCASwitchingRecord[]
@@ -32657,7 +32659,7 @@ export interface ERCADashboard {
   hardship: ERCAHardshipRecord[]
 }
 
-export async function getERCADashboard(): Promise<ERCADashboard> {
+export async function getERCADashboard(): Promise<ERCARetailCompDashboard> {
   const r = await fetch(`${BASE_URL}/api/retail-competition/dashboard`, { headers: getHeaders() })
   if (!r.ok) throw new Error(await r.text())
   return r.json()
@@ -34770,7 +34772,7 @@ export const riskLimitsApi = {
     }
     return put(`/api/risk/limits/${limitId}?${params.toString()}`, {})
   },
-  delete(limitId: string): Promise<{ deleted: boolean }> {
+  delete(limitId: string): Promise<void> {
     return del(`/api/risk/limits/${limitId}`)
   },
   monitor(portfolioId?: string): Promise<{ monitors: LimitMonitorResult[]; count: number; portfolio_id: string | null }> {
@@ -34995,10 +34997,12 @@ export const environmentalsApi = {
 export interface GeneratedReport {
   report_id: string; report_type: string; title: string; report_date: string;
   summary: string; status: string; created_at: string; content?: string;
+  region?: string;
 }
 
 export interface ReportTemplate {
   type: string; title: string; description: string; sections: string[];
+  report_type?: string; name?: string; frequency?: string;
 }
 
 export const reportsApi = {
@@ -35205,6 +35209,7 @@ export interface AssetHealth {
   region?: string
   dnsp?: string
   replacement_cost_aud?: number
+  failure_probability_12m?: number
 }
 
 export interface FailurePrediction {
@@ -35217,6 +35222,10 @@ export interface FailurePrediction {
   asset_name?: string
   region?: string
   dnsp?: string
+  age_years?: number
+  replacement_cost_aud?: number
+  predicted_failure_date?: string
+  risk_factors?: string | string[]
 }
 
 export interface VoltageEvent {
@@ -35234,6 +35243,9 @@ export interface PowerQuality {
   thd_pct: number
   flicker_pst: number
   voltage_unbalance_pct: number
+  unbalance_pct?: number
+  asset_name?: string
+  region?: string
 }
 
 export interface OutageEvent {
@@ -35725,7 +35737,7 @@ export const settlementBackOfficeApi = {
     return get(`/api/settlement/trueup/material${qs}`)
   },
   trueupAccept(runId: string): Promise<{ status: string; run_id: string }> {
-    return post(`/api/settlement/trueup/accept?run_id=${runId}`)
+    return post(`/api/settlement/trueup/accept?run_id=${runId}`, {})
   },
 
   // Reconciliation
@@ -35808,7 +35820,7 @@ export const settlementBackOfficeApi = {
   upsertGlMapping(body: { entity?: string; charge_type: string; debit_account_code: string; debit_account_name: string; credit_account_code: string; credit_account_name: string }): Promise<{ status: string; mapping_id: string }> {
     return post('/api/settlement/gl-mappings', body)
   },
-  deleteGlMapping(mappingId: string): Promise<{ status: string; mapping_id: string }> {
+  deleteGlMapping(mappingId: string): Promise<void> {
     return del(`/api/settlement/gl-mappings/${mappingId}`)
   },
 

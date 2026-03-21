@@ -192,7 +192,7 @@ export default function PriceSetterAnalytics() {
 
   const scatterStrategic = timelineData
     .filter((r) => r.is_strategic)
-    .map((r) => ({ interval: r.interval, dispatch_price: r.dispatch_price, ...r }))
+    .map((r) => ({ ...r }))
 
   const pieData = (dashboard?.fuel_type_stats ?? []).map((f) => ({
     ...f,

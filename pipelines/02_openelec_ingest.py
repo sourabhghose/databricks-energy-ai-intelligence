@@ -3,9 +3,11 @@
 # MAGIC # Pipeline 02 — OpenElectricity API Ingest (Bronze -> Silver -> Gold)
 # MAGIC Batch pipeline, hourly. API: https://api.openelectricity.org.au/v4
 
+import os
+from datetime import datetime, timedelta, timezone
+
 import dlt
 import requests
-from datetime import datetime, timedelta, timezone
 from pyspark.sql import functions as F
 from pyspark.sql.types import DoubleType, StringType, StructField, StructType, TimestampType
 
@@ -18,7 +20,7 @@ def _get_api_key() -> str:
     try:
         return dbutils.secrets.get(scope=SECRET_SCOPE, key="openelec_api_key")
     except Exception:
-        import os; return os.environ.get("OPENELEC_API_KEY", "")
+        return os.environ.get("OPENELEC_API_KEY", "")
 
 
 def _last_fetch(endpoint: str) -> datetime:

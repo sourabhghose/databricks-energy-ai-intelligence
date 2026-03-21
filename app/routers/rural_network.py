@@ -7,13 +7,16 @@ from __future__ import annotations
 
 import random as _r
 from datetime import date, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Optional
 
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from .shared import (
-    _CATALOG, _query_gold, _cache_get, _cache_set, logger,
+    _CATALOG,
+    _cache_get,
+    _cache_set,
+    _query_gold,
 )
 
 router = APIRouter()

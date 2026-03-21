@@ -1,8 +1,11 @@
 from __future__ import annotations
+
 import random as _r
 from datetime import datetime as _dt
-from fastapi import APIRouter, Query
-from .shared import _NEM_REGIONS, _query_gold, _CATALOG, logger
+
+from fastapi import APIRouter
+
+from .shared import _CATALOG, _NEM_REGIONS, _query_gold
 
 router = APIRouter()
 
@@ -944,7 +947,7 @@ def market_bidding_strategy_dashboard():
             "generator_id": generator_bids[i % len(generator_bids)]["generator_id"],
             "generator_name": generator_bids[i % len(generator_bids)]["generator_name"],
             "technology": generator_bids[i % len(generator_bids)]["technology"],
-            "analysis_period": f"2026-Q1",
+            "analysis_period": "2026-Q1",
             "behaviour_type": bt,
             "evidence_events": _r.randint(1, 50),
             "price_impact_dolpermwh": round(_r.uniform(5, 200), 2),

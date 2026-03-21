@@ -4,24 +4,24 @@ import json
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import Any, Dict, List
+from typing import Dict, List
 
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException
 
-from .shared import _NEM_REGIONS, _AEST, _CATALOG, _query_gold, _sql_escape, logger
 from .home import (
-    prices_latest,
-    market_summary_latest,
+    forecasts,
+    generation_mix_pct,
     interconnectors,
+    market_summary_latest,
+    prices_latest,
     prices_spikes,
     prices_volatility,
-    generation_mix_pct,
-    forecasts,
 )
-from .sidebar import bess_fleet, alerts_list, demand_response, merit_order
+from .shared import _AEST, _CATALOG, _NEM_REGIONS, _query_gold, _sql_escape, logger
+from .sidebar import alerts_list, bess_fleet, demand_response, merit_order
 
 router = APIRouter()
 
@@ -999,7 +999,7 @@ def _dispatch_tool(name: str, arguments: dict) -> str:
                     {"topic": "NER Chapter 4 - Power System Security", "summary": "System security, frequency control, load shedding"},
                     {"topic": "MASS - Market Ancillary Services", "summary": "FCAS requirements, regulation, contingency services"},
                     {"topic": "SO_OP 3705 - Dispatch", "summary": "5-minute dispatch process, NEMDE, constraint formulation"},
-                    {"topic": "Administered Price Cap", "summary": f"Cumulative Price Threshold triggers $300/MWh cap"},
+                    {"topic": "Administered Price Cap", "summary": "Cumulative Price Threshold triggers $300/MWh cap"},
                 ],
             })
 
@@ -1146,7 +1146,8 @@ def _dispatch_tool(name: str, arguments: dict) -> str:
             timestamp = arguments.get("timestamp", "")
             event_id = arguments.get("event_id", "")
             if not timestamp:
-                from datetime import datetime as _dt, timezone as _tz
+                from datetime import datetime as _dt
+                from datetime import timezone as _tz
                 timestamp = _dt.now(_tz.utc).isoformat()
             result = _explain_anomaly_core(event_id, region, timestamp)
             return json.dumps(result, default=str)
@@ -1238,12 +1239,12 @@ def _dispatch_tool(name: str, arguments: dict) -> str:
             )
             lines = [f"PPA Valuation: {result['volume_mw']}MW {result['technology']} in {result['region']}"]
             lines.append(f"Strike: ${result['strike_price']}/MWh, Term: {result['term_years']}yr, Escalation: {result['escalation']:.1%}")
-            lines.append(f"\nNPV Distribution:")
+            lines.append("\nNPV Distribution:")
             lines.append(f"  Expected NPV: ${result['expected_npv']:,.0f}")
             lines.append(f"  P10 (downside): ${result['p10_npv']:,.0f}")
             lines.append(f"  P50 (median):   ${result['p50_npv']:,.0f}")
             lines.append(f"  P90 (upside):   ${result['p90_npv']:,.0f}")
-            lines.append(f"\nKey Metrics:")
+            lines.append("\nKey Metrics:")
             lines.append(f"  Capacity Factor: {result['capacity_factor']:.0%}")
             lines.append(f"  Capture Discount: {result['capture_price_discount']:.0%}")
             lines.append(f"  Breakeven Strike: ${result['breakeven_strike']:.2f}/MWh")
@@ -1360,7 +1361,7 @@ def _dispatch_tool(name: str, arguments: dict) -> str:
                         f"${v['variance_aud']:>13,.2f} {v['status']:<8}"
                     )
             if result.get("residues"):
-                lines.append(f"\nInter-Regional Residues:")
+                lines.append("\nInter-Regional Residues:")
                 for r in result["residues"]:
                     lines.append(f"  {r['interconnector_id']}: ${r['settlement_residue_aud']:,.2f} ({r['direction']}, {r['flow_mw']}MW avg)")
             return json.dumps({"text": "\n".join(lines), "reconciliation": result}, default=str)
@@ -1568,7 +1569,8 @@ def _dispatch_tool(name: str, arguments: dict) -> str:
             return _sd(name, arguments)
 
         elif name == "get_settlement_finance_summary":
-            from .shared import _CATALOG as _C, _sql_escape as _esc
+            from .shared import _CATALOG as _C
+            from .shared import _sql_escape as _esc
             where_parts = []
             if arguments.get("start_date"):
                 where_parts.append(f"run_date >= '{_esc(arguments['start_date'])}'")
@@ -1924,7 +1926,7 @@ async def _build_market_context() -> str:
                     f"${g.get('offer_price', 0):.0f}/MWh, "
                     f"{g.get('capacity_mw', 0)} MW, {g.get('fuel_type', '?')}"
                 )
-            parts.append(f"MERIT ORDER — NSW1 (cheapest 5):\n" + "\n".join(mo_lines))
+            parts.append("MERIT ORDER — NSW1 (cheapest 5):\n" + "\n".join(mo_lines))
     except Exception as exc:
         logger.warning("Context: merit order failed: %s", exc)
 

@@ -9,9 +9,10 @@
 
 # COMMAND ----------
 
-import requests
 import json
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
+
+import requests
 
 try:
     CATALOG = dbutils.widgets.get("catalog")
@@ -81,7 +82,7 @@ for fac in facilities:
         if resp.status_code == 404:
             continue  # Facility not in OpenElectricity
         if resp.status_code == 429:
-            print(f"  Rate limited — stopping API calls")
+            print("  Rate limited — stopping API calls")
             break
         resp.raise_for_status()
         data = resp.json()
@@ -101,7 +102,7 @@ for fac in facilities:
                     "power_mw": float(power),
                     "energy_mwh": energy,
                 })
-    except Exception as e:
+    except Exception:
         errors += 1
         if errors > 10:
             print(f"Too many errors ({errors}) — stopping")
@@ -119,7 +120,6 @@ print(f"Fetched {len(all_rows)} timeseries points for {len(set(r['facility_id'] 
 # Seed fallback if API returned no data
 if not all_rows:
     print("OpenElectricity API returned 0 rows — using representative seed data")
-    from datetime import datetime as _dt
     _base = now - timedelta(hours=24)
     _seed_facilities = [
         ("BAYSW1", "NSW1", "BLACK_COAL", 660),
@@ -177,7 +177,7 @@ if not all_rows:
 # COMMAND ----------
 
 if all_rows:
-    from pyspark.sql.types import StructType, StructField, StringType, DoubleType, TimestampType
+    from pyspark.sql.types import DoubleType, StringType, StructField, StructType, TimestampType
 
     schema = StructType([
         StructField("facility_id", StringType()),

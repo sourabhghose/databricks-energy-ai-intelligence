@@ -303,10 +303,10 @@ export default function SpotPriceSpikePredictionAnalytics() {
               <Tooltip
                 contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: 8 }}
                 labelStyle={{ color: '#f9fafb' }}
-                formatter={(val: number, _name: string, entry: { payload: SPPFeatureRecord }) => [
+                formatter={((val: number, _name: string, entry: { payload: SPPFeatureRecord }) => [
                   `${val}% importance | correlation: ${entry.payload.spike_correlation}`,
                   entry.payload.category,
-                ]}
+                ]) as any}
               />
               <Bar
                 dataKey="importance"

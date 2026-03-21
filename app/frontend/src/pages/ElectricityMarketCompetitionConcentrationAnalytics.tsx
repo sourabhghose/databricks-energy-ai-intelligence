@@ -314,7 +314,7 @@ export default function ElectricityMarketCompetitionConcentrationAnalytics() {
         <ResponsiveContainer width="100%" height={320}>
           <BarChart data={retailChartData} margin={{ bottom: 80 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-            <XAxis dataKey="name" stroke="#9ca3af" tick={{ fontSize: 9, angle: -40, textAnchor: 'end' }} interval={0} />
+            <XAxis dataKey="name" stroke="#9ca3af" tick={{ fontSize: 9, angle: -40, textAnchor: 'end' } as any} interval={0} />
             <YAxis stroke="#9ca3af" tick={{ fontSize: 11 }} />
             <Tooltip
               contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}

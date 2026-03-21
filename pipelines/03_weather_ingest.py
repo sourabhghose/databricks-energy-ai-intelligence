@@ -4,9 +4,10 @@
 # MAGIC Batch pipeline, hourly. API: api.open-meteo.com (BOM ACCESS-G, no key required)
 # MAGIC Region coords: NSW1(-33.87,151.21) QLD1(-27.47,153.03) VIC1(-37.81,144.96) SA1(-34.93,138.60) TAS1(-42.88,147.33)
 
+from datetime import datetime, timezone
+
 import dlt
 import requests
-from datetime import datetime, timezone
 from pyspark.sql import functions as F
 from pyspark.sql.types import DoubleType, StringType, StructField, StructType, TimestampType
 

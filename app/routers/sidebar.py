@@ -1,14 +1,26 @@
 from __future__ import annotations
-import json
+
 import math
 import random
 import time
 import uuid
-from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict
+
 from fastapi import APIRouter, Query
 from pydantic import BaseModel
-from .shared import _NEM_REGIONS, _REGION_BASE_PRICES, _query_gold, _execute_gold, _insert_gold, _update_gold, _sql_escape, _invalidate_cache, _CATALOG, logger
+
+from .shared import (
+    _CATALOG,
+    _NEM_REGIONS,
+    _REGION_BASE_PRICES,
+    _insert_gold,
+    _invalidate_cache,
+    _query_gold,
+    _sql_escape,
+    _update_gold,
+    logger,
+)
 
 router = APIRouter()
 
@@ -1928,8 +1940,8 @@ async def constraints(region: str = Query("NSW1"), hours_back: int = Query(24), 
     rng = random.Random(hash(region) + int(time.time() // 30))
     now = datetime.now(timezone.utc)
     constraint_names = [
-        f"{region}_XFER_LIMIT", f"N_Q_MNSP1_LIMIT", f"V_SA_FLOW_LIMIT",
-        f"SYSTEM_NORMAL_{region}", f"N_NIL_CLWP_LIMIT", f"V_T_FLOW_LIMIT",
+        f"{region}_XFER_LIMIT", "N_Q_MNSP1_LIMIT", "V_SA_FLOW_LIMIT",
+        f"SYSTEM_NORMAL_{region}", "N_NIL_CLWP_LIMIT", "V_T_FLOW_LIMIT",
     ]
     records = []
     for i in range(rng.randint(4, 10)):

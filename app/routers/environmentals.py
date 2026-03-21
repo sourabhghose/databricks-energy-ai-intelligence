@@ -4,23 +4,19 @@ LGC/ACCU/STC portfolio management, certificate balances, carbon exposure, and bu
 """
 from __future__ import annotations
 
-import math
-import random
 import uuid
-from datetime import datetime, date, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from datetime import date, datetime, timedelta, timezone
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 
 from .shared import (
     _CATALOG,
-    _NEM_REGIONS,
-    _query_gold,
     _insert_gold,
-    _sql_escape,
     _invalidate_cache,
-    logger,
+    _query_gold,
+    _sql_escape,
 )
 
 router = APIRouter()

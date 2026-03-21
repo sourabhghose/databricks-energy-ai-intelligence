@@ -64,7 +64,7 @@ function buildChartData(points: Fwd38cCurvePoint[]): ChartRow[] {
     .filter(p => p.product_type === 'CALENDAR')
     .forEach(p => {
       if (map[p.product]) {
-        ;(map[p.product] as Record<string, unknown>)[p.region] = p.settlement_price_aud_mwh
+        ;(map[p.product] as unknown as Record<string, unknown>)[p.region] = p.settlement_price_aud_mwh
       }
     })
 

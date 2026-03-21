@@ -4,16 +4,13 @@ Balancing prices, generation mix, demand, and NEM-WEM comparison.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict
 
 from fastapi import APIRouter, Query
 
 from .shared import (
     _CATALOG,
     _query_gold,
-    _sql_escape,
-    logger,
 )
 
 router = APIRouter()

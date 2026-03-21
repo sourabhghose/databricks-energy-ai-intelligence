@@ -857,7 +857,7 @@ export default function Settings() {
     }
   }, [prefs])
 
-  const TABS: { id: TabId; label: string; Icon: React.FC<{ size?: number; className?: string }> }[] = [
+  const TABS: { id: TabId; label: string; Icon: React.ElementType }[] = [
     { id: 'preferences', label: 'User Preferences', Icon: SettingsIcon },
     { id: 'api-keys', label: 'API Keys', Icon: Key },
     { id: 'data-sources', label: 'Data Sources', Icon: Database },

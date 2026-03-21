@@ -105,7 +105,7 @@ interface KpiCardProps {
   value: string
   sub?: string
   variant?: 'default' | 'red' | 'green'
-  Icon: React.ComponentType<{ size?: number; className?: string }>
+  Icon: React.ElementType
 }
 
 function KpiCard({ title, value, sub, variant = 'default', Icon }: KpiCardProps) {

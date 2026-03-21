@@ -10,7 +10,8 @@ Schedule: Quarterly (1st Monday of Jan/Apr/Jul/Oct, 12pm AEST)
 
 import hashlib
 from datetime import datetime, timezone
-from pyspark.sql.types import StructType, StructField, StringType, DoubleType, TimestampType
+
+from pyspark.sql.types import DoubleType, StringType, StructField, StructType, TimestampType
 
 # COMMAND ----------
 

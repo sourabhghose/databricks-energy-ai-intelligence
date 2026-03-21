@@ -331,7 +331,7 @@ export default function ElectricityWholesaleMarketLiquidityAnalytics() {
               <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
               <XAxis
                 dataKey="period"
-                tick={{ fill: '#9ca3af', fontSize: 10, angle: -45, textAnchor: 'end' }}
+                tick={{ fill: '#9ca3af', fontSize: 10, angle: -45, textAnchor: 'end' } as any}
                 interval={0}
               />
               <YAxis tick={{ fill: '#9ca3af', fontSize: 12 }} unit=" A$M" />

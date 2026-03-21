@@ -202,7 +202,7 @@ function DispatchChart({ schedule }: DispatchChartProps) {
               name="Power (MW)"
               fill={barColours[i]}
               hide={i !== 0}
-              data={[slot]}
+              data={[slot] as any}
             />
           ))}
           {/* Single Bar element for all slots with custom fill */}

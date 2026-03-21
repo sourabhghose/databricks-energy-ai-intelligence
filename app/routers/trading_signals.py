@@ -18,10 +18,18 @@ from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from .shared import (
-    _CATALOG, _NEM_REGIONS, _AEST,
-    _query_gold, _insert_gold, _insert_gold_batch,
-    _update_gold, _execute_gold, _invalidate_cache,
-    _cache_get, _cache_set, _sql_escape, logger,
+    _CATALOG,
+    _NEM_REGIONS,
+    _cache_get,
+    _cache_set,
+    _execute_gold,
+    _insert_gold,
+    _insert_gold_batch,
+    _invalidate_cache,
+    _query_gold,
+    _sql_escape,
+    _update_gold,
+    logger,
 )
 
 router = APIRouter()

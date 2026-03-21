@@ -107,7 +107,7 @@ function MapeAccuracyTrendChart({ data }: { data: EPFMDashboard['forecast_accura
     .filter(d => modelIds.includes(d.model_id))
     .forEach(d => {
       const key = `${d.year}-${String(d.month).padStart(2, '0')}`
-      if (!periodMap.has(key)) periodMap.set(key, { period: key })
+      if (!periodMap.has(key)) periodMap.set(key, { period: key } as unknown as Entry)
       const entry = periodMap.get(key)!
       entry[d.model_id] = d.mape_pct
     })
@@ -158,7 +158,7 @@ function FeatureImportanceChart({ data }: { data: EPFMDashboard['feature_importa
     .filter(d => modelIds.includes(d.model_id))
     .forEach(d => {
       if (!featureMap.has(d.feature_name))
-        featureMap.set(d.feature_name, { feature_name: d.feature_name })
+        featureMap.set(d.feature_name, { feature_name: d.feature_name } as unknown as Entry)
       const entry = featureMap.get(d.feature_name)!
       entry[d.model_id] = d.importance_score
     })
@@ -171,7 +171,7 @@ function FeatureImportanceChart({ data }: { data: EPFMDashboard['feature_importa
       <ResponsiveContainer width="100%" height={320}>
         <BarChart data={chartData} margin={{ left: 10, right: 10 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-          <XAxis dataKey="feature_name" tick={{ fill: '#9ca3af', fontSize: 9 }} angle={-30} textAnchor="end" height={60} />
+          <XAxis dataKey="feature_name" tick={{ fill: '#9ca3af', fontSize: 9 }} {...({ angle: -30 } as any)} textAnchor="end" height={60} />
           <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} />
           <Tooltip
             contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', color: '#f9fafb' }}
@@ -202,7 +202,7 @@ function ForecastVsActualChart({ data }: { data: EPFMDashboard['forecast_vs_actu
     .filter(d => d.model_id === modelId && regions.includes(d.region))
     .forEach(d => {
       const key = `${d.year} ${d.quarter}`
-      if (!periodMap.has(key)) periodMap.set(key, { period: key })
+      if (!periodMap.has(key)) periodMap.set(key, { period: key } as unknown as Entry)
       const entry = periodMap.get(key)!
       entry[`${d.region}_forecast`] = d.avg_forecast_mwh
       entry[`${d.region}_actual`] = d.avg_actual_mwh

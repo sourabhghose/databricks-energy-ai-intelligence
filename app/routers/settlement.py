@@ -2,23 +2,19 @@
 
 from __future__ import annotations
 
-import json
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Query, Body
+from fastapi import APIRouter, Body, Query
 from pydantic import BaseModel, Field
 
 from .shared import (
-    _NEM_REGIONS,
     _CATALOG,
-    _query_gold,
     _execute_gold,
     _insert_gold,
-    _update_gold,
+    _query_gold,
     _sql_escape,
-    _invalidate_cache,
     logger,
 )
 

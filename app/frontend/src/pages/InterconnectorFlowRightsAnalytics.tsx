@@ -144,7 +144,7 @@ export default function InterconnectorFlowRightsAnalytics() {
   const quarters = ['Q1', 'Q2', 'Q3', 'Q4']
   const congByQuarter: Record<string, Record<string, number>> = {}
   for (const cc of congestion_costs) {
-    if (!congByQuarter[cc.quarter]) congByQuarter[cc.quarter] = { quarter: cc.quarter }
+    if (!congByQuarter[cc.quarter]) congByQuarter[cc.quarter] = { quarter: cc.quarter } as unknown as Record<string, number>
     congByQuarter[cc.quarter][cc.interconnector_id] =
       ((congByQuarter[cc.quarter][cc.interconnector_id] as number) ?? 0) + cc.congestion_cost_m_aud
   }

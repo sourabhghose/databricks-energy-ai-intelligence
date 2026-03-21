@@ -17,11 +17,11 @@
 
 # COMMAND ----------
 
-from pyspark.sql import functions as F
-from pyspark.sql.types import DoubleType, TimestampType
-from pyspark.sql.window import Window
+
 from delta.tables import DeltaTable
-from datetime import timezone, datetime
+from pyspark.sql import functions as F
+from pyspark.sql.types import DoubleType
+from pyspark.sql.window import Window
 
 CATALOG     = "energy_copilot_catalog"
 NEM_REGIONS = ["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]

@@ -236,7 +236,7 @@ function FrequencyChart({ records }: { records: PSEFrequencyRecord[] }) {
             dataKey="date"
             type="category"
             allowDuplicatedCategory={false}
-            data={minData}
+            {...({ data: minData } as any)}
             stroke="#9ca3af"
             tick={{ fill: '#9ca3af', fontSize: 11 }}
           />

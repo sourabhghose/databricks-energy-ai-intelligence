@@ -266,9 +266,9 @@ export default function CarbonOffsetMarketAnalytics() {
             <Bar
               dataKey="value"
               fill="#6b7280"
-              shape={(props: React.SVGProps<SVGRectElement> & { fill?: string }) => {
+              shape={((props: React.SVGProps<SVGRectElement> & { fill?: string }) => {
                 return <rect {...props} fill={props.fill} />
-              }}
+              }) as any}
             >
               {top15Projects.map((entry, i) => (
                 <rect key={i} fill={entry.fill} />

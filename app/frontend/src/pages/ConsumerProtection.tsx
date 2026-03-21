@@ -89,7 +89,7 @@ function buildComplaintData(
     .filter(c => c.state === state && ['BILLING', 'DISCONNECTION', 'CONTRACT'].includes(c.category))
     .forEach(c => {
       if (!byQtr[c.quarter]) byQtr[c.quarter] = { quarter: c.quarter }
-      ;(byQtr[c.quarter] as Record<string, unknown>)[c.category] = c.complaint_count
+      ;(byQtr[c.quarter] as unknown as Record<string, unknown>)[c.category] = c.complaint_count
     })
   return Object.values(byQtr).sort((a, b) => a.quarter.localeCompare(b.quarter))
 }

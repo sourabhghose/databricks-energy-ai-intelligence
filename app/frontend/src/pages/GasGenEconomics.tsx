@@ -57,7 +57,7 @@ function buildSparkChartData(records: SparkSpreadRecord[]): SparkChartRow[] {
   const byMonth: Record<string, SparkChartRow> = {}
   records.forEach(r => {
     if (!byMonth[r.month]) byMonth[r.month] = { month: r.month }
-    ;(byMonth[r.month] as Record<string, unknown>)[r.region] = r.spark_spread_aud_mwh
+    ;(byMonth[r.month] as unknown as Record<string, unknown>)[r.region] = r.spark_spread_aud_mwh
   })
   return Object.values(byMonth).sort((a, b) => a.month.localeCompare(b.month))
 }

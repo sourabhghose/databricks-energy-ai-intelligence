@@ -285,7 +285,7 @@ export default function FuturesPriceDiscovery() {
             <XAxis
               dataKey="label"
               stroke="#9ca3af"
-              tick={{ fill: '#9ca3af', fontSize: 10, angle: -35, textAnchor: 'end' }}
+              tick={{ fill: '#9ca3af', fontSize: 10, angle: -35, textAnchor: 'end' } as any}
             />
             <YAxis stroke="#9ca3af" tick={{ fill: '#9ca3af', fontSize: 12 }} tickFormatter={v => `$${v}`} />
             <Tooltip

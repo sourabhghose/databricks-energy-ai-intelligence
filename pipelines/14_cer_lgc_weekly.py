@@ -25,8 +25,9 @@ import hashlib
 import io
 import json
 import re
+from datetime import date, datetime, timezone
+
 import requests
-from datetime import datetime, date, timezone
 
 try:
     CATALOG = dbutils.widgets.get("catalog")

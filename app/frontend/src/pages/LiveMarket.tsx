@@ -299,7 +299,7 @@ export default function LiveMarket() {
         ) : !genLoading && genData.length === 0 ? (
           <EmptyStateCard />
         ) : (
-          <GenerationChart region={region} data={genData} fuelColors={FUEL_COLORS} />
+          <GenerationChart region={region} data={genData} />
         )}
       </section>
 

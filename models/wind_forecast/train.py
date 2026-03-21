@@ -246,8 +246,8 @@ def add_wind_target(spark, df_spark):
     Cross-joins the base feature table with all forecast horizons, then
     looks up the actual wind generation at each future timestamp.
     """
-    from pyspark.sql import functions as F
     import pyspark.sql.types as T
+    from pyspark.sql import functions as F
 
     horizons_df = spark.createDataFrame(
         [(h,) for h in FORECAST_HORIZONS],

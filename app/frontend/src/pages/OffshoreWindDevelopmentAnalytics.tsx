@@ -221,10 +221,10 @@ export default function OffshoreWindDevelopmentAnalytics() {
               <Tooltip
                 contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: 8 }}
                 labelStyle={{ color: '#f9fafb' }}
-                formatter={(v: number, _n: string, entry: { payload: { status: string } }) => [
+                formatter={((v: number, _n: string, entry: { payload: { status: string } }) => [
                   `${v} MW`,
                   entry.payload.status,
-                ]}
+                ]) as any}
               />
               <Bar dataKey="capacity_mw" name="Capacity (MW)" radius={[0, 4, 4, 0]}>
                 {projectsByCapacity.map((entry, idx) => (

@@ -1,10 +1,17 @@
+from datetime import datetime, timedelta, timezone
+
 from fastapi import APIRouter
-from datetime import datetime, timezone, timedelta
 
 from .shared import (
-    _get_sql_connection, _get_lakebase_pool, _get_lakebase_token,
-    _get_lakebase_last_error, _query_gold, _query_lakebase,
-    _get_query_stats, _CATALOG, logger, RATE_LIMIT_REQUESTS,
+    _CATALOG,
+    RATE_LIMIT_REQUESTS,
+    _get_lakebase_last_error,
+    _get_lakebase_pool,
+    _get_lakebase_token,
+    _get_query_stats,
+    _get_sql_connection,
+    _query_gold,
+    _query_lakebase,
 )
 
 router = APIRouter()

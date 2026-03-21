@@ -33,7 +33,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Tuple
 
@@ -43,9 +42,9 @@ import mlflow.lightgbm
 import numpy as np
 import optuna
 import pandas as pd
+import pyspark.sql.functions as F
 from mlflow.tracking import MlflowClient
 from pyspark.sql import SparkSession
-import pyspark.sql.functions as F
 
 logger = logging.getLogger(__name__)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")

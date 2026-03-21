@@ -15,7 +15,7 @@ import {
   ZAxis,
 } from 'recharts'
 import { FileText } from 'lucide-react'
-import { api } from '../api/client'
+import { api, getPPAStructuringDashboard } from '../api/client'
 import type {
   PPASDashboard,
   PPASContractRecord,
@@ -494,13 +494,12 @@ export default function PPAStructuringAnalytics() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    api
-      .getPPAStructuringDashboard()
+    getPPAStructuringDashboard()
       .then((d) => {
         setData(d)
         setLoading(false)
       })
-      .catch((err) => {
+      .catch((err: any) => {
         setError(err?.message ?? 'Failed to load PPA structuring data')
         setLoading(false)
       })

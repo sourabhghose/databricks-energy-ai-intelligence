@@ -12,8 +12,8 @@ Cluster: Standard (no ML runtime needed), autoscale 1-4
 
 import json
 import logging
-from datetime import datetime, date, timedelta, timezone
-from typing import Any, Dict, List, Optional, Tuple
+from datetime import date, datetime, timedelta, timezone
+from typing import Any, Dict, List, Tuple
 
 logging.basicConfig(
     level=logging.INFO,

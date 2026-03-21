@@ -15,10 +15,11 @@ Target: energy_copilot_catalog.gold.aer_enforcement_actions
 Schedule: Weekly (Monday 9am AEST) — enforcement actions published infrequently
 """
 
-import requests
-import re
 import hashlib
+import re
 from datetime import datetime, timezone
+
+import requests
 from bs4 import BeautifulSoup
 
 # COMMAND ----------

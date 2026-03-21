@@ -296,8 +296,8 @@ def add_solar_target(spark, df_spark):
     Night-time rows are excluded from the result to prevent a trivial
     zero-prediction policy from dominating the model.
     """
-    from pyspark.sql import functions as F
     import pyspark.sql.types as T
+    from pyspark.sql import functions as F
 
     horizons_df = spark.createDataFrame(
         [(h,) for h in FORECAST_HORIZONS],

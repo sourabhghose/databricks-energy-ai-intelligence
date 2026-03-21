@@ -8,7 +8,6 @@
 import random as _r
 from datetime import datetime as _dt
 
-
 # ---------------------------------------------------------------------------
 # 1) /api/electricity-price-index/dashboard  ->  ElectricityPriceIndexDashboard
 # ---------------------------------------------------------------------------

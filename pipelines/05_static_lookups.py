@@ -13,7 +13,7 @@ Target schema: energy_copilot_catalog.gold
 """
 
 from pyspark.sql import SparkSession
-from pyspark.sql.types import StructType, StructField, StringType, DoubleType, BooleanType
+from pyspark.sql.types import BooleanType, DoubleType, StringType, StructField, StructType
 
 try:
     CATALOG = dbutils.widgets.get("catalog")

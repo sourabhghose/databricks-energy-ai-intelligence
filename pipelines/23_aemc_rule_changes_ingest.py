@@ -9,10 +9,9 @@ Schedule: Monthly (1st Monday, 9:30am AEST)
 """
 
 import hashlib
-import requests
 from datetime import datetime, timezone
-from bs4 import BeautifulSoup
-from pyspark.sql.types import StructType, StructField, StringType, TimestampType
+
+from pyspark.sql.types import StringType, StructField, StructType, TimestampType
 
 # COMMAND ----------
 

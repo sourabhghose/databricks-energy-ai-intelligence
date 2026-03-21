@@ -20,10 +20,10 @@ Target tables:
 Schedule: Weekly (Monday 10am AEST)
 """
 
-import requests
-import re
 import hashlib
 from datetime import datetime, timezone
+
+import requests
 from bs4 import BeautifulSoup
 
 # COMMAND ----------

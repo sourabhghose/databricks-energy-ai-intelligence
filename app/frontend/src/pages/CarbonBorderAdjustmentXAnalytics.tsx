@@ -120,7 +120,7 @@ export default function CarbonBorderAdjustmentXAnalytics() {
   // pivot: sector × destination → cbam_cost
   const chart2Map: Record<string, Record<string, number>> = {}
   top5Ids.forEach(id => {
-    chart2Map[id] = { sector: top5Names[id] ?? id }
+    chart2Map[id] = { sector: top5Names[id] ?? id } as unknown as Record<string, number>
     Object.keys(DEST_COLOURS).forEach(d => { chart2Map[id][d] = 0 })
   })
   trade_flows.forEach(tf => {

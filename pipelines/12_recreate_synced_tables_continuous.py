@@ -13,11 +13,16 @@ dbutils.library.restartPython()
 
 # COMMAND ----------
 
-import psycopg
 import socket
 import uuid
+
+import psycopg
 from databricks.sdk import WorkspaceClient
-from databricks.sdk.service.database import SyncedDatabaseTable, SyncedTableSpec, SyncedTableSchedulingPolicy
+from databricks.sdk.service.database import (
+    SyncedDatabaseTable,
+    SyncedTableSchedulingPolicy,
+    SyncedTableSpec,
+)
 
 try:
     instance_name = dbutils.widgets.get("lakebase_instance_name")
@@ -34,7 +39,7 @@ except Exception:
 try:
     CATALOG = dbutils.widgets.get("catalog")
 except Exception:
-    CATALOG = f"{CATALOG"
+    CATALOG = "energy_copilot_catalog"
 
 w = WorkspaceClient()
 instance = w.database.get_database_instance(name=instance_name)
@@ -192,6 +197,7 @@ for t in tables:
 
 # Step 4: Grant permissions on gold schema to the app SP
 import time
+
 time.sleep(10)  # Wait for tables to be created
 
 # Reconnect (token may have changed)

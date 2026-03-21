@@ -1,9 +1,10 @@
 from __future__ import annotations
-import random
-from datetime import datetime, timezone, timedelta
-from typing import Optional
-from fastapi import APIRouter, Query
-from .shared import _query_gold, _CATALOG, _NEM_REGIONS, logger
+
+from datetime import datetime, timezone
+
+from fastapi import APIRouter
+
+from .shared import _CATALOG, _NEM_REGIONS, _query_gold
 
 router = APIRouter()
 
@@ -13,7 +14,6 @@ router = APIRouter()
 
 @router.get("/api/nem-suspension/dashboard")
 async def nem_suspension_dashboard():
-    import random
     ts = "2026-02-27T06:00:00+11:00"
     events = [
         {"event_id":"EVT001","event_name":"SA System Black","start_date":"2016-09-28","end_date":"2016-10-11","duration_days":13,"event_type":"SYSTEM_BLACK","regions_affected":["SA1"],"trigger":"Severe storm destroyed transmission towers; cascading failure","avg_spot_price_before_aud_mwh":52.30,"avg_spot_price_during_aud_mwh":14200.00,"max_spot_price_aud_mwh":14200.00,"total_market_cost_m_aud":367.0,"load_shed_mwh":524000,"generators_directed":12,"aemo_market_notices":47},

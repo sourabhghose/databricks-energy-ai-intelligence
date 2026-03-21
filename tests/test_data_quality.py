@@ -39,10 +39,8 @@ Run (integration, requires Databricks cluster):
 from __future__ import annotations
 
 import os
-import sys
 import unittest
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import pandas as pd
@@ -233,6 +231,7 @@ def col(name: str) -> _MockColumn:
 # ---------------------------------------------------------------------------
 
 import numpy as np
+
 _RNG = np.random.default_rng(seed=42)
 
 
@@ -799,7 +798,6 @@ class TestGoldPriceTableQualityIntegration(unittest.TestCase):
         self.assertEqual(oob, 0)
 
     def test_no_duplicate_intervals(self):
-        from pyspark.sql import functions as F
         total   = self.df.count()
         deduped = self.df.dropDuplicates(["interval_datetime", "region_id"]).count()
         self.assertEqual(total, deduped, "Duplicate intervals found in production table")

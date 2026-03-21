@@ -349,7 +349,7 @@ export default function ElectricityDemandForecastingMLAnalytics() {
             margin={{ left: 10, right: 10, top: 4, bottom: 60 }}
           >
             <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="type" tick={{ fontSize: 10, angle: -30, textAnchor: 'end' }} />
+            <XAxis dataKey="type" tick={{ fontSize: 10, angle: -30, textAnchor: 'end' } as any} />
             <YAxis tickFormatter={(v) => `+${v}%`} />
             <Tooltip formatter={(v: number) => [`+${v}%`, 'MAPE Increase']} />
             <Legend />

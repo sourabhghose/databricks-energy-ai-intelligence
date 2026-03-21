@@ -441,7 +441,7 @@ function ReplacementPriorityTab() {
     setError(null)
     try {
       const res = await networkAssetsApi.replacementPriority()
-      setData(res.priority ?? [])
+      setData((res.priority ?? []) as unknown as ReplacementItem[])
     } catch (e: any) {
       setError(e?.message ?? 'Failed to load replacement priority')
     } finally {

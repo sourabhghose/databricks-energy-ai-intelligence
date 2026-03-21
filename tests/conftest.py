@@ -26,6 +26,7 @@ def client():
     os.environ.setdefault("ANTHROPIC_API_KEY", "sk-ant-dummy-key")
 
     from fastapi.testclient import TestClient
+
     from app.backend.main import app  # noqa: E402
 
     with TestClient(app) as c:

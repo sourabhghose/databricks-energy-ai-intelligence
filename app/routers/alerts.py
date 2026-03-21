@@ -3,12 +3,12 @@ from __future__ import annotations
 
 import json
 import uuid
-from datetime import datetime, timezone, timedelta
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Query
 
-from .shared import _NEM_REGIONS, _CATALOG, _query_gold, _insert_gold, _sql_escape, logger
+from .shared import _CATALOG, _insert_gold, _query_gold, _sql_escape, logger
 
 router = APIRouter()
 

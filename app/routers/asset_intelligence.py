@@ -7,13 +7,10 @@ for Australian DNSP asset portfolios.
 from __future__ import annotations
 
 import random as _r
-from datetime import date, timedelta
-from typing import Optional
+from datetime import date
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter
 from fastapi.responses import JSONResponse
-
-from .shared import _query_gold, logger
 
 router = APIRouter()
 

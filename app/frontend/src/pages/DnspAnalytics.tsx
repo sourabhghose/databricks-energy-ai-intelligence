@@ -18,7 +18,7 @@ interface KpiCardProps {
   label: string
   value: string
   sub?: string
-  Icon: React.ComponentType<{ size?: number; className?: string }>
+  Icon: React.ElementType
   color: string
 }
 
@@ -67,7 +67,7 @@ function SaidiChart({ records }: SaidiChartProps) {
           <XAxis
             dataKey="name"
             tick={{ fontSize: 10, fill: '#9CA3AF' }}
-            angle={-40}
+            {...({ angle: -40 } as any)}
             textAnchor="end"
             interval={0}
           />
@@ -95,7 +95,7 @@ function SaidiChart({ records }: SaidiChartProps) {
               stroke="#EF4444"
               strokeDasharray="4 2"
               strokeWidth={1.5}
-              dot={{ r: 3, fill: '#EF4444' }}
+              {...({ dot: { r: 3, fill: '#EF4444' } } as any)}
             />
           ))}
         </BarChart>

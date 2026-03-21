@@ -16,14 +16,13 @@ import uuid
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-
 from routers.shared import (
     ALLOW_ORIGINS,
     RATE_LIMIT_REQUESTS,
     RATE_LIMIT_WINDOW_SECONDS,
-    _rate_limit_store,
-    _get_last_source,
     _get_last_elapsed_ms,
+    _get_last_source,
+    _rate_limit_store,
     logger,
 )
 
@@ -123,66 +122,66 @@ async def _global_exc_handler(request: Request, exc: Exception):
 # ---------------------------------------------------------------------------
 # Include all routers (order matters — catch-alls must be last)
 # ---------------------------------------------------------------------------
-from routers.health import router as health_router  # noqa: E402
-from routers.dashboards import router as dashboards_router  # noqa: E402
-from routers.home import router as home_router  # noqa: E402
-from routers.sidebar import router as sidebar_router  # noqa: E402
-from routers.copilot import router as copilot_router  # noqa: E402
-from routers.stubs import router as stubs_router  # noqa: E402
-from routers.market_events import router as market_events_router  # noqa: E402
-from routers.spike_analysis import router as spike_analysis_router  # noqa: E402
-from routers.genie import router as genie_router  # noqa: E402
+from routers.aer_benchmarking import router as aer_benchmarking_router  # noqa: E402
+from routers.aer_compliance import router as aer_compliance_router  # noqa: E402
+from routers.aio_compliance import router as aio_compliance_router  # noqa: E402
+from routers.alerts import router as anomaly_router  # noqa: E402
+from routers.asset_health import router as asset_health_router  # noqa: E402
+from routers.asset_intelligence import router as asset_intelligence_router  # noqa: E402
+from routers.auto_stubs import router as auto_stubs_router  # noqa: E402
+from routers.batch_bidding import router as batch_bidding_router  # noqa: E402
 from routers.batch_forecasting import router as batch_forecasting_router  # noqa: E402
 from routers.batch_futures_hedging import router as batch_futures_hedging_router  # noqa: E402
-from routers.batch_bidding import router as batch_bidding_router  # noqa: E402
-from routers.alerts import router as anomaly_router  # noqa: E402
-from routers.market_briefs import router as market_briefs_router  # noqa: E402
-from routers.replay import router as replay_router  # noqa: E402
-from routers.settlement import router as settlement_router  # noqa: E402
-from routers.live_data import router as live_data_router  # noqa: E402
-from routers.auto_stubs import router as auto_stubs_router  # noqa: E402
-from routers.deals import router as deals_router  # noqa: E402
-from routers.curves import router as curves_router  # noqa: E402
-from routers.risk import router as risk_router
-from routers.constraints import router as constraints_router  # noqa: E402
-from routers.bidding import router as bidding_router  # noqa: E402
 from routers.battery import router as battery_router  # noqa: E402
-from routers.gas import router as gas_router  # noqa: E402
-from routers.wem import router as wem_router  # noqa: E402
-from routers.compliance import router as compliance_router  # noqa: E402
-from routers.environmentals import router as environmentals_router  # noqa: E402
-from routers.reports import router as reports_router  # noqa: E402
-from routers.nem_map import router as nem_map_router  # noqa: E402
-from routers.trading_signals import router as trading_signals_router  # noqa: E402
-from routers.network_ops import router as network_ops_router  # noqa: E402
-from routers.network_assets import router as network_assets_router  # noqa: E402
-from routers.outages import router as outages_router  # noqa: E402
-from routers.der import router as der_router  # noqa: E402
-from routers.network_planning import router as network_planning_router  # noqa: E402
-from routers.aer_compliance import router as aer_compliance_router  # noqa: E402
-from routers.network_tariffs import router as network_tariffs_router  # noqa: E402
+from routers.bidding import router as bidding_router  # noqa: E402
 from routers.bushfire import router as bushfire_router  # noqa: E402
-from routers.rural_network import router as rural_network_router  # noqa: E402
-from routers.connections import router as connections_router  # noqa: E402
 from routers.capex_program import router as capex_program_router  # noqa: E402
-from routers.asset_health import router as asset_health_router  # noqa: E402
-from routers.vegetation import router as vegetation_router  # noqa: E402
-from routers.reliability_dnsp import router as reliability_dnsp_router  # noqa: E402
-from routers.rab_rollforward import router as rab_rollforward_router  # noqa: E402
-from routers.dapr import router as dapr_router  # noqa: E402
-from routers.customer_harm import router as customer_harm_router  # noqa: E402
-from routers.der_export import router as der_export_router  # noqa: E402
-from routers.large_load import router as large_load_router  # noqa: E402
+from routers.compliance import router as compliance_router  # noqa: E402
+from routers.connections import router as connections_router  # noqa: E402
+from routers.constraints import router as constraints_router  # noqa: E402
+from routers.copilot import router as copilot_router  # noqa: E402
+from routers.curves import router as curves_router  # noqa: E402
 from routers.customer_experience import router as customer_experience_router  # noqa: E402
-from routers.sf6_esq import router as sf6_esq_router  # noqa: E402
-from routers.fleet_electrification import router as fleet_electrification_router  # noqa: E402
-from routers.aio_compliance import router as aio_compliance_router  # noqa: E402
-from routers.asset_intelligence import router as asset_intelligence_router  # noqa: E402
-from routers.aer_benchmarking import router as aer_benchmarking_router  # noqa: E402
-from routers.hosting_capacity import router as hosting_capacity_router  # noqa: E402
-from routers.vegetation_risk import router as vegetation_risk_router  # noqa: E402
-from routers.workforce_analytics import router as workforce_analytics_router  # noqa: E402
+from routers.customer_harm import router as customer_harm_router  # noqa: E402
+from routers.dapr import router as dapr_router  # noqa: E402
 from routers.dapr_assembly import router as dapr_assembly_router  # noqa: E402
+from routers.dashboards import router as dashboards_router  # noqa: E402
+from routers.deals import router as deals_router  # noqa: E402
+from routers.der import router as der_router  # noqa: E402
+from routers.der_export import router as der_export_router  # noqa: E402
+from routers.environmentals import router as environmentals_router  # noqa: E402
+from routers.fleet_electrification import router as fleet_electrification_router  # noqa: E402
+from routers.gas import router as gas_router  # noqa: E402
+from routers.genie import router as genie_router  # noqa: E402
+from routers.health import router as health_router  # noqa: E402
+from routers.home import router as home_router  # noqa: E402
+from routers.hosting_capacity import router as hosting_capacity_router  # noqa: E402
+from routers.large_load import router as large_load_router  # noqa: E402
+from routers.live_data import router as live_data_router  # noqa: E402
+from routers.market_briefs import router as market_briefs_router  # noqa: E402
+from routers.market_events import router as market_events_router  # noqa: E402
+from routers.nem_map import router as nem_map_router  # noqa: E402
+from routers.network_assets import router as network_assets_router  # noqa: E402
+from routers.network_ops import router as network_ops_router  # noqa: E402
+from routers.network_planning import router as network_planning_router  # noqa: E402
+from routers.network_tariffs import router as network_tariffs_router  # noqa: E402
+from routers.outages import router as outages_router  # noqa: E402
+from routers.rab_rollforward import router as rab_rollforward_router  # noqa: E402
+from routers.reliability_dnsp import router as reliability_dnsp_router  # noqa: E402
+from routers.replay import router as replay_router  # noqa: E402
+from routers.reports import router as reports_router  # noqa: E402
+from routers.risk import router as risk_router
+from routers.rural_network import router as rural_network_router  # noqa: E402
+from routers.settlement import router as settlement_router  # noqa: E402
+from routers.sf6_esq import router as sf6_esq_router  # noqa: E402
+from routers.sidebar import router as sidebar_router  # noqa: E402
+from routers.spike_analysis import router as spike_analysis_router  # noqa: E402
+from routers.stubs import router as stubs_router  # noqa: E402
+from routers.trading_signals import router as trading_signals_router  # noqa: E402
+from routers.vegetation import router as vegetation_router  # noqa: E402
+from routers.vegetation_risk import router as vegetation_risk_router  # noqa: E402
+from routers.wem import router as wem_router  # noqa: E402
+from routers.workforce_analytics import router as workforce_analytics_router  # noqa: E402
 
 app.include_router(health_router)
 app.include_router(dashboards_router)
@@ -265,8 +264,8 @@ async def api_fallback(path: str):
 # STATIC FRONTEND SERVING (Databricks Apps deployment)
 # ---------------------------------------------------------------------------
 
+from fastapi.responses import FileResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
-from fastapi.responses import FileResponse    # noqa: E402
 
 _frontend_dist = os.path.join(os.path.dirname(__file__), "frontend", "dist")
 if os.path.isdir(_frontend_dist):

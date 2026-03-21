@@ -5,21 +5,14 @@ Fleet management, dispatch scheduling, revenue optimisation, and performance ana
 from __future__ import annotations
 
 import math
-import random
-import uuid
-from datetime import datetime, date, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Query
-from fastapi.responses import JSONResponse
 
 from .shared import (
     _CATALOG,
-    _NEM_REGIONS,
     _query_gold,
-    _execute_gold,
     _sql_escape,
-    logger,
 )
 
 router = APIRouter()

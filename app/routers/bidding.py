@@ -4,26 +4,16 @@ Generator bid management, optimisation, conformance monitoring, and revenue attr
 """
 from __future__ import annotations
 
-import math
 import random
-import uuid
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from datetime import datetime
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Query
-from fastapi.responses import JSONResponse
 
 from .shared import (
     _CATALOG,
-    _NEM_REGIONS,
     _query_gold,
-    _execute_gold,
-    _insert_gold,
-    _insert_gold_batch,
     _sql_escape,
-    _cache_get,
-    _cache_set,
-    logger,
 )
 
 router = APIRouter()

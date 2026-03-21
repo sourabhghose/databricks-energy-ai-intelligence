@@ -6,16 +6,19 @@ historical binding patterns, demand/weather correlation, and price signals.
 from __future__ import annotations
 
 import json
-import math
-import random
 import uuid
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Query
+
 from .shared import (
-    _NEM_REGIONS, _CATALOG, _query_gold, _execute_gold, _insert_gold_batch,
-    _sql_escape, _cache_get, _cache_set, logger,
+    _CATALOG,
+    _NEM_REGIONS,
+    _cache_get,
+    _cache_set,
+    _insert_gold_batch,
+    _query_gold,
 )
 
 router = APIRouter()

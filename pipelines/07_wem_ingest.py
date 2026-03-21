@@ -11,8 +11,9 @@
 
 import hashlib
 import json
-import requests
 from datetime import datetime, timedelta, timezone
+
+import requests
 
 try:
     CATALOG = dbutils.widgets.get("catalog")
@@ -68,7 +69,7 @@ def _last_fetch(endpoint: str) -> datetime:
 
 def _update_fetch_state(endpoint: str, latest_ts: datetime):
     """Record latest data timestamp for incremental fetch."""
-    from pyspark.sql.types import StringType, TimestampType, StructType, StructField
+    from pyspark.sql.types import StringType, StructField, StructType, TimestampType
     row = spark.createDataFrame(
         [(endpoint, latest_ts, datetime.now(timezone.utc))],
         schema=StructType([
@@ -201,6 +202,7 @@ for rec in energy_data:
 
 # Aggregate generation per interval for prices
 from collections import defaultdict
+
 interval_agg = defaultdict(lambda: {"gen": 0, "demand": 0, "price": None})
 for rec in power_data:
     ts = rec.get("interval") or rec.get("date") or rec.get("trading_interval")
@@ -333,7 +335,14 @@ if not price_rows:
 
 # COMMAND ----------
 
-from pyspark.sql.types import StructType, StructField, StringType, DoubleType, TimestampType, IntegerType
+from pyspark.sql.types import (
+    DoubleType,
+    IntegerType,
+    StringType,
+    StructField,
+    StructType,
+    TimestampType,
+)
 
 # --- wem_balancing_prices ---
 if price_rows:

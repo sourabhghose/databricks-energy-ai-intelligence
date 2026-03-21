@@ -17,10 +17,14 @@ Runs: Hourly (low frequency — notices published periodically)
 
 import dlt
 from pyspark.sql.functions import (
-    col, current_timestamp, lit, regexp_extract, to_timestamp, trim, upper
+    col,
+    current_timestamp,
+    regexp_extract,
+    to_timestamp,
+    trim,
+    upper,
 )
-from pyspark.sql.types import StructType, StructField, StringType, TimestampType
-
+from pyspark.sql.types import StringType, StructField, StructType
 
 # Schema for parsed market notices
 NOTICE_SCHEMA = StructType([

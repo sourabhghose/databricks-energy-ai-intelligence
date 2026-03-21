@@ -7,6 +7,7 @@ import { Thermometer } from 'lucide-react'
 import {
   getGeothermalEnergyDevelopmentDashboard,
   GEDADashboard,
+  GEDAGlobalBenchmarkRecord,
 } from '../api/client'
 
 // ── colour palette ──────────────────────────────────────────────────────────

@@ -109,7 +109,7 @@ export default function PowerSystemStabilityXAnalytics() {
   // ── Chart 1: Line — total_inertia_mws by month for 5 regions ────────────
   const inertiaByMonth: Record<string, Record<string, number>> = {}
   for (const rec of data.inertia) {
-    if (!inertiaByMonth[rec.month]) inertiaByMonth[rec.month] = { month: rec.month } as Record<string, number>
+    if (!inertiaByMonth[rec.month]) inertiaByMonth[rec.month] = { month: rec.month } as unknown as Record<string, number>
     inertiaByMonth[rec.month][rec.region] = rec.total_inertia_mws
   }
   const inertiaChartData = Object.values(inertiaByMonth).sort((a, b) =>
@@ -119,7 +119,7 @@ export default function PowerSystemStabilityXAnalytics() {
   // ── Chart 2: Bar — short_circuit_ratio by region x year (grouped) ────────
   const scrByRegion: Record<string, Record<string, number>> = {}
   for (const rec of data.scr) {
-    if (!scrByRegion[rec.region]) scrByRegion[rec.region] = { region: rec.region }
+    if (!scrByRegion[rec.region]) scrByRegion[rec.region] = { region: rec.region } as unknown as Record<string, number>
     scrByRegion[rec.region][String(rec.year)] = rec.short_circuit_ratio
   }
   const scrChartData = REGIONS.map((r) => scrByRegion[r] ?? { region: r })
@@ -156,7 +156,7 @@ export default function PowerSystemStabilityXAnalytics() {
   // ── Chart 4: Line — static_voltage_stability_margin_pct by month ─────────
   const voltageByMonth: Record<string, Record<string, number>> = {}
   for (const rec of data.voltage) {
-    if (!voltageByMonth[rec.month]) voltageByMonth[rec.month] = { month: rec.month } as Record<string, number>
+    if (!voltageByMonth[rec.month]) voltageByMonth[rec.month] = { month: rec.month } as unknown as Record<string, number>
     voltageByMonth[rec.month][rec.region] = rec.static_voltage_stability_margin_pct
   }
   const voltageChartData = Object.values(voltageByMonth).sort((a, b) =>

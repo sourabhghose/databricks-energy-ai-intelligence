@@ -4,19 +4,14 @@ STTM prices, DWGM prices, spark spreads, and gas-electricity correlation.
 """
 from __future__ import annotations
 
-import random
-from datetime import date, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Query
-from fastapi.responses import JSONResponse
 
 from .shared import (
     _CATALOG,
-    _NEM_REGIONS,
     _query_gold,
     _sql_escape,
-    logger,
 )
 
 router = APIRouter()

@@ -37,9 +37,8 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import sys
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import mlflow
 import mlflow.sklearn
@@ -47,7 +46,6 @@ import numpy as np
 import pandas as pd
 from mlflow.tracking import MlflowClient
 from sklearn.metrics import (
-    f1_score,
     precision_recall_fscore_support,
     roc_auc_score,
 )
@@ -326,7 +324,6 @@ def load_known_events(spark, df: pd.DataFrame) -> pd.Series:
     Falls back to rule-based ground truth if the table is absent or empty.
     Returns a pd.Series of str labels (normal/spike/negative/separation).
     """
-    import pyspark.sql.functions as F
 
     try:
         events_df = (

@@ -5,17 +5,16 @@ and replacement priority ranking for distribution network assets.
 """
 from __future__ import annotations
 
-import json
 import random as _r
-from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from datetime import datetime, timezone
+from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Query
-from fastapi.responses import JSONResponse
 
 from .shared import (
-    _CATALOG, _NEM_REGIONS,
-    _query_gold, _cache_get, _cache_set, logger,
+    _CATALOG,
+    _NEM_REGIONS,
+    _query_gold,
 )
 
 router = APIRouter()

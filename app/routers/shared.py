@@ -8,9 +8,8 @@ import os
 import threading
 import time
 from collections import defaultdict
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
-
 
 # ---------------------------------------------------------------------------
 # Structured JSON logging
@@ -140,8 +139,8 @@ def _get_sql_connection():
             _sql_connection = None
 
     try:
-        from databricks.sdk import WorkspaceClient
         from databricks import sql as dbsql
+        from databricks.sdk import WorkspaceClient
 
         w = WorkspaceClient()
         host = w.config.host.rstrip("/").replace("https://", "")
@@ -194,6 +193,7 @@ def _get_lakebase_token():
         return None
     try:
         import uuid
+
         from databricks.sdk import WorkspaceClient
         w = WorkspaceClient()
         cred = w.database.generate_database_credential(
@@ -234,6 +234,7 @@ def _get_lakebase_pool():
 
     try:
         import socket
+
         from psycopg_pool import ConnectionPool
 
         # Get username: PGUSER (Apps-injected) > SDK > LAKEBASE_USER

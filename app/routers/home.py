@@ -1,11 +1,21 @@
 from __future__ import annotations
+
 import math
 import random
 import time
-from datetime import datetime, timezone, timedelta, date
-from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, Query, Response
-from .shared import _NEM_REGIONS, _REGION_BASE_PRICES, _AEST, _CATALOG, _query_gold, _query_lakebase, _query_lakebase_fresh, _get_last_source, _get_last_elapsed_ms, _cache_get, _cache_set, logger
+from datetime import date, datetime, timedelta, timezone
+from typing import Optional
+
+from fastapi import APIRouter, Query
+
+from .shared import (
+    _AEST,
+    _CATALOG,
+    _NEM_REGIONS,
+    _REGION_BASE_PRICES,
+    _query_gold,
+    _query_lakebase_fresh,
+)
 
 router = APIRouter()
 

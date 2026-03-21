@@ -39,9 +39,8 @@ from __future__ import annotations
 import argparse
 import logging
 import math
-import sys
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -64,9 +63,9 @@ except ImportError:
     _MLFLOW_AVAILABLE = False
 
 try:
-    from pyspark.sql import SparkSession
     import pyspark.sql.functions as F
     import pyspark.sql.types as T
+    from pyspark.sql import SparkSession
     _SPARK_AVAILABLE = True
 except ImportError:
     _SPARK_AVAILABLE = False

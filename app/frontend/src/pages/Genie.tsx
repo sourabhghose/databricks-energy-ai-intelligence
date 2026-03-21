@@ -53,7 +53,7 @@ interface ChatMessage {
 // Icon mapping
 // ---------------------------------------------------------------------------
 
-const ICON_MAP: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
+const ICON_MAP: Record<string, React.ElementType> = {
   zap: Zap,
   sun: Sun,
   network: Network,

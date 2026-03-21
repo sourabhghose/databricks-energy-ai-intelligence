@@ -106,6 +106,7 @@ for r in seed_rules:
     })
 
 from pyspark.sql import Row
+
 df = spark.createDataFrame([Row(**r) for r in rows])
 df.write.mode("append").saveAsTable(f"{schema}.approval_rules")
 print(f"Seeded {len(rows)} approval rules.")

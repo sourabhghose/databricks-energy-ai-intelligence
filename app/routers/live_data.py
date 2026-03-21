@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import random as _r
 from datetime import datetime as _dt
+
 from fastapi import APIRouter
-from .shared import _query_gold, _CATALOG, logger
+
+from .shared import _CATALOG, _query_gold
 
 router = APIRouter()
 

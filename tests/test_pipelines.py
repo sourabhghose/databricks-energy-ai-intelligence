@@ -29,15 +29,12 @@ from __future__ import annotations
 
 import io
 import json
-import os
 import sys
 import unittest
 import zipfile
 from pathlib import Path
 from typing import List
-from unittest.mock import MagicMock, call, patch, PropertyMock
-
-import pytest
+from unittest.mock import MagicMock, patch
 
 # ---------------------------------------------------------------------------
 # Ensure the project root is on the path so we can import the pipelines module

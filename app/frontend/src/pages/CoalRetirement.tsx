@@ -60,9 +60,9 @@ function buildGapChartData(gaps: CapacityGapRecord[]): GapChartRow[] {
     states.forEach(state => {
       const rec = gaps.find(g => g.year === yr && g.state === state)
       if (rec) {
-        ;(row as Record<string, unknown>)[`${state}_retirements`] = rec.retirements_mw
-        ;(row as Record<string, unknown>)[`${state}_renewables`] = rec.new_renewables_mw
-        ;(row as Record<string, unknown>)[`${state}_storage`] = rec.new_storage_mw
+        ;(row as unknown as Record<string, unknown>)[`${state}_retirements`] = rec.retirements_mw
+        ;(row as unknown as Record<string, unknown>)[`${state}_renewables`] = rec.new_renewables_mw
+        ;(row as unknown as Record<string, unknown>)[`${state}_storage`] = rec.new_storage_mw
       }
     })
     return row

@@ -6,12 +6,9 @@ and inflation indexing — plus allowed revenue sensitivity to WACC.
 from __future__ import annotations
 
 import random as _r
-from typing import Optional
 
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
-
-from .shared import _query_gold, logger
 
 router = APIRouter()
 

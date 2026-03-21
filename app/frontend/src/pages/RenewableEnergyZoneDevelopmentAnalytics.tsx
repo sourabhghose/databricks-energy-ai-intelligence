@@ -227,7 +227,7 @@ export default function RenewableEnergyZoneDevelopmentAnalytics() {
         <ResponsiveContainer width="100%" height={360}>
           <BarChart data={techMixChartData} margin={{ bottom: 60 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-            <XAxis dataKey="name" stroke="#9ca3af" tick={{ fontSize: 9, angle: -35, textAnchor: 'end' }} interval={0} />
+            <XAxis dataKey="name" stroke="#9ca3af" tick={{ fontSize: 9, angle: -35, textAnchor: 'end' } as any} interval={0} />
             <YAxis stroke="#9ca3af" tick={{ fontSize: 11 }} tickFormatter={(v) => `${v} GW`} />
             <Tooltip
               contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}
@@ -259,7 +259,7 @@ export default function RenewableEnergyZoneDevelopmentAnalytics() {
         <ResponsiveContainer width="100%" height={360}>
           <BarChart data={txInvestmentChartData} margin={{ bottom: 60 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-            <XAxis dataKey="name" stroke="#9ca3af" tick={{ fontSize: 9, angle: -35, textAnchor: 'end' }} interval={0} />
+            <XAxis dataKey="name" stroke="#9ca3af" tick={{ fontSize: 9, angle: -35, textAnchor: 'end' } as any} interval={0} />
             <YAxis stroke="#9ca3af" tick={{ fontSize: 11 }} />
             <Tooltip
               contentStyle={{ backgroundColor: '#1f2937', border: '1px solid #374151', borderRadius: '8px' }}

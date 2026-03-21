@@ -12,15 +12,12 @@ from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, Query
 
 from .shared import (
-    _query_gold,
     _CATALOG,
-    _insert_gold_batch,
-    _insert_gold,
-    _execute_gold,
-    _update_gold,
-    _sql_escape,
     _NEM_REGIONS,
-    logger,
+    _execute_gold,
+    _insert_gold_batch,
+    _query_gold,
+    _sql_escape,
 )
 
 router = APIRouter()

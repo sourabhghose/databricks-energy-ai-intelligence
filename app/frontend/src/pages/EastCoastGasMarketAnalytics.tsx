@@ -95,7 +95,7 @@ export default function EastCoastGasMarketAnalytics() {
 
   // ---- Derived data ----
   const latestPrices = data.hub_prices.reduce<Record<string, number>>((acc, r) => {
-    if (!acc[r.hub] || r.month > (acc._month ?? '')) {
+    if (!acc[r.hub] || r.month > String(acc._month ?? '')) {
       acc[r.hub] = r.price_aud_gj
       acc._month = r.month as unknown as number
     }

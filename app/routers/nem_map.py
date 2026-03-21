@@ -5,8 +5,7 @@ from __future__ import annotations
 from typing import Optional
 
 from fastapi import APIRouter, Query
-
-from routers.shared import _query_gold, _CATALOG, logger
+from routers.shared import _CATALOG, _query_gold
 
 router = APIRouter()
 
@@ -136,6 +135,7 @@ async def get_map_facility_detail(duid: str):
 # Mock fallbacks
 # ---------------------------------------------------------------------------
 import random as _r
+
 
 def _mock_facilities(fuel_type=None, region=None, layer_type=None, min_cap=0):
     """Generate mock facility locations across Australia for dev/demo."""

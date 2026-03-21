@@ -14,9 +14,10 @@ dbutils.library.restartPython()
 
 # COMMAND ----------
 
-import psycopg
-import uuid
 import socket
+import uuid
+
+import psycopg
 from databricks.sdk import WorkspaceClient
 
 w = WorkspaceClient()
@@ -49,7 +50,6 @@ ip = socket.gethostbyname(host)
 print(f"Resolved {host} -> {ip}")
 
 # Try multiple port/dbname combos
-import traceback
 
 for port, dbname in [(443, "energy_copilot_db"), (5432, "energy_copilot_db"), (443, "postgres"), (5432, "postgres")]:
     try:
