@@ -15,9 +15,33 @@ resources:
         environment: ${bundle.target}
         pipeline: "00_setup"
       tasks:
+        - task_key: create_catalog
+          notebook_task:
+            notebook_path: ../setup/00_create_catalog.sql
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: default
         - task_key: create_schemas
+          depends_on:
+            - task_key: create_catalog
           notebook_task:
             notebook_path: ../setup/01_create_schemas.sql
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: default
+        - task_key: setup_lakebase
+          depends_on:
+            - task_key: create_schemas
+          notebook_task:
+            notebook_path: ../setup/03_setup_lakebase.sql
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: default
+        - task_key: create_legacy_tables
+          depends_on:
+            - task_key: create_schemas
+          notebook_task:
+            notebook_path: ../setup/02_create_tables_legacy.sql
             base_parameters:
               catalog: ${var.catalog}
           environment_key: default
@@ -190,6 +214,23 @@ resources:
             base_parameters:
               catalog: ${var.catalog}
           environment_key: default
+        - task_key: create_alerts
+          depends_on:
+            - task_key: create_tables
+          notebook_task:
+            notebook_path: ../setup/05_create_alerts.sql
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: default
+        - task_key: grant_lakebase_perms
+          depends_on:
+            - task_key: setup_lakebase
+            - task_key: create_tables
+          notebook_task:
+            notebook_path: ../pipelines/11_grant_lakebase_perms.py
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: lakebase
         - task_key: create_genie_spaces
           depends_on:
             - task_key: create_tables
@@ -235,6 +276,12 @@ resources:
         - environment_key: default
           spec:
             client: "1"
+        - environment_key: lakebase
+          spec:
+            client: "1"
+            dependencies:
+              - psycopg[binary]>=3.0
+              - databricks-sdk>=0.81.0
       max_concurrent_runs: 1
 
     # -----------------------------------------------------------------
@@ -1222,4 +1269,51 @@ resources:
         - environment_key: default
           spec:
             client: "1"
+      max_concurrent_runs: 1
+
+    # -----------------------------------------------------------------
+    # Job 36 — Historical NEMWEB Backfill (one-time / manual)
+    # -----------------------------------------------------------------
+    job_36_historical_backfill:
+      name: "[${bundle.target}] 36 — Historical NEMWEB Backfill"
+      description: "One-time pipeline to backfill up to 2 years of NEMWEB dispatch data (prices, generation, interconnectors, trading) into Bronze Delta tables."
+      tags:
+        environment: ${bundle.target}
+        pipeline: "36_historical_backfill"
+      tasks:
+        - task_key: historical_backfill
+          notebook_task:
+            notebook_path: ../pipelines/00_historical_backfill.py
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: default
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"
+      max_concurrent_runs: 1
+
+    # -----------------------------------------------------------------
+    # Job 37 — Lakebase Query Demo (manual / ad-hoc)
+    # -----------------------------------------------------------------
+    job_37_lakebase_demo:
+      name: "[${bundle.target}] 37 — Lakebase Query Demo"
+      description: "Ad-hoc notebook demonstrating direct Postgres queries via Lakebase Provisioned instance. Proves data is served from Postgres, not Delta."
+      tags:
+        environment: ${bundle.target}
+        pipeline: "37_lakebase_demo"
+      tasks:
+        - task_key: lakebase_query_demo
+          notebook_task:
+            notebook_path: ../pipelines/10_lakebase_query_demo.py
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: lakebase
+      environments:
+        - environment_key: lakebase
+          spec:
+            client: "1"
+            dependencies:
+              - psycopg[binary]>=3.0
+              - databricks-sdk>=0.81.0
       max_concurrent_runs: 1
