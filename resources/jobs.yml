@@ -190,6 +190,38 @@ resources:
             base_parameters:
               catalog: ${var.catalog}
           environment_key: default
+        - task_key: create_genie_spaces
+          depends_on:
+            - task_key: create_tables
+          notebook_task:
+            notebook_path: ../setup/04_create_genie_spaces.py
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: default
+        - task_key: register_uc_functions
+          depends_on:
+            - task_key: create_tables
+          notebook_task:
+            notebook_path: ../setup/06_register_uc_functions.py
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: default
+        - task_key: setup_monitoring
+          depends_on:
+            - task_key: create_tables
+          notebook_task:
+            notebook_path: ../setup/07_setup_monitoring.py
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: default
+        - task_key: load_generator_registry
+          depends_on:
+            - task_key: create_tables
+          notebook_task:
+            notebook_path: ../setup/load_generator_registry.py
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: default
         - task_key: backfill
           depends_on:
             - task_key: create_core_nem_tables
@@ -1043,6 +1075,131 @@ resources:
         - environment_key: default
           spec:
             client: "1"
+      max_concurrent_runs: 1
+
+    # -----------------------------------------------------------------
+    # Job 31 — Market Notices Ingest (hourly)
+    # -----------------------------------------------------------------
+    job_31_market_notices:
+      name: "[${bundle.target}] 31 — Market Notices Ingest"
+      description: "AEMO market notices from NEMWEB public data feeds (system security, advisories, constraint changes)."
+      tags:
+        environment: ${bundle.target}
+        pipeline: "31_market_notices"
+      schedule:
+        quartz_cron_expression: "0 0 */1 * * ?"
+        timezone_id: "UTC"
+        pause_status: UNPAUSED
+      tasks:
+        - task_key: market_notices_ingest
+          notebook_task:
+            notebook_path: ../pipelines/04_market_notices_ingest.py
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: default
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"
+      max_concurrent_runs: 1
+
+    # -----------------------------------------------------------------
+    # Job 32 — Static Lookup Tables (one-time / manual)
+    # -----------------------------------------------------------------
+    job_32_static_lookups:
+      name: "[${bundle.target}] 32 — Static Lookup Tables"
+      description: "Creates reference/dimension tables from public datasets (NEM regions, fuel types, etc.)."
+      tags:
+        environment: ${bundle.target}
+        pipeline: "32_static_lookups"
+      tasks:
+        - task_key: static_lookups
+          notebook_task:
+            notebook_path: ../pipelines/05_static_lookups.py
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: default
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"
+      max_concurrent_runs: 1
+
+    # -----------------------------------------------------------------
+    # Job 33 — AEMO Gas Bulletin Board Ingest (every 6 hours)
+    # -----------------------------------------------------------------
+    job_33_gas_data_ingest:
+      name: "[${bundle.target}] 33 — AEMO Gas Bulletin Board"
+      description: "AEMO Gas Bulletin Board (GBB) production, storage, and flow data."
+      tags:
+        environment: ${bundle.target}
+        pipeline: "33_gas_data"
+      schedule:
+        quartz_cron_expression: "0 30 */6 * * ?"
+        timezone_id: "UTC"
+        pause_status: UNPAUSED
+      tasks:
+        - task_key: gas_data_ingest
+          notebook_task:
+            notebook_path: ../pipelines/06_gas_data_ingest.py
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: default
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"
+      max_concurrent_runs: 1
+
+    # -----------------------------------------------------------------
+    # Job 34 — NEMWEB Bronze → Gold (every 5 min)
+    # -----------------------------------------------------------------
+    job_34_nemweb_bronze_to_gold:
+      name: "[${bundle.target}] 34 — NEMWEB Bronze → Gold"
+      description: "Promotes real AEMO NEMWEB dispatch price data from bronze to gold.nem_prices_5min."
+      tags:
+        environment: ${bundle.target}
+        pipeline: "34_nemweb_bronze_gold"
+      schedule:
+        quartz_cron_expression: "0 */5 * * * ?"
+        timezone_id: "UTC"
+        pause_status: UNPAUSED
+      tasks:
+        - task_key: nemweb_bronze_to_gold
+          notebook_task:
+            notebook_path: ../pipelines/13_nemweb_bronze_to_gold.py
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: default
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"
+      max_concurrent_runs: 1
+
+    # -----------------------------------------------------------------
+    # Job 35 — Recreate Synced Tables (manual utility)
+    # -----------------------------------------------------------------
+    job_35_recreate_synced_tables:
+      name: "[${bundle.target}] 35 — Recreate Synced Tables"
+      description: "Drops and recreates Lakebase synced tables with CONTINUOUS scheduling. Run manually when sync config changes."
+      tags:
+        environment: ${bundle.target}
+        pipeline: "35_recreate_synced_tables"
+      tasks:
+        - task_key: recreate_synced_tables
+          notebook_task:
+            notebook_path: ../pipelines/12_recreate_synced_tables_continuous.py
+            base_parameters:
+              catalog: ${var.catalog}
+          environment_key: default
+      environments:
+        - environment_key: default
+          spec:
+            client: "1"
+            dependencies:
+              - psycopg[binary]>=3.0
+              - databricks-sdk>=0.81.0
       max_concurrent_runs: 1
 
     # -----------------------------------------------------------------
