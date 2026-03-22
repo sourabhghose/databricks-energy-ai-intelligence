@@ -37,9 +37,9 @@ os.environ.setdefault("ANTHROPIC_API_KEY", "sk-ant-fake-key")
 # Pre-import agent subpackages so unittest.mock.patch can resolve dotted paths
 # (patch resolves "agent.tools.market_data_tools._connection" by walking module
 # attributes; if the subpackages haven't been imported yet the lookup fails).
-import agent.tools.market_data_tools  # noqa: E402
-import agent.tools.forecast_tools  # noqa: E402
-import agent.tools.analysis_tools  # noqa: E402
+import agent.tools.analysis_tools  # noqa: E402, F401
+import agent.tools.forecast_tools  # noqa: E402, F401
+import agent.tools.market_data_tools  # noqa: E402, F401
 
 # ---------------------------------------------------------------------------
 # Helpers

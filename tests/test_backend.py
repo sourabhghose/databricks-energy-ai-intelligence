@@ -47,6 +47,10 @@ from app.backend.main import app  # noqa: E402
 # ---------------------------------------------------------------------------
 client = TestClient(app)
 
+# Auth headers — empty dict because ENERGY_COPILOT_API_KEY is not set in the
+# test environment, so _API_AUTH_ENABLED=False and all endpoints accept any request.
+AUTH: dict = {}
+
 
 # ===========================================================================
 # TestHealthEndpoint
@@ -1054,7 +1058,6 @@ class TestCatalogEndpoints:
         assert r.status_code == 200
         for run in r.json():
             assert run["status"] in ("COMPLETED", "RUNNING", "FAILED", "WAITING")
-        assert marginal["duid"] == data["marginal_generator"]
 
 
 # ===========================================================================
@@ -5355,7 +5358,7 @@ class TestPlannedOutageAnalytics:
     def test_planned_outage_dashboard(self, client: TestClient) -> None:
         resp = client.get(
             "/api/planned-outage/dashboard",
-            headers={"X-API-Key": os.environ["API_KEY"]},
+            headers={"X-API-Key": os.environ.get("API_KEY", "test-key")},
         )
         assert resp.status_code == 200
         d = resp.json()
@@ -17839,7 +17842,9 @@ class TestGridModernisationDigitalTwinDashboard:
         assert r.status_code == 200
 
     def test_requires_auth(self, client=client):
-        r = client.get(self.URL)
+        with patch("app.backend.main._API_AUTH_ENABLED", True), \
+             patch("app.backend.main.API_KEY", "secret-test-key"):
+            r = client.get(self.URL)
         assert r.status_code in (401, 403)
 
     def test_initiatives_count(self, client=client):
@@ -27335,7 +27340,9 @@ class TestPowerQualityMonitoringAnalytics:
 
     def test_pqma_requires_api_key(self):
         """Endpoint must reject requests without API key."""
-        r = client.get(self.URL)
+        with patch("app.backend.main._API_AUTH_ENABLED", True), \
+             patch("app.backend.main.API_KEY", "secret-test-key"):
+            r = client.get(self.URL)
         assert r.status_code in (401, 403, 422)
 
 
@@ -27772,7 +27779,9 @@ class TestCoalFleetRetirementPathwayAnalytics:
 
     def test_cfra_requires_api_key(self):
         """Endpoint must reject requests without API key."""
-        r = client.get(self.URL)
+        with patch("app.backend.main._API_AUTH_ENABLED", True), \
+             patch("app.backend.main.API_KEY", "secret-test-key"):
+            r = client.get(self.URL)
         assert r.status_code in (401, 403, 422)
 
 
@@ -27908,7 +27917,9 @@ class TestISPADashboard:
 
     def test_ispa_requires_api_key(self):
         """Endpoint must reject requests without API key."""
-        r = client.get(self.URL)
+        with patch("app.backend.main._API_AUTH_ENABLED", True), \
+             patch("app.backend.main.API_KEY", "secret-test-key"):
+            r = client.get(self.URL)
         assert r.status_code in (401, 403, 422)
 
 
@@ -28018,7 +28029,9 @@ class TestEastCoastGasMarketAnalytics:
 
     def test_ecga_requires_api_key(self):
         """Endpoint must reject requests without API key."""
-        r = client.get(self.URL)
+        with patch("app.backend.main._API_AUTH_ENABLED", True), \
+             patch("app.backend.main.API_KEY", "secret-test-key"):
+            r = client.get(self.URL)
         assert r.status_code in (401, 403, 422)
 
 
@@ -28177,7 +28190,9 @@ class TestSMDADashboard:
 
     def test_smda_requires_api_key(self):
         """Endpoint must reject requests without API key."""
-        r = client.get(self.URL)
+        with patch("app.backend.main._API_AUTH_ENABLED", True), \
+             patch("app.backend.main.API_KEY", "secret-test-key"):
+            r = client.get(self.URL)
         assert r.status_code in (401, 403, 422)
 
 
@@ -28322,7 +28337,9 @@ class TestCBADashboard:
 
     def test_cba_requires_api_key(self):
         """Endpoint must reject requests without API key."""
-        r = client.get(self.URL)
+        with patch("app.backend.main._API_AUTH_ENABLED", True), \
+             patch("app.backend.main.API_KEY", "secret-test-key"):
+            r = client.get(self.URL)
         assert r.status_code in (401, 403, 422)
 
 
@@ -28495,5 +28512,7 @@ class TestESCADashboard:
 
     def test_esca_requires_api_key(self):
         """Endpoint must reject requests without API key."""
-        r = client.get(self.URL)
+        with patch("app.backend.main._API_AUTH_ENABLED", True), \
+             patch("app.backend.main.API_KEY", "secret-test-key"):
+            r = client.get(self.URL)
         assert r.status_code in (401, 403, 422)
