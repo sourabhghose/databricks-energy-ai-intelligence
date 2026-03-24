@@ -839,6 +839,57 @@ _GENIE_SPACES = [
 ]
 
 
+def _resolve_genie_space_ids() -> None:
+    """Resolve Genie space IDs by display_name via the workspace API at startup.
+
+    Handles fresh installs where job_00_setup creates spaces with new IDs that
+    differ from the hardcoded defaults above. Falls back silently to hardcoded
+    IDs if the API is unreachable (e.g. no workspace client, cold start).
+    Runs in a background daemon thread so it never blocks app startup.
+    """
+    import logging
+    import os
+    import httpx
+    log = logging.getLogger("energy_copilot")
+    try:
+        from databricks.sdk import WorkspaceClient
+        w = WorkspaceClient()
+        auth = w.config.authenticate()
+        host = w.config.host.rstrip("/")
+        # Inside Databricks Apps, host may resolve to the app URL — use workspace host instead
+        if "databricksapps.com" in host:
+            host = os.environ.get("DATABRICKS_HOST", host).rstrip("/")
+        resp = httpx.get(
+            f"{host}/api/2.0/genie/spaces",
+            headers=auth,
+            timeout=10,
+        )
+        if resp.status_code != 200:
+            return
+        api_spaces: dict[str, str] = {}
+        for s in resp.json().get("spaces", []):
+            # API may return 'title', 'display_name', or 'name' depending on version
+            display = s.get("title") or s.get("display_name") or s.get("name", "")
+            sid = s.get("space_id") or s.get("id", "")
+            if display and sid:
+                api_spaces[display] = sid
+        updated = 0
+        for space in _GENIE_SPACES:
+            title = space["title"]
+            resolved = api_spaces.get(title)
+            if resolved and resolved != space["space_id"]:
+                space["space_id"] = resolved
+                updated += 1
+        if updated:
+            log.info("genie_space_ids_resolved count=%d", updated)
+    except Exception as exc:
+        log.debug("Genie space ID resolution skipped: %s", exc)
+
+
+import threading as _threading
+_threading.Thread(target=_resolve_genie_space_ids, daemon=True).start()
+
+
 @router.get("/api/genie/spaces")
 def list_genie_spaces():
     """Return the list of configured Genie spaces."""

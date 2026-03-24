@@ -121,7 +121,7 @@ _AEST = timezone(timedelta(hours=10))
 # SQL query helper — query gold tables via Databricks Statement Execution API
 # ---------------------------------------------------------------------------
 _CATALOG = os.environ.get("DATABRICKS_CATALOG", "energy_copilot_catalog")
-_SQL_WAREHOUSE_ID = os.environ.get("SQL_WAREHOUSE_ID", "4d5388b3d6cbcb6e")
+_SQL_WAREHOUSE_ID = os.environ.get("SQL_WAREHOUSE_ID", "")
 
 # WorkspaceClient singleton — used for both SQL and Lakebase cred generation
 _workspace_client = None
