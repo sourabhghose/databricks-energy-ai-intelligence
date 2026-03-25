@@ -1,17 +1,17 @@
 ---
 title: Genie AI/BI Spaces
-description: 12 Genie spaces for natural language SQL — how Genie works, sample questions, space IDs, and how to add new spaces.
+description: 16 Genie spaces for natural language SQL — how Genie works, sample questions, primary tables, and how to add new spaces.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-![Genie Analytics page showing 15 available Genie spaces spanning NEM spot market, generation, storage, FCAS, portfolio, settlement, and DNSP intelligence](../../../assets/screenshots/genie.png)
+![Genie Analytics page showing 16 available Genie spaces spanning NEM spot market, generation, storage, FCAS, portfolio, settlement, and DNSP intelligence](../../../assets/screenshots/genie.png)
 
 ## Overview
 
 Databricks Genie AI/BI provides a natural language interface directly to Delta tables. Users type a question in plain English; Genie translates it to SQL, executes it against the Gold tables, and returns results as a table or chart — with the generated SQL visible for transparency.
 
-Energy Copilot configures 12 Genie spaces, each optimised for a specific domain with curated semantic metadata (table and column descriptions, glossary terms, and benchmark questions).
+Energy Copilot configures **16 Genie spaces**, each optimised for a specific domain with curated semantic metadata (table and column descriptions, glossary terms, and benchmark questions).
 
 ## How Genie Works
 
@@ -31,142 +31,191 @@ Databricks SQL Warehouse
 Results (table + auto-chart)
 ```
 
-Genie uses the Unity Catalog table and column COMMENT annotations as context for SQL generation. Columns with well-documented COMMENTs produce more accurate SQL. All 108+ Gold tables have column-level COMMENT annotations specifically to improve Genie accuracy.
+Genie uses Unity Catalog table and column COMMENT annotations as context for SQL generation. All 113+ Gold tables have column-level COMMENT annotations specifically to improve Genie accuracy.
 
-## The 12 Genie Spaces
+## The 16 Genie Spaces
 
-### 1. NEM Prices & Demand
+### 1. NEM Spot Market Intelligence
 
-**Primary tables**: `gold.nem_prices_5min`, `gold.nem_prices_30min`, `gold.weather_nem_regions`
-
-Sample questions:
-- "What was the average spot price in SA1 last week?"
-- "Show me the top 10 highest price intervals in VIC1 this year"
-- "Compare demand-weighted average prices across all regions today"
-- "How many times did QLD1 prices exceed $500/MWh in the past 30 days?"
-- "What is the correlation between SA1 prices and temperature?"
-
-### 2. Generation & Fuel Mix
-
-**Primary tables**: `gold.nem_generation_by_fuel`
+**Primary tables**: `nem_prices_5min`, `nem_prices_30min`, `nem_daily_summary`, `daily_market_summary`, `anomaly_events`, `demand_actuals`
 
 Sample questions:
-- "What percentage of NEM generation came from renewables yesterday?"
+- "What was the average spot price by region last week?"
+- "Show me all price spike events above $1000/MWh"
+- "Which region had the most negative pricing intervals?"
+- "What is the daily price volatility trend for SA1?"
+- "Compare average spot prices between NSW1 and VIC1 this month"
+
+### 2. NEM Generation & Renewables
+
+**Primary tables**: `nem_generation_by_fuel`, `nem_daily_summary`, `generation_forecasts`
+
+Sample questions:
+- "What is the current renewable energy share by region?"
+- "Show the daily renewables percentage trend over the last month"
+- "Which regions have the highest solar generation right now?"
 - "Show coal generation declining trend over the past 2 years"
-- "Which regions have the highest battery generation?"
-- "What was the peak wind output in SA1 this month?"
 
-### 3. Interconnectors & Constraints
+### 3. NEM Network & Interconnectors
 
-**Primary tables**: `gold.nem_interconnectors`
+**Primary tables**: `nem_interconnectors`, `nem_constraints_active`, `nem_daily_summary`
 
 Sample questions:
-- "When was Basslink last at full capacity?"
-- "Show interconnector flows between QLD1 and NSW1 for the past week"
+- "What is the average utilization of each interconnector?"
+- "Show the flow pattern between NSW and QLD over the last week"
+- "When did Basslink last reach its export limit?"
 - "How often does V-SA reach its import limit during summer?"
 
-### 4. FCAS Markets
+### 4. NEM Forecasting & Weather
 
-**Primary tables**: `gold.nem_fcas_prices`
+**Primary tables**: `demand_forecasts`, `price_forecasts`, `generation_forecasts`, `weather_nem_regions`, `demand_actuals`
 
 Sample questions:
-- "What was the average RAISEREG price this month?"
-- "Show FCAS price spikes during the October 2024 contingency event"
+- "How accurate are the demand forecasts for NSW1?"
+- "Show forecast vs actual demand for the last 24 hours"
+- "What temperature is forecast for SA1 this week?"
+- "Compare P10/P50/P90 price forecasts for VIC1 tomorrow"
+
+### 5. NEM Bidding & Trading
+
+**Primary tables**: `nem_facilities`, `nem_generation_by_fuel`, `nem_prices_5min`
+
+Sample questions:
+- "What is the total generation capacity by fuel type across all NEM regions?"
+- "Which generators have the largest capacity in Queensland?"
+- "Which generators are currently dispatched above their registered capacity?"
+
+### 6. NEM Storage & Battery Analytics
+
+**Primary tables**: `nem_facilities`, `nem_generation_by_fuel`, `nem_interconnectors`, `nem_prices_5min`
+
+Sample questions:
+- "How many battery storage units are registered in each NEM region?"
+- "What is the total battery charging and discharging capacity by region?"
+- "Which batteries are currently charging vs discharging?"
+- "Show battery dispatch patterns during peak price events"
+
+### 7. NEM FCAS & Ancillary Services
+
+**Primary tables**: `nem_facilities`, `nem_generation_by_fuel`, `nem_prices_5min`, `gold_nem_fcas_prices`
+
+Sample questions:
+- "What is the average clearing price for each FCAS service type in the last 24 hours?"
+- "Which FCAS service has the highest clearing price right now?"
+- "Show FCAS price spikes during contingency events this month"
 - "Compare Regulation Raise vs Regulation Lower prices over the past year"
-- "Which 5-minute intervals had the highest RAISE6SEC prices?"
 
-### 5. Settlement & Finance
+### 8. Portfolio & P&L
 
-**Primary tables**: `gold.settlement_statements`, `gold.settlement_true_up`
-
-Sample questions:
-- "What was our net settlement position for March 2025?"
-- "Show the PRELIM to FINAL true-up for February 2025"
-- "List all settlement runs published for Q1 2025"
-
-### 6. DNSP Compliance
-
-**Primary tables**: `gold.dnsp_aio_metrics`, `gold.dnsp_stpis_metrics`
+**Primary tables**: `approval_requests`, `approval_rules`, `counterparties`, `credit_exposure`, `pnl_attribution`, `portfolio_mtm`, `portfolios`, `risk_metrics`, `trades`
 
 Sample questions:
-- "Which feeders have the highest SAIDI contribution this year?"
-- "Show SAIDI trend for Ausgrid over the past 5 years"
-- "Which AIO obligations are overdue for Essential Energy?"
+- "What is the total MtM value by region?"
+- "Show me the P&L attribution breakdown for this month"
+- "Which counterparties have the highest credit exposure?"
+- "What trades were booked this week and their current MtM?"
 
-### 7. Asset Intelligence
+### 9. NEM Bidding & Revenue Optimisation
 
-**Primary tables**: `gold.dnsp_asset_register`
-
-Sample questions:
-- "List all transformers with health index below 40"
-- "How many Ausgrid assets are scheduled for replacement this year?"
-- "Show asset failure predictions by zone for SA Power Networks"
-
-### 8. Vegetation Risk
-
-**Primary tables**: `gold.dnsp_vegetation_risk`
+**Primary tables**: `bids_submitted`, `bid_optimization_results`, `dispatch_conformance`, `revenue_attribution`
 
 Sample questions:
-- "Which spans are in BMO zones with risk score above 0.7?"
-- "How many spans have not been inspected in over 18 months?"
-- "Show vegetation risk trend by zone for Ergon Energy"
+- "Show all bids for Bayswater in the last 7 days"
+- "What is the average bid price by band across NSW generators?"
+- "Which generators have the best dispatch conformance rate?"
+- "Compare actual vs ML-optimal revenue for Loy Yang A"
 
-### 9. Workforce Analytics
+### 10. Gas Market Analytics
 
-**Primary tables**: `gold.dnsp_workforce_metrics`
-
-Sample questions:
-- "What is the forecast HV linesperson demand for the next 6 months?"
-- "Which contractors have the best job completion rates?"
-- "Compare crew productivity by work type for Energex"
-
-### 10. Environmental & LGCs
-
-**Primary tables**: `gold.lgc_registry`, `gold.emissions_factors`
+**Primary tables**: `gas_sttm_prices`, `gas_dwgm_prices`, `gas_spark_spreads`, `gas_hub_prices`
 
 Sample questions:
-- "What is our current LGC registry balance vs this year's obligation?"
-- "Show NEM emissions intensity trend over the past 3 years"
-- "Which regions have the lowest carbon intensity generation?"
-
-### 11. Forward Curves
-
-**Primary tables**: `gold.asx_futures_eod`, `gold.forward_curves`
-
-Sample questions:
-- "What are the current NSW1 calendar year futures prices?"
-- "Show Q3 2025 SA1 futures settlement price history"
-- "Compare VIC1 and NSW1 forward curves for the next 12 months"
-
-### 12. Gas Markets
-
-**Primary tables**: `gold.gas_hub_prices`
-
-Sample questions:
-- "What was the average Sydney STTM commodity price last month?"
+- "What is the average STTM gas price by hub this month?"
+- "Show the ex-ante vs ex-post price for Sydney hub"
 - "Compare Adelaide vs Brisbane STTM prices over the past 6 months"
 - "When was the highest STTM price recorded at Wallumbilla?"
 
+### 11. WEM Market Analytics
+
+**Primary tables**: `wem_balancing_prices`, `wem_generation`, `wem_demand`
+
+Sample questions:
+- "What is the average WEM balancing price this week?"
+- "Show the WEM price distribution over the last 30 days"
+- "Compare WEM vs NEM average prices this quarter"
+- "What is the current renewable generation share in WEM?"
+
+### 12. Network Operations & Reliability
+
+**Primary tables**: `network_assets`, `asset_loading_5min`, `voltage_monitoring`, `outage_events`, `reliability_kpis`, `power_quality`
+
+Sample questions:
+- "Which zone substations had the highest average utilization in the last 24 hours?"
+- "Which assets are above 90% utilization right now?"
+- "Show SAIDI/SAIFI trend by DNSP over the past 3 years"
+- "List all active outages and estimated restoration times"
+
+### 13. DER & Hosting Capacity
+
+**Primary tables**: `der_fleet`, `hosting_capacity`, `curtailment_events`, `vpp_dispatch_events`, `doe_compliance`, `der_output_estimated`
+
+Sample questions:
+- "What is the total installed rooftop solar capacity by zone substation?"
+- "Show the breakdown of DER installations by technology type and region"
+- "Which feeders have the least remaining hosting capacity?"
+- "How many curtailment events occurred this month and what was the energy impact?"
+
+### 14. Network Planning & EV Impact
+
+**Primary tables**: `demand_forecast_spatial`, `network_constraints_register`, `ev_network_impact`, `ev_charging_profiles`
+
+Sample questions:
+- "Which zone substations have the highest peak demand growth by 2030 under BAU?"
+- "Compare peak demand across BAU vs combined scenario for 2028"
+- "Which network constraints have the most breach years forecast?"
+- "What is the projected EV charging load by region for 2027?"
+
+### 15. Settlement & Finance
+
+**Primary tables**: `settlement_runs`, `settlement_charges`, `settlement_journals`, `settlement_disputes`, `settlement_gl_mapping`, `settlement_evidence`
+
+Sample questions:
+- "Show all settlement runs with their status, AEMO total, and variance percentage"
+- "Which settlement runs have variance above $50,000?"
+- "What was our net settlement position for the last completed run?"
+- "Show the PRELIM to FINAL true-up by charge type"
+
+### 16. DNSP Enterprise Intelligence
+
+**Primary tables**: `rin_submissions`, `stpis_performance`, `revenue_monitoring`, `pricing_proposals`, `regulatory_milestones`, `network_tariff_structures`, `bmp_asset_register`, `elc_inspections`, `fire_risk_incidents`, `bmp_spend`, `cso_payments`, `rural_feeder_performance`, `connection_applications`, `timely_connections_kpi`, `capital_projects`, `fault_response_kpis`
+
+Sample questions:
+- "What is the current STPIS performance score for AusNet Services?"
+- "Which DNSPs are at risk of missing their AER revenue cap?"
+- "Show BMP capex spend vs allowance by DNSP"
+- "Which DNSPs have overdue RIN submissions?"
+- "What is the timely connections rate by DNSP this quarter?"
+
 ## Space Configuration
 
-Each Genie space is configured with:
+Each Genie space is configured with semantic metadata to improve SQL generation accuracy:
 
 ```python
 # From setup/04_create_genie_spaces.py
 space_config = {
-    "displayName": "NEM Prices & Demand",
-    "description": "Query NEM spot prices, demand, and weather data for all 5 regions",
+    "displayName": "NEM Spot Market Intelligence",
+    "description": "Spot prices, demand, price spikes, negative pricing, and anomaly events across all NEM regions.",
     "tables": [
         {
-            "catalog": "energy_copilot",
+            "catalog": "energy_copilot_catalog",
             "schema": "gold",
             "table": "nem_prices_5min",
-            "description": "5-minute NEM dispatch prices for all regions. ...",
+            "description": "5-minute NEM dispatch prices for all regions.",
             "columns": [...]
         }
     ],
     "sampleQuestions": [
-        "What was the average spot price in SA1 last week?",
+        "What was the average spot price by region last week?",
         ...
     ],
     "glossary": {
@@ -194,6 +243,22 @@ databricks jobs run-now --job-id <SETUP_JOB_ID> \
   --profile=my-profile
 ```
 
+## Genie vs Copilot
+
+| Feature | Genie AI/BI | AI Copilot |
+|---------|------------|-----------|
+| Interface | Direct question → SQL → result | Conversational chat |
+| SQL visibility | Yes (show SQL) | No (abstracted) |
+| Custom tool calling | No | Yes (58 tools) |
+| Multi-step reasoning | Limited | Yes (agentic loop) |
+| ML model access | No | Yes |
+| Real-time data | Yes (direct table access) | Yes (via tool calls) |
+| Best for | Direct data queries, ad hoc SQL | Complex analysis, trading actions, narratives |
+
 <Aside type="note">
-  Genie space creation uses the Databricks SDK. If the SDK method is not yet GA in your workspace version, the script falls back to the REST API: `POST /api/2.0/genie/spaces`. Genie space permissions require specifying the `applicationId` UUID of the App service principal (not the numeric SP ID) — see `feedback_genie_permissions.md` in the memory files.
+  Genie space IDs are resolved dynamically at app startup. A background thread queries the workspace Genie API and matches spaces by title, updating the hardcoded IDs in-place. This means Genie spaces work correctly after a fresh deploy even if space IDs change. If the API is unreachable, the app falls back to the hardcoded IDs.
+</Aside>
+
+<Aside type="tip">
+  Genie space permissions require specifying the `applicationId` UUID of the App service principal (not the numeric SP ID) — see the post-deploy setup guide for details.
 </Aside>
