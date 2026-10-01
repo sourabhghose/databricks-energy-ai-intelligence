@@ -41,10 +41,10 @@ if API_KEY:
 
 # Get top 50 facilities by capacity from our gold table
 facilities_df = spark.sql(f"""
-    SELECT duid, station_name, region_id, fuel_type, capacity_mw
+    SELECT duid, station_name, region_id, fuel_type, max_capacity_mw
     FROM {SCHEMA}.nem_facilities
-    WHERE capacity_mw > 50
-    ORDER BY capacity_mw DESC
+    WHERE max_capacity_mw > 50
+    ORDER BY max_capacity_mw DESC
     LIMIT 50
 """)
 facilities = [row.asDict() for row in facilities_df.collect()]

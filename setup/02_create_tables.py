@@ -49,6 +49,7 @@ CREATE TABLE IF NOT EXISTS {SCHEMA}.trades (
 USING DELTA
 COMMENT 'Deal capture trades — Phase 2 PRD 15.1'
 TBLPROPERTIES (
+    'delta.feature.allowColumnDefaults' = 'supported',
     'delta.enableChangeDataFeed' = 'true',
     'delta.autoOptimize.optimizeWrite' = 'true',
     'delta.autoOptimize.autoCompact' = 'true'
@@ -78,6 +79,7 @@ CREATE TABLE IF NOT EXISTS {SCHEMA}.trade_legs (
 USING DELTA
 COMMENT 'Trade settlement interval legs'
 TBLPROPERTIES (
+    'delta.feature.allowColumnDefaults' = 'supported',
     'delta.enableChangeDataFeed' = 'true',
     'delta.autoOptimize.optimizeWrite' = 'true',
     'delta.autoOptimize.autoCompact' = 'true'
@@ -106,6 +108,7 @@ CREATE TABLE IF NOT EXISTS {SCHEMA}.trade_amendments (
 USING DELTA
 COMMENT 'Append-only audit log for trade amendments'
 TBLPROPERTIES (
+    'delta.feature.allowColumnDefaults' = 'supported',
     'delta.enableChangeDataFeed' = 'true',
     'delta.autoOptimize.optimizeWrite' = 'true'
 )
@@ -132,6 +135,7 @@ CREATE TABLE IF NOT EXISTS {SCHEMA}.counterparties (
 USING DELTA
 COMMENT 'Counterparty registry for deal capture'
 TBLPROPERTIES (
+    'delta.feature.allowColumnDefaults' = 'supported',
     'delta.enableChangeDataFeed' = 'true',
     'delta.autoOptimize.optimizeWrite' = 'true'
 )
@@ -157,6 +161,7 @@ CREATE TABLE IF NOT EXISTS {SCHEMA}.portfolios (
 USING DELTA
 COMMENT 'Portfolio definitions for trade grouping'
 TBLPROPERTIES (
+    'delta.feature.allowColumnDefaults' = 'supported',
     'delta.enableChangeDataFeed' = 'true',
     'delta.autoOptimize.optimizeWrite' = 'true'
 )
@@ -179,6 +184,7 @@ CREATE TABLE IF NOT EXISTS {SCHEMA}.portfolio_trades (
 USING DELTA
 COMMENT 'Many-to-many mapping between portfolios and trades'
 TBLPROPERTIES (
+    'delta.feature.allowColumnDefaults' = 'supported',
     'delta.enableChangeDataFeed' = 'true',
     'delta.autoOptimize.optimizeWrite' = 'true'
 )
@@ -210,6 +216,7 @@ CREATE TABLE IF NOT EXISTS {SCHEMA}.forward_curves (
 USING DELTA
 COMMENT 'Forward curve snapshots bootstrapped from ASX futures — E1 enhancement'
 TBLPROPERTIES (
+    'delta.feature.allowColumnDefaults' = 'supported',
     'delta.enableChangeDataFeed' = 'true',
     'delta.autoOptimize.optimizeWrite' = 'true'
 )
@@ -248,6 +255,7 @@ CREATE TABLE IF NOT EXISTS {SCHEMA}.portfolio_mtm (
 USING DELTA
 COMMENT 'Mark-to-market valuations per trade — E2 enhancement'
 TBLPROPERTIES (
+    'delta.feature.allowColumnDefaults' = 'supported',
     'delta.enableChangeDataFeed' = 'true',
     'delta.autoOptimize.optimizeWrite' = 'true',
     'delta.autoOptimize.autoCompact' = 'true'
@@ -279,6 +287,7 @@ CREATE TABLE IF NOT EXISTS {SCHEMA}.pnl_attribution (
 USING DELTA
 COMMENT 'P&L attribution breakdown by effect type — E2 enhancement'
 TBLPROPERTIES (
+    'delta.feature.allowColumnDefaults' = 'supported',
     'delta.enableChangeDataFeed' = 'true',
     'delta.autoOptimize.optimizeWrite' = 'true'
 )
@@ -313,6 +322,7 @@ CREATE TABLE IF NOT EXISTS {SCHEMA}.risk_metrics (
 USING DELTA
 COMMENT 'VaR and portfolio Greeks — E3 enhancement'
 TBLPROPERTIES (
+    'delta.feature.allowColumnDefaults' = 'supported',
     'delta.enableChangeDataFeed' = 'true',
     'delta.autoOptimize.optimizeWrite' = 'true'
 )
@@ -347,6 +357,7 @@ CREATE TABLE IF NOT EXISTS {SCHEMA}.credit_exposure (
 USING DELTA
 COMMENT 'Counterparty credit exposure — E5 enhancement'
 TBLPROPERTIES (
+    'delta.feature.allowColumnDefaults' = 'supported',
     'delta.enableChangeDataFeed' = 'true',
     'delta.autoOptimize.optimizeWrite' = 'true'
 )
@@ -376,6 +387,7 @@ CREATE TABLE IF NOT EXISTS {SCHEMA}.retail_tariffs (
 USING DELTA
 COMMENT 'AER CDR retail energy plans'
 TBLPROPERTIES (
+    'delta.feature.allowColumnDefaults' = 'supported',
     'delta.enableChangeDataFeed' = 'true',
     'delta.autoOptimize.optimizeWrite' = 'true'
 )
@@ -397,6 +409,7 @@ CREATE TABLE IF NOT EXISTS {SCHEMA}.tariff_components (
 USING DELTA
 COMMENT 'Tariff rate components per plan'
 TBLPROPERTIES (
+    'delta.feature.allowColumnDefaults' = 'supported',
     'delta.enableChangeDataFeed' = 'true',
     'delta.autoOptimize.optimizeWrite' = 'true'
 )
@@ -422,6 +435,7 @@ CREATE TABLE IF NOT EXISTS {SCHEMA}.facility_generation_ts (
 USING DELTA
 COMMENT 'Facility-level generation timeseries from OpenElectricity API'
 TBLPROPERTIES (
+    'delta.feature.allowColumnDefaults' = 'supported',
     'delta.enableChangeDataFeed' = 'true',
     'delta.autoOptimize.optimizeWrite' = 'true'
 )
@@ -449,6 +463,7 @@ CREATE TABLE IF NOT EXISTS {SCHEMA}.lgc_registry (
 USING DELTA
 COMMENT 'CER LGC creation volumes by power station'
 TBLPROPERTIES (
+    'delta.feature.allowColumnDefaults' = 'supported',
     'delta.enableChangeDataFeed' = 'true',
     'delta.autoOptimize.optimizeWrite' = 'true'
 )
@@ -467,6 +482,7 @@ CREATE TABLE IF NOT EXISTS {SCHEMA}.lgc_spot_prices (
 USING DELTA
 COMMENT 'LGC spot price history from CER quarterly reports'
 TBLPROPERTIES (
+    'delta.feature.allowColumnDefaults' = 'supported',
     'delta.enableChangeDataFeed' = 'true',
     'delta.autoOptimize.optimizeWrite' = 'true'
 )
@@ -495,6 +511,7 @@ CREATE TABLE IF NOT EXISTS {SCHEMA}.isp_projects (
 USING DELTA
 COMMENT 'AEMO ISP 2024 actionable and future projects'
 TBLPROPERTIES (
+    'delta.feature.allowColumnDefaults' = 'supported',
     'delta.enableChangeDataFeed' = 'true',
     'delta.autoOptimize.optimizeWrite' = 'true'
 )
@@ -516,6 +533,7 @@ CREATE TABLE IF NOT EXISTS {SCHEMA}.isp_capacity_outlook (
 USING DELTA
 COMMENT 'ISP 2024 capacity outlook by scenario/year/region/fuel'
 TBLPROPERTIES (
+    'delta.feature.allowColumnDefaults' = 'supported',
     'delta.enableChangeDataFeed' = 'true',
     'delta.autoOptimize.optimizeWrite' = 'true'
 )
@@ -538,6 +556,7 @@ CREATE TABLE IF NOT EXISTS {SCHEMA}.rez_assessments (
 USING DELTA
 COMMENT 'ISP 2024 Renewable Energy Zone assessments'
 TBLPROPERTIES (
+    'delta.feature.allowColumnDefaults' = 'supported',
     'delta.enableChangeDataFeed' = 'true',
     'delta.autoOptimize.optimizeWrite' = 'true'
 )

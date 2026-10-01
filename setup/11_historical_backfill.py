@@ -25,7 +25,7 @@ AEST = timezone(timedelta(hours=10))
 
 DAYS_BACK = 90
 INTERVALS_PER_DAY = 288  # 24h * 60min / 5min
-CHUNK_SIZE = 50  # rows per INSERT statement
+CHUNK_SIZE = 500  # rows per INSERT statement
 
 # COMMAND ----------
 

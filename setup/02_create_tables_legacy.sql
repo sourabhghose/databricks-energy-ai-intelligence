@@ -427,7 +427,6 @@ CREATE TABLE IF NOT EXISTS energy_copilot.silver.dispatch_prices (
   _processed_at         TIMESTAMP COMMENT 'UTC timestamp when Bronze record was processed to Silver'
 )
 USING DELTA
-PARTITIONED BY (CAST(interval_datetime AS DATE))
 TBLPROPERTIES (
   'delta.autoOptimize.optimizeWrite' = 'true',
   'delta.autoOptimize.autoCompact'   = 'true'
@@ -459,7 +458,6 @@ CREATE TABLE IF NOT EXISTS energy_copilot.silver.dispatch_generation (
   _processed_at         TIMESTAMP COMMENT 'UTC timestamp when Bronze record was processed to Silver'
 )
 USING DELTA
-PARTITIONED BY (CAST(interval_datetime AS DATE))
 TBLPROPERTIES (
   'delta.autoOptimize.optimizeWrite' = 'true',
   'delta.autoOptimize.autoCompact'   = 'true'
@@ -489,7 +487,6 @@ CREATE TABLE IF NOT EXISTS energy_copilot.silver.dispatch_interconnectors (
   _processed_at         TIMESTAMP COMMENT 'UTC timestamp when Bronze record was processed to Silver'
 )
 USING DELTA
-PARTITIONED BY (CAST(interval_datetime AS DATE))
 TBLPROPERTIES (
   'delta.autoOptimize.optimizeWrite' = 'true',
   'delta.autoOptimize.autoCompact'   = 'true'
@@ -513,7 +510,6 @@ CREATE TABLE IF NOT EXISTS energy_copilot.silver.dispatch_constraints (
   _processed_at         TIMESTAMP COMMENT 'UTC timestamp when Bronze record was processed to Silver'
 )
 USING DELTA
-PARTITIONED BY (CAST(interval_datetime AS DATE))
 TBLPROPERTIES (
   'delta.autoOptimize.optimizeWrite' = 'true',
   'delta.autoOptimize.autoCompact'   = 'true'
@@ -540,7 +536,6 @@ CREATE TABLE IF NOT EXISTS energy_copilot.silver.trading_prices (
   _processed_at         TIMESTAMP COMMENT 'UTC timestamp when Bronze record was processed to Silver'
 )
 USING DELTA
-PARTITIONED BY (CAST(interval_datetime AS DATE))
 TBLPROPERTIES (
   'delta.autoOptimize.optimizeWrite' = 'true',
   'delta.autoOptimize.autoCompact'   = 'true'
@@ -567,7 +562,6 @@ CREATE TABLE IF NOT EXISTS energy_copilot.silver.predispatch_prices (
   _processed_at         TIMESTAMP COMMENT 'UTC timestamp when Bronze record was processed to Silver'
 )
 USING DELTA
-PARTITIONED BY (CAST(run_datetime AS DATE))
 TBLPROPERTIES (
   'delta.autoOptimize.optimizeWrite' = 'true',
   'delta.autoOptimize.autoCompact'   = 'true'
@@ -678,7 +672,6 @@ CREATE TABLE IF NOT EXISTS energy_copilot.silver.weather_nem_regions (
   _processed_at           TIMESTAMP COMMENT 'UTC timestamp when Bronze record was processed to Silver'
 )
 USING DELTA
-PARTITIONED BY (CAST(forecast_datetime AS DATE))
 TBLPROPERTIES (
   'delta.autoOptimize.optimizeWrite' = 'true',
   'delta.autoOptimize.autoCompact'   = 'true'
@@ -700,7 +693,6 @@ CREATE TABLE IF NOT EXISTS energy_copilot.silver.solar_rooftop (
   _processed_at         TIMESTAMP COMMENT 'UTC timestamp when Bronze record was processed to Silver'
 )
 USING DELTA
-PARTITIONED BY (CAST(interval_datetime AS DATE))
 TBLPROPERTIES (
   'delta.autoOptimize.optimizeWrite' = 'true',
   'delta.autoOptimize.autoCompact'   = 'true'
@@ -724,7 +716,6 @@ CREATE TABLE IF NOT EXISTS energy_copilot.silver.openelec_generation (
   _processed_at         TIMESTAMP COMMENT 'UTC timestamp when Bronze record was processed to Silver'
 )
 USING DELTA
-PARTITIONED BY (CAST(interval_start AS DATE))
 TBLPROPERTIES (
   'delta.autoOptimize.optimizeWrite' = 'true',
   'delta.autoOptimize.autoCompact'   = 'true'
@@ -744,7 +735,6 @@ CREATE TABLE IF NOT EXISTS energy_copilot.silver.openelec_prices (
   _processed_at         TIMESTAMP COMMENT 'UTC timestamp when Bronze record was processed to Silver'
 )
 USING DELTA
-PARTITIONED BY (CAST(interval_start AS DATE))
 TBLPROPERTIES (
   'delta.autoOptimize.optimizeWrite' = 'true',
   'delta.autoOptimize.autoCompact'   = 'true'
@@ -769,7 +759,6 @@ CREATE TABLE IF NOT EXISTS energy_copilot.silver.generation_by_fuel (
   _processed_at         TIMESTAMP COMMENT 'UTC timestamp when Silver record was created'
 )
 USING DELTA
-PARTITIONED BY (CAST(interval_datetime AS DATE))
 TBLPROPERTIES (
   'delta.autoOptimize.optimizeWrite' = 'true',
   'delta.autoOptimize.autoCompact'   = 'true'
@@ -803,7 +792,6 @@ CREATE TABLE IF NOT EXISTS energy_copilot.gold.nem_prices_5min (
   _updated_at           TIMESTAMP COMMENT 'UTC timestamp when this Gold record was last updated'
 )
 USING DELTA
-PARTITIONED BY (CAST(interval_datetime AS DATE))
 TBLPROPERTIES (
   'delta.autoOptimize.optimizeWrite' = 'true',
   'delta.autoOptimize.autoCompact'   = 'true',
@@ -831,7 +819,6 @@ CREATE TABLE IF NOT EXISTS energy_copilot.gold.nem_prices_30min (
   _updated_at           TIMESTAMP COMMENT 'UTC timestamp when this Gold record was last updated'
 )
 USING DELTA
-PARTITIONED BY (CAST(interval_datetime AS DATE))
 TBLPROPERTIES (
   'delta.autoOptimize.optimizeWrite' = 'true',
   'delta.autoOptimize.autoCompact'   = 'true',
@@ -857,7 +844,6 @@ CREATE TABLE IF NOT EXISTS energy_copilot.gold.nem_generation_by_fuel (
   _updated_at           TIMESTAMP COMMENT 'UTC timestamp when this Gold record was last updated'
 )
 USING DELTA
-PARTITIONED BY (CAST(interval_datetime AS DATE))
 TBLPROPERTIES (
   'delta.autoOptimize.optimizeWrite' = 'true',
   'delta.autoOptimize.autoCompact'   = 'true'
@@ -886,7 +872,6 @@ CREATE TABLE IF NOT EXISTS energy_copilot.gold.nem_interconnectors (
   _updated_at           TIMESTAMP COMMENT 'UTC timestamp when this Gold record was last updated'
 )
 USING DELTA
-PARTITIONED BY (CAST(interval_datetime AS DATE))
 TBLPROPERTIES (
   'delta.autoOptimize.optimizeWrite' = 'true',
   'delta.autoOptimize.autoCompact'   = 'true'
@@ -910,7 +895,6 @@ CREATE TABLE IF NOT EXISTS energy_copilot.gold.nem_constraints_active (
   _updated_at           TIMESTAMP COMMENT 'UTC timestamp when this Gold record was last updated'
 )
 USING DELTA
-PARTITIONED BY (CAST(interval_datetime AS DATE))
 TBLPROPERTIES (
   'delta.autoOptimize.optimizeWrite' = 'true',
   'delta.autoOptimize.autoCompact'   = 'true'
@@ -932,7 +916,6 @@ CREATE TABLE IF NOT EXISTS energy_copilot.gold.nem_fcas_prices (
   _updated_at           TIMESTAMP COMMENT 'UTC timestamp when this Gold record was last updated'
 )
 USING DELTA
-PARTITIONED BY (CAST(interval_datetime AS DATE))
 TBLPROPERTIES (
   'delta.autoOptimize.optimizeWrite' = 'true',
   'delta.autoOptimize.autoCompact'   = 'true'
@@ -959,7 +942,6 @@ CREATE TABLE IF NOT EXISTS energy_copilot.gold.demand_actuals (
   _updated_at           TIMESTAMP COMMENT 'UTC timestamp when this Gold record was last updated'
 )
 USING DELTA
-PARTITIONED BY (CAST(interval_datetime AS DATE))
 TBLPROPERTIES (
   'delta.autoOptimize.optimizeWrite' = 'true',
   'delta.autoOptimize.autoCompact'   = 'true'
@@ -988,7 +970,6 @@ CREATE TABLE IF NOT EXISTS energy_copilot.gold.weather_nem_regions (
   _updated_at             TIMESTAMP COMMENT 'UTC timestamp when this Gold record was last updated'
 )
 USING DELTA
-PARTITIONED BY (CAST(forecast_datetime AS DATE))
 TBLPROPERTIES (
   'delta.autoOptimize.optimizeWrite' = 'true',
   'delta.autoOptimize.autoCompact'   = 'true'
@@ -1016,7 +997,6 @@ CREATE TABLE IF NOT EXISTS energy_copilot.gold.price_forecasts (
   _updated_at           TIMESTAMP COMMENT 'UTC timestamp when this Gold record was last updated'
 )
 USING DELTA
-PARTITIONED BY (CAST(interval_datetime AS DATE))
 TBLPROPERTIES (
   'delta.autoOptimize.optimizeWrite' = 'true',
   'delta.autoOptimize.autoCompact'   = 'true',
@@ -1044,7 +1024,6 @@ CREATE TABLE IF NOT EXISTS energy_copilot.gold.demand_forecasts (
   _updated_at           TIMESTAMP COMMENT 'UTC timestamp when this Gold record was last updated'
 )
 USING DELTA
-PARTITIONED BY (CAST(interval_datetime AS DATE))
 TBLPROPERTIES (
   'delta.autoOptimize.optimizeWrite' = 'true',
   'delta.autoOptimize.autoCompact'   = 'true'
@@ -1071,7 +1050,6 @@ CREATE TABLE IF NOT EXISTS energy_copilot.gold.generation_forecasts (
   _updated_at           TIMESTAMP COMMENT 'UTC timestamp when this Gold record was last updated'
 )
 USING DELTA
-PARTITIONED BY (CAST(interval_datetime AS DATE))
 TBLPROPERTIES (
   'delta.autoOptimize.optimizeWrite' = 'true',
   'delta.autoOptimize.autoCompact'   = 'true'
@@ -1162,7 +1140,6 @@ CREATE TABLE IF NOT EXISTS energy_copilot.gold.feature_store_price (
   _feature_created_at       TIMESTAMP COMMENT 'UTC timestamp when feature row was computed'
 )
 USING DELTA
-PARTITIONED BY (CAST(interval_datetime AS DATE))
 TBLPROPERTIES (
   'delta.autoOptimize.optimizeWrite' = 'true',
   'delta.autoOptimize.autoCompact'   = 'true'
@@ -1211,7 +1188,6 @@ CREATE TABLE IF NOT EXISTS energy_copilot.gold.feature_store_demand (
   _feature_created_at       TIMESTAMP COMMENT 'UTC timestamp when feature row was computed'
 )
 USING DELTA
-PARTITIONED BY (CAST(interval_datetime AS DATE))
 TBLPROPERTIES (
   'delta.autoOptimize.optimizeWrite' = 'true',
   'delta.autoOptimize.autoCompact'   = 'true'
@@ -1268,7 +1244,6 @@ CREATE TABLE IF NOT EXISTS energy_copilot.gold.anomaly_events (
   _created_at           TIMESTAMP COMMENT 'UTC timestamp when this record was inserted'
 )
 USING DELTA
-PARTITIONED BY (CAST(detected_at AS DATE))
 TBLPROPERTIES (
   'delta.autoOptimize.optimizeWrite' = 'true',
   'delta.autoOptimize.autoCompact'   = 'true',
