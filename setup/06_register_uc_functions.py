@@ -165,8 +165,7 @@ RETURN
     SELECT
         CASE interval
             WHEN '5min'  THEN p.interval_datetime
-            WHEN '30min' THEN DATE_TRUNC('MINUTE', p.interval_datetime -
-                              INTERVAL (MINUTE(p.interval_datetime) MOD 30) MINUTES)
+            WHEN '30min' THEN TIMESTAMP_SECONDS(FLOOR(UNIX_TIMESTAMP(p.interval_datetime) / 1800) * 1800)
             WHEN '1hr'   THEN DATE_TRUNC('HOUR', p.interval_datetime)
             WHEN 'daily' THEN CAST(DATE_TRUNC('DAY', p.interval_datetime) AS TIMESTAMP)
             ELSE p.interval_datetime
@@ -601,6 +600,7 @@ COMMENT 'Correlates a price event with its likely causes across multiple data di
          Source: gold.nem_prices_5min, gold.nem_constraints_active, gold.nem_interconnectors,
                  gold.weather_nem_regions, gold.demand_actuals.'
 RETURN
+    (
     -- Price context: the actual RRP and surrounding 30-min window
     SELECT
         'PRICE'                                 AS context_type,
@@ -624,9 +624,9 @@ RETURN
                                   AND DATEADD(MINUTE,  15, event_time)
     ORDER BY ABS(TIMESTAMPDIFF(SECOND, p.interval_datetime, event_time))
     LIMIT 3
-
+    )
     UNION ALL
-
+    (
     -- Binding constraints correlated with the event
     SELECT
         'CONSTRAINT'                            AS context_type,
@@ -644,9 +644,9 @@ RETURN
       AND ABS(c.marginal_value) > 10
     ORDER BY ABS(c.marginal_value) DESC
     LIMIT 5
-
+    )
     UNION ALL
-
+    (
     -- Interconnector context
     SELECT
         'INTERCONNECTOR'                        AS context_type,
@@ -664,9 +664,9 @@ RETURN
                                    AND DATEADD(MINUTE,  15, event_time)
     ORDER BY ic.utilization_pct DESC
     LIMIT 3
-
+    )
     UNION ALL
-
+    (
     -- Weather context
     SELECT
         'WEATHER'                               AS context_type,
@@ -686,6 +686,7 @@ RETURN
                                   AND DATEADD(HOUR,  1, event_time)
     ORDER BY ABS(TIMESTAMPDIFF(SECOND, w.forecast_datetime, event_time))
     LIMIT 1
+    )
 '''
     run_sql(sql)
     log.info('Registered: explain_price_event')
