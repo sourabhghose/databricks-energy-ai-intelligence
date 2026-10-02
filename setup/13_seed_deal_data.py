@@ -108,12 +108,19 @@ print(f"Created {len(portfolios)} portfolios")
 # COMMAND ----------
 
 # --- Query 1: Latest ASX futures settlement prices ---
-asx_rows = spark.sql(f"""
-    SELECT region, quarter, year, contract_type, settlement_price
-    FROM {SCHEMA}.asx_futures_eod
-    WHERE trade_date = (SELECT MAX(trade_date) FROM {SCHEMA}.asx_futures_eod)
-    ORDER BY region, year, quarter
-""").collect()
+# ASX futures are optional — if the table is empty or lacks the expected
+# columns (e.g. seeded before the ASX ingest job runs), fall back to synthetic
+# prices (fallback_price) below.
+try:
+    asx_rows = spark.sql(f"""
+        SELECT region, quarter, year, contract_type, settlement_price
+        FROM {SCHEMA}.asx_futures_eod
+        WHERE trade_date = (SELECT MAX(trade_date) FROM {SCHEMA}.asx_futures_eod)
+        ORDER BY region, year, quarter
+    """).collect()
+except Exception as _e:
+    print(f"ASX futures unavailable ({_e}); using fallback prices")
+    asx_rows = []
 
 # Build lookup: (region, quarter_label) -> settlement_price
 # quarter format in table is "Q1-2026" etc.
@@ -161,13 +168,20 @@ for region, s in spot_stats.items():
 # COMMAND ----------
 
 # --- Query 3: Real renewable facility capacities ---
-facility_rows = spark.sql(f"""
-    SELECT duid, station_name, region_id, fuel_type, capacity_mw
-    FROM {SCHEMA}.nem_facilities
-    WHERE is_renewable = TRUE AND capacity_mw >= 30
-    ORDER BY capacity_mw DESC
-    LIMIT 30
-""").collect()
+# nem_facilities exposes max_capacity_mw (not capacity_mw/is_renewable) and may
+# be empty — guard the read and derive "renewable" from fuel_type.
+try:
+    facility_rows = spark.sql(f"""
+        SELECT duid, station_name, region_id, fuel_type, max_capacity_mw AS capacity_mw
+        FROM {SCHEMA}.nem_facilities
+        WHERE fuel_type IN ('wind','solar_utility','solar','hydro','battery')
+          AND max_capacity_mw >= 30
+        ORDER BY max_capacity_mw DESC
+        LIMIT 30
+    """).collect()
+except Exception as _e:
+    print(f"facilities unavailable ({_e}); PPA deals will use synthetic names")
+    facility_rows = []
 
 renewable_facilities = [
     {"duid": r.duid, "name": r.station_name, "region": r.region_id,
