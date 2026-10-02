@@ -62,7 +62,7 @@ spot_df = spark.sql(f"""
     GROUP BY region_id
 """)
 
-region_stats = {row["region_id"]: row for row in spot_df.collect()}
+region_stats = {row["region_id"]: row.asDict() for row in spot_df.collect()}
 
 if not region_stats:
     print("No spot price data found — using base prices")
