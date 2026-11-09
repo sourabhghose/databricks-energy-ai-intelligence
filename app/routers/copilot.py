@@ -11,6 +11,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException
 
+from . import copilot_tools as _copilot_tools
 from .home import (
     forecasts,
     generation_mix_pct,
@@ -20,7 +21,6 @@ from .home import (
     prices_spikes,
     prices_volatility,
 )
-from . import copilot_tools as _copilot_tools
 from .shared import _AEST, _CATALOG, _NEM_REGIONS, _insert_gold, _query_gold, _sql_escape, logger
 from .sidebar import alerts_list, bess_fleet, demand_response, merit_order
 

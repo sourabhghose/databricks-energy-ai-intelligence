@@ -6,7 +6,7 @@ from datetime import datetime as _dt
 from fastapi import APIRouter
 
 from .curves import _build_forward_curve
-from .shared import _sample_data, _CATALOG, _query_gold, logger
+from .shared import _CATALOG, _query_gold, _sample_data, logger
 
 router = APIRouter()
 

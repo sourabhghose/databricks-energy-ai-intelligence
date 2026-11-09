@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 from fastapi import APIRouter
 from pydantic import BaseModel
 
-from .shared import _no_real_data, _CATALOG, _cache_get, _cache_set, _query_gold, logger
+from .shared import _CATALOG, _cache_get, _cache_set, _no_real_data, _query_gold, logger
 
 router = APIRouter()
 

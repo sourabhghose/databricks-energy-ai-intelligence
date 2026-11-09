@@ -849,6 +849,7 @@ def _resolve_genie_space_ids() -> None:
     """
     import logging
     import os
+
     import httpx
     log = logging.getLogger("energy_copilot")
     try:
@@ -887,6 +888,7 @@ def _resolve_genie_space_ids() -> None:
 
 
 import threading as _threading
+
 _threading.Thread(target=_resolve_genie_space_ids, daemon=True).start()
 
 

@@ -8,7 +8,7 @@ from datetime import timezone as _tz
 from fastapi import APIRouter
 
 from . import spike_dashboards as _sd
-from .shared import _no_real_data, _sample_data, _CATALOG, _query_gold
+from .shared import _CATALOG, _no_real_data, _query_gold, _sample_data
 
 router = APIRouter()
 
