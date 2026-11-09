@@ -9,6 +9,8 @@
 
 AI-powered market intelligence for the Australian National Electricity Market — built entirely on Databricks.
 
+> **Executed notebooks with outputs:** [`notebooks/executed/`](notebooks/executed/README.md): ingestion landing rows, model training log + MLflow runs, and [conversation transcripts](notebooks/executed/conversation_transcripts.md) (AI assistant tool calls with returned rows; Genie SQL + result rows).
+>
 > **Reviewers — start with [`EVIDENCE.md`](EVIDENCE.md)** (real notebook output cells, displayed query results and a captured API response)
 > **and [`GOVERNANCE.sql`](GOVERNANCE.sql)** (the Unity Catalog row filter, column mask, grants and CHECK constraints).
 > The governance is implemented in [`setup/30_governance.py`](setup/30_governance.py) and served live by
@@ -20,7 +22,7 @@ AI-powered market intelligence for the Australian National Electricity Market �
 > (catalog `serverless_stable_2b9lj3_catalog`). Start here: **[docs/evidence/README.md](docs/evidence/README.md)**
 >
 > **Real notebook run outputs** (exported job runs with every cell's printed output): **[docs/evidence/runs/](docs/evidence/runs/README.md)**.
-> Start with the one-run summary [`docs/evidence/runs/evidence_verification_…md`](docs/evidence/runs/evidence_verification_evidence_verification_197619732568832.md),
+> Start with the one-run summary [`docs/evidence/runs/evidence_verification_…md`](docs/evidence/runs/evidence_verification_evidence_verification_709237712614405.md),
 > which shows DQ totals, UC row filter and mask, lineage, model metrics, live forecasts, the AI assistant audit log and a Genie answer, all executed in Databricks.
 
 ## Data journey: raw → governed → AI, with an artifact for every step

@@ -32,6 +32,8 @@ filterwarnings = [
 [tool.ruff]
 target-version = "py311"
 line-length = 100
+# notebooks/executed/ holds verbatim exports of job runs (code + outputs as they ran) — evidence, not source to lint
+extend-exclude = ["notebooks/executed"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I"]

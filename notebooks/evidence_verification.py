@@ -41,6 +41,14 @@ show("gold.dq_results — latest 5 runs", f"""
   SELECT job_run_id, min(run_ts) AS run_ts_utc, max(rows_checked) AS rows_checked, sum(rows_failed) AS rows_failed,
          max(CASE WHEN rule_name = 'freshness' THEN status END) AS freshness
   FROM {G}.dq_results GROUP BY 1 ORDER BY 2 DESC LIMIT 5""")
+show("Rows landed in bronze by the live 5-minute ingest (one row per AEMO file, latest 12)", f"""
+  SELECT _source_file, _ingested_at, count(*) AS rows_landed, concat_ws(',', sort_array(collect_set(regionid))) AS regions,
+         max(settlement_datetime) AS settlement_datetime_aest
+  FROM {CATALOG}.bronze.nemweb_dispatch_price GROUP BY 1, 2 ORDER BY 2 DESC, 1 DESC LIMIT 12""")
+show("Latest real 5-minute prices in gold.nem_prices_5min", f"""
+  SELECT interval_datetime, region_id, round(rrp, 2) AS rrp_aud_mwh, round(total_demand_mw) AS demand_mw,
+         round(available_gen_mw) AS available_gen_mw, round(net_interchange_mw) AS net_interchange_mw
+  FROM {G}.nem_prices_5min ORDER BY interval_datetime DESC, region_id LIMIT 10""")
 show("gold.nem_prices_quarantine", f"""
   SELECT region_id, failed_rules, count(*) AS n, round(min(rrp), 2) AS min_rrp, round(max(rrp), 2) AS max_rrp
   FROM {G}.nem_prices_quarantine GROUP BY 1, 2""")
@@ -90,6 +98,18 @@ show("Live 1-hour price forecasts (job 05) scored against actuals that have sinc
     ON a.region_id = f.region_id AND a.interval_datetime = f.interval_datetime
   WHERE f.model_name LIKE '%.ml.nem_price_forecast_%' AND f.horizon_intervals = 12 GROUP BY 1 ORDER BY 1""")
 
+import mlflow
+
+mlflow.set_tracking_uri("databricks")
+mlflow.set_registry_uri("databricks-uc")  # serverless: avoid reading spark.mlflow.modelRegistryUri
+exp = mlflow.get_experiment_by_name("/Shared/energy_copilot_nem_forecast")
+runs = mlflow.search_runs([exp.experiment_id], order_by=["start_time DESC"], max_results=12)
+cols = [c for c in ["run_id", "tags.mlflow.runName", "start_time", "status", "params.target", "params.region",
+                    "params.n_train", "metrics.h12_mae", "metrics.h12_persistence_mae", "metrics.h12_skill_vs_persistence"]
+        if c in runs.columns]
+print(f"\n=== MLflow training runs in /Shared/energy_copilot_nem_forecast (experiment {exp.experiment_id}, latest 12) ===")
+print(runs[cols].to_string(index=False))
+
 # COMMAND ----------
 # MAGIC %md ## 4. AI assistant: audit log of real turns (question, tool calls, answer)
 
@@ -101,10 +121,12 @@ show("gold.copilot_interactions", f"""
 latest = spark.sql(f"SELECT * FROM {G}.copilot_interactions ORDER BY created_at DESC LIMIT 1").collect()
 if latest:
     row = latest[0]
-    print(f"\n=== Latest turn {row['interaction_id']} — tool calls ===")
+    print(f"\n=== Conversation transcript — interaction {row['interaction_id']} ({row['created_at']}, {row['model']}) ===")
+    print(f"USER: {row['question']}")
     for call in json.loads(row["tool_calls"]):
-        print(f"round {call['round']}: {call['name']}({json.dumps(call['arguments'])}) -> {call['result_preview'][:300]}")
-    print("\n=== Answer (first 1,500 chars) ===\n" + (row["answer"] or "")[:1500])
+        print(f"\nTOOL CALL (round {call['round']}): {call['name']}({json.dumps(call['arguments'])})")
+        print(f"TOOL RESULT ({call['result_chars']} chars, first 600): {call['result_preview']}")
+    print(f"\nASSISTANT ({row['input_tokens']} in / {row['output_tokens']} out tokens, {row['latency_ms']} ms):\n{row['answer']}")
 
 # COMMAND ----------
 # MAGIC %md ## 5. Genie: a natural-language question answered with SQL on governed tables

@@ -4,6 +4,8 @@ Everything below was **printed by real Databricks runs or returned by the app's 
 job-run notebooks in [`docs/evidence/runs/`](docs/evidence/runs/README.md) (HTML with outputs, plus Markdown transcripts).
 Workspace `fevm-serverless-stable-2b9lj3.cloud.databricks.com`, catalog `serverless_stable_2b9lj3_catalog`, 2026-11-09.
 
+**Executed notebooks (`.ipynb` with outputs):** [`notebooks/executed/`](notebooks/executed/README.md) · **Conversation transcripts:** [`notebooks/executed/conversation_transcripts.md`](notebooks/executed/conversation_transcripts.md)
+
 Data journey: **AEMO NEMWEB → bronze → data-quality rules + Unity Catalog policies (governed step) → gold → models → app / AI**
 
 ---
@@ -75,8 +77,8 @@ OK  column tag credit_limit_aud
 
 ## 3. Unity Catalog governance — read back from the workspace (displayed query results)
 
-Evidence notebook run `678829619491776` ([`notebooks/evidence_verification.py`](notebooks/evidence_verification.py),
-transcript [`evidence_verification_…md`](docs/evidence/runs/evidence_verification_evidence_verification_197619732568832.md)):
+Evidence notebook run `63172587989947` ([`notebooks/evidence_verification.py`](notebooks/evidence_verification.py),
+transcript [`evidence_verification_…md`](docs/evidence/runs/evidence_verification_evidence_verification_709237712614405.md)):
 
 ```text
 === Row filters and column masks registered in information_schema ===
@@ -109,27 +111,35 @@ transcript [`evidence_verification_…md`](docs/evidence/runs/evidence_verificat
 (the Renewable PPAs book — 3 trades — is filtered out for a member of energy_traders)
 
 === CHECK constraints on gold.nem_prices_5min ===
++------------------------------------------+------------------------------------------------+
+|key                                       |value                                           |
++------------------------------------------+------------------------------------------------+
 |delta.constraints.interval_not_null       |interval_datetime IS NOT NULL                   |
 |delta.constraints.rrp_within_market_limits|rrp BETWEEN -1000.0 AND 23200.0                 |
 |delta.constraints.valid_nem_region        |region_id IN ('NSW1','QLD1','VIC1','SA1','TAS1')|
++------------------------------------------+------------------------------------------------+
 
 === gold.dq_results — totals per rule ===
 +-----------------------------+----+------------+-----------+-----------+
 |rule_name                    |runs|rows_checked|rows_failed|failed_runs|
 +-----------------------------+----+------------+-----------+-----------+
 |demand_non_negative          |3   |2880        |102        |1          |
-|demand_within_physical_bounds|115 |264110      |0          |0          |
-|freshness                    |118 |118         |0          |0          |
-|interval_not_null            |118 |266990      |0          |0          |
-|interval_on_5min_grid        |118 |266990      |0          |0          |
-|rrp_is_numeric               |118 |266990      |0          |0          |
-|rrp_within_market_limits     |118 |266990      |3          |1          |
-|valid_nem_region             |118 |266990      |0          |0          |
+|demand_within_physical_bounds|176 |264415      |0          |0          |
+|freshness                    |179 |179         |0          |0          |
+|interval_not_null            |179 |267295      |0          |0          |
+|interval_on_5min_grid        |179 |267295      |0          |0          |
+|rrp_is_numeric               |179 |267295      |0          |0          |
+|rrp_within_market_limits     |179 |267295      |3          |1          |
+|valid_nem_region             |179 |267295      |0          |0          |
 +-----------------------------+----+------------+-----------+-----------+
 
 === Lineage (system.access.table_lineage) ===
-|serverless_stable_2b9lj3_catalog.bronze.nemweb_dispatch_price|serverless_stable_2b9lj3_catalog.gold.nem_prices_5min      |JOB|2026-11-09 10:56:14.819|
-|serverless_stable_2b9lj3_catalog.bronze.nemweb_dispatch_price|serverless_stable_2b9lj3_catalog.gold.nem_prices_quarantine|JOB|2026-11-09 02:50:42.386|
++-------------------------------------------------------------+-----------------------------------------------------------+-----------+-----------------------+
+|source_table_full_name                                       |target_table_full_name                                     |entity_type|last_seen              |
++-------------------------------------------------------------+-----------------------------------------------------------+-----------+-----------------------+
+|serverless_stable_2b9lj3_catalog.bronze.nemweb_dispatch_price|serverless_stable_2b9lj3_catalog.gold.nem_prices_5min      |JOB        |2026-11-09 16:01:16.097|
+|serverless_stable_2b9lj3_catalog.bronze.nemweb_dispatch_price|serverless_stable_2b9lj3_catalog.gold.nem_prices_quarantine|JOB        |2026-11-09 02:50:42.386|
++-------------------------------------------------------------+-----------------------------------------------------------+-----------+-----------------------+
 ```
 
 When a trader is also added to `energy_risk`, the same query returns all **45** trades, and credit limits are no longer masked
@@ -215,9 +225,9 @@ round 1: query_price_forecasts({"region": "NSW1", "hours": 1}) -> {"source": "go
 Genie question asked inside the same Databricks run:
 
 ```text
-conversation 01f1dc2e8e5216498b3afa75f53bb0bb | message 01f1dc2e8e641840ad76967d2b82b139 | status COMPLETED
-RESULT: ['region_id', 'interval_count', 'max_price'] [['NSW1', '87', '23200.0']]
-GENIE ANSWER: For October 2026, **NSW1** had the most 5-minute intervals with spot prices above $300/MWh, with **87** intervals, and **NSW1** reached a maximum price of **$23,200.0/MWh**.
+conversation 01f1dc59262a195d808c641ca73a45d8 | message 01f1dc5926411ff484c8a741a094efc3 | status COMPLETED
+RESULT: ['region_id', 'interval_count_above_300', 'max_price_aud_mwh'] [['NSW1', '87', '23200.0']]
+GENIE ANSWER: For **October 2026**, **NSW1** had the most 5-minute intervals with a spot price above **$300/MWh**, with **87** intervals. The maximum spot price in **NSW1** during those intervals was **$23,200.0/MWh**.
 ```
 
 The independent check in the next cell returned `NSW1 | 87 | 23200.0`.

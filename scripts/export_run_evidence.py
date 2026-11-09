@@ -3,6 +3,7 @@
 For each run ID, every task run is exported via the Jobs API (`databricks jobs export-run --views-to-export ALL`):
   * <name>_<task_run_id>.html  — the notebook exactly as it ran, outputs included (opens in a browser)
   * <name>_<task_run_id>.md    — a plain-text transcript: run metadata, then each cell's code and printed output
+  * <ipynb-dir>/<name>_<task>.ipynb (optional) — a Jupyter notebook with the run's outputs embedded as text
 
 Usage:
     python scripts/export_run_evidence.py --profile <cli-profile> --out docs/evidence/runs \
@@ -81,7 +82,35 @@ def transcript(name: str, run: dict, task: dict, model: dict) -> str:
     return "\n".join(lines)
 
 
-def export(profile: str, name: str, run_id: str, out: Path) -> list[Path]:
+def to_ipynb(name: str, run: dict, task: dict, model: dict) -> dict:
+    """Jupyter (nbformat 4) notebook of the run: each cell's source with the text output it produced."""
+    started = datetime.fromtimestamp(task["start_time"] / 1000, timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC")
+    header = (f"# Executed run — {name} / task `{task['task_key']}`\n\n"
+              f"Databricks job run `{run['run_id']}`, task run `{task['run_id']}`, started {started}, result "
+              f"**{task['state'].get('result_state')}**.\n\nOutputs below are exactly what the run printed "
+              f"(exported from the Databricks Jobs API). Run page: {task.get('run_page_url', '')}")
+    cells = [{"cell_type": "markdown", "metadata": {}, "source": header.splitlines(keepends=True)}]
+    count = 0
+    for cmd in model.get("commands", []):
+        code = (cmd.get("command") or "").strip()
+        if not code:
+            continue
+        if code.startswith("%md"):
+            md = "\n".join(line.removeprefix("%md").removeprefix(" ") for line in code.splitlines())
+            cells.append({"cell_type": "markdown", "metadata": {}, "source": md.splitlines(keepends=True)})
+            continue
+        count += 1
+        text = render_output(cmd.get("results"))
+        outputs = [{"output_type": "stream", "name": "stdout", "text": text.splitlines(keepends=True)}] if text else []
+        cells.append({"cell_type": "code", "execution_count": count, "metadata": {}, "outputs": outputs,
+                      "source": code.splitlines(keepends=True)})
+    return {"cells": cells, "metadata": {"kernelspec": {"display_name": "Python 3", "language": "python", "name": "python3"},
+                                         "language_info": {"name": "python"},
+                                         "databricks": {"job_run_id": run["run_id"], "task_run_id": task["run_id"]}},
+            "nbformat": 4, "nbformat_minor": 5}
+
+
+def export(profile: str, name: str, run_id: str, out: Path, ipynb_dir: Path | None = None) -> list[Path]:
     run = cli(profile, "jobs", "get-run", run_id)
     written = []
     for task in run.get("tasks", []):
@@ -89,8 +118,13 @@ def export(profile: str, name: str, run_id: str, out: Path) -> list[Path]:
         html = exported["views"][0]["content"]
         stem = f"{name}_{task['task_key']}_{task['run_id']}"
         (out / f"{stem}.html").write_text(html, encoding="utf-8")
-        (out / f"{stem}.md").write_text(transcript(name, run, task, notebook_model(html)), encoding="utf-8")
+        model = notebook_model(html)
+        (out / f"{stem}.md").write_text(transcript(name, run, task, model), encoding="utf-8")
         written += [out / f"{stem}.md", out / f"{stem}.html"]
+        if ipynb_dir is not None:
+            nb_path = ipynb_dir / f"{name}_{task['task_key']}.ipynb"
+            nb_path.write_text(json.dumps(to_ipynb(name, run, task, model), indent=1), encoding="utf-8")
+            written.append(nb_path)
     return written
 
 
@@ -99,11 +133,14 @@ def main() -> None:
     ap.add_argument("--profile", required=True)
     ap.add_argument("--out", type=Path, default=Path("docs/evidence/runs"))
     ap.add_argument("--run", action="append", required=True, help="name=job_run_id (repeatable)")
+    ap.add_argument("--ipynb-dir", type=Path, default=None, help="also write executed .ipynb notebooks here")
     args = ap.parse_args()
     args.out.mkdir(parents=True, exist_ok=True)
+    if args.ipynb_dir:
+        args.ipynb_dir.mkdir(parents=True, exist_ok=True)
     for spec in args.run:
         name, run_id = spec.split("=", 1)
-        for path in export(args.profile, name, run_id, args.out):
+        for path in export(args.profile, name, run_id, args.out, args.ipynb_dir):
             print(f"wrote {path}")
 
 
