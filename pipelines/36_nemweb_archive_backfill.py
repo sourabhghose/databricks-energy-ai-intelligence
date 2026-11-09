@@ -2,6 +2,8 @@
 # MAGIC %md
 # MAGIC # 36 — NEMWEB archive backfill (real history for model training)
 # MAGIC
+# MAGIC **Execution evidence:** `evidence/captured_runs.py::BACKFILL` (job run 161620000649581: rows_written 128,860, days_failed 0); executed notebook with outputs in `notebooks/executed/`; checked by `tests/test_execution_evidence.py`.
+# MAGIC
 # MAGIC Downloads AEMO's daily DispatchIS bundles from `/REPORTS/ARCHIVE/DispatchIS_Reports/`
 # MAGIC (each holds the 288 five-minute files for one market day), parses them with the same
 # MAGIC parser as the live ingest (`nemweb_parse.py`) and appends the rows to

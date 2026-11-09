@@ -9,6 +9,8 @@
 
 AI-powered market intelligence for the Australian National Electricity Market — built entirely on Databricks.
 
+> **Execution evidence as code:** [`evidence/captured_runs.py`](evidence/captured_runs.py) holds the verbatim cell outputs of the real job runs (ingest landing rows, MLflow training + back-test, live inference, governance, assistant and Genie conversations), each tied to the source file it executed; [`tests/test_execution_evidence.py`](tests/test_execution_evidence.py) asserts the facts in CI.
+>
 > **Executed notebooks with outputs:** [`notebooks/executed/`](notebooks/executed/README.md): ingestion landing rows, model training log + MLflow runs, and [conversation transcripts](notebooks/executed/conversation_transcripts.md) (AI assistant tool calls with returned rows; Genie SQL + result rows).
 >
 > **Reviewers — start with [`EVIDENCE.md`](EVIDENCE.md)** (real notebook output cells, displayed query results and a captured API response)

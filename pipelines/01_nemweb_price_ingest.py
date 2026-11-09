@@ -2,6 +2,8 @@
 # MAGIC %md
 # MAGIC # Pipeline 01 — NEMWEB Dispatch Price Ingest (live, every 5 minutes)
 # MAGIC
+# MAGIC **Execution evidence:** `evidence/captured_runs.py::INGEST_LIVE` (job run 230199744739803: landed 5 rows from AEMO NEMWEB; backfill landed 128,860); executed notebook with outputs in `notebooks/executed/`; checked by `tests/test_execution_evidence.py`.
+# MAGIC
 # MAGIC Polls AEMO NEMWEB `/REPORTS/CURRENT/DispatchIS_Reports/`, downloads any 5-minute
 # MAGIC DispatchIS ZIPs not yet landed, parses the `DISPATCH,PRICE` and `DISPATCH,REGIONSUM`
 # MAGIC records and appends them to `{catalog}.bronze.nemweb_dispatch_price`.

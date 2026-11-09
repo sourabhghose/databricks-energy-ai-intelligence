@@ -2,6 +2,8 @@
 # MAGIC %md
 # MAGIC # 30 — Unity Catalog governance for the trading book and market data
 # MAGIC
+# MAGIC **Execution evidence:** `evidence/captured_runs.py::UC_GOVERNANCE` (job run 962676474138249: row filter, column mask, grants, constraints, tags applied); executed notebook with outputs in `notebooks/executed/`; checked by `tests/test_execution_evidence.py`.
+# MAGIC
 # MAGIC | Control | Object | Effect |
 # MAGIC |---------|--------|--------|
 # MAGIC | **Role-based grants** | catalog / schemas | 4 business roles get least-privilege access; no business role can read bronze/silver |

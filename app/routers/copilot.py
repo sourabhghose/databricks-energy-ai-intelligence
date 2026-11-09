@@ -1,3 +1,4 @@
+# Execution evidence: evidence/captured_runs.py::EVIDENCE_VERIFICATION (job run 63172587989947): assistant conversation transcript (4 live tool calls, full answer) read back from gold.copilot_interactions. See tests/test_execution_evidence.py.
 from __future__ import annotations
 
 import json
