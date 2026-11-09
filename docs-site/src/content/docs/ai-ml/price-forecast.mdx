@@ -80,25 +80,30 @@ with mlflow.start_run():
 
 ## Train/Val/Test Split
 
-Chronological split (stored as MLflow run tags):
-- **Train**: 18 months (oldest)
-- **Validation**: 3 months (middle — used for HPO)
-- **Test**: 3 months (most recent — held out)
+Chronological split over 90 days of real AEMO NEMWEB data (`models/nem_forecast/train.py`):
+- **Fit**: oldest ~62 days
+- **Validation**: next 14 days (80% prediction intervals and spike threshold)
+- **Test**: most recent 14 days (held out, never used for training or tuning)
 
-## Accuracy Metrics by Region
+## Accuracy Metrics by Region (held-out test, models v6, captured 2026-11-09)
 
-| Region | MAE ($/MWh) | MAPE | Spike Recall (>$300) | Spike Precision |
-|--------|------------|------|---------------------|----------------|
-| NSW1 | 18.4 | 12.3% | 68% | 72% |
-| QLD1 | 22.1 | 14.8% | 64% | 68% |
-| SA1 | 45.2 | 18.7% | 71% | 65% |
-| TAS1 | 12.8 | 9.4% | 52% | 78% |
-| VIC1 | 19.7 | 13.1% | 66% | 70% |
+Baseline is *persistence* (the forecast equals the latest observed price). Skill = 1 − MAE / persistence MAE.
 
-SA1 has the highest MAPE due to its high price volatility and frequent spike events, which are inherently difficult to forecast. Spike recall (detecting >$300/MWh events) is a dedicated evaluation metric alongside standard MAPE.
+| Region | MAE 1 h ($/MWh) | Persistence 1 h | MAPE 1 h | MAE 4 h | Persistence 4 h | Skill 4 h |
+|--------|-----------------|-----------------|----------|---------|-----------------|-----------|
+| NSW1 | 12.8 | 14.6 | 16.8% | 18.0 | 28.4 | 37% |
+| QLD1 | 12.0 | 13.5 | 16.0% | 19.8 | 32.2 | 38% |
+| SA1 | 38.1 | 39.9 | 42.1% | 52.1 | 80.0 | 35% |
+| TAS1 | 20.1 | 18.1 | 24.3% | 31.7 | 36.7 | 14% |
+| VIC1 | 16.1 | 18.4 | 23.9% | 26.2 | 40.0 | 35% |
+
+At 4 hours the model beats persistence in every region. At 1 hour it is better in four regions and slightly worse in TAS1.
+**Spike prediction is not yet useful.** The held-out window had only 23 spike intervals, and the classifier mostly learned "already
+spiking" rather than giving early warning, so no spike recall or precision is claimed. Full results:
+[evidence/03_models.md](https://github.com/sourabhghose/databricks-energy-ai-intelligence/blob/main/docs/evidence/03_models.md).
 
 <Aside type="note">
-  MAPE is distorted by near-zero prices (negative prices or prices close to zero make percentage error explode). The evaluation pipeline excludes intervals where the actual price is below $5/MWh from MAPE calculations.
+  MAPE is distorted by near-zero prices (negative prices or prices close to zero make percentage error explode). The evaluation pipeline excludes intervals where |actual price| is below $20/MWh from MAPE calculations.
 </Aside>
 
 ## Backtesting

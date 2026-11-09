@@ -5,6 +5,11 @@ description: XGBoost model for DNSP asset failure prediction — AUC 0.961, accu
 
 import { Aside } from '@astrojs/starlight/components';
 
+<Aside type="caution" title="Illustrative metrics">
+  The metrics on this page come from a synthetic DNSP dataset and are illustrative. They are not backed by a training run in this build. Evidenced models (NEM price and demand forecasts) are documented in [evidence/03_models.md](https://github.com/sourabhghose/databricks-energy-ai-intelligence/blob/main/docs/evidence/03_models.md).
+</Aside>
+
+
 ## Overview
 
 The Asset Failure Prediction model is an XGBoost binary classifier that scores every DNSP distribution network asset on its probability of failing within the next 12 months. It runs as a scheduled job (monthly) and as a real-time Model Serving endpoint for on-demand scoring.
