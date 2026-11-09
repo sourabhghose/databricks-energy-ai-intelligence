@@ -20,11 +20,10 @@ from datetime import datetime, timezone
 from urllib.parse import urljoin
 
 import requests
+from nemweb_parse import iter_archive_day, to_bronze_row  # pipelines/nemweb_parse.py
+from pyspark.sql.types import StringType, StructField, StructType, TimestampType
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from pyspark.sql.types import StringType, StructField, StructType, TimestampType
-
-from nemweb_parse import iter_archive_day, to_bronze_row  # pipelines/nemweb_parse.py
 
 dbutils.widgets.text("catalog", "energy_copilot_catalog")
 dbutils.widgets.text("days", "90")

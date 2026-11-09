@@ -13,11 +13,11 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Query
 
 from .shared import (
-    _sample_data,
     _CATALOG,
     _cache_get,
     _cache_set,
     _query_gold,
+    _sample_data,
 )
 
 router = APIRouter()

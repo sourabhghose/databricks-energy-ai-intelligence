@@ -6,7 +6,7 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, Query
 
-from .shared import _no_real_data, _CATALOG, _query_gold, _sql_escape, logger
+from .shared import _CATALOG, _no_real_data, _query_gold, _sql_escape, logger
 
 router = APIRouter()
 

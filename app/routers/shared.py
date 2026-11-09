@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import functools
+import inspect
 import json
 import logging
 import os
@@ -10,9 +12,6 @@ import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, NoReturn, Optional
-
-import functools
-import inspect
 
 from fastapi import HTTPException
 from fastapi.encoders import jsonable_encoder
@@ -412,7 +411,7 @@ def _query_gold(sql: str, params: Optional[dict] = None) -> Optional[List[Dict[s
         return None
     t0 = time.monotonic()
     try:
-        from databricks.sdk.service.sql import Format, Disposition
+        from databricks.sdk.service.sql import Disposition, Format
         resp = w.statement_execution.execute_statement(
             statement=sql,
             warehouse_id=_SQL_WAREHOUSE_ID,

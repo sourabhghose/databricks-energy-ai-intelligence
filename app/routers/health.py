@@ -56,11 +56,11 @@ async def api_health():
 def _run_sql_test():
     """Run a simple test query and return diagnostics."""
     try:
-        from .shared import _get_workspace_client, _SQL_WAREHOUSE_ID
+        from .shared import _SQL_WAREHOUSE_ID, _get_workspace_client
         w = _get_workspace_client()
         if w is None:
             return "workspace_client_none"
-        from databricks.sdk.service.sql import StatementState, Format, Disposition
+        from databricks.sdk.service.sql import Disposition, Format
         resp = w.statement_execution.execute_statement(
             statement="SELECT 1 AS n, current_date() AS dt",
             warehouse_id=_SQL_WAREHOUSE_ID,

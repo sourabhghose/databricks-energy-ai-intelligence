@@ -13,7 +13,7 @@
 # COMMAND ----------
 
 import math
-from datetime import date, timedelta
+from datetime import date
 
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
@@ -24,7 +24,6 @@ from pyspark.sql.types import (
     StringType,
     StructField,
     StructType,
-    TimestampType,
 )
 
 spark = SparkSession.builder.getOrCreate()

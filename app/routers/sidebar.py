@@ -11,13 +11,13 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
 from .shared import (
-    _sample_data,
-    _no_real_data,
     _CATALOG,
     _NEM_REGIONS,
     _insert_gold,
     _invalidate_cache,
+    _no_real_data,
     _query_gold,
+    _sample_data,
     _sql_escape,
     _update_gold,
     logger,
@@ -1984,7 +1984,7 @@ _NEMWEB = f"{_CATALOG}.nemweb_analytics"
 async def constraint_dashboard_full():
     """Full constraint dashboard matching ConstraintDashboard interface."""
     now_str = datetime.now(timezone.utc).isoformat()
-    
+
     try:
         # Query real constraint data
         rows = _query_gold(

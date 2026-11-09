@@ -23,7 +23,12 @@ import pandas as pd
 from pyspark.sql import functions as F
 
 sys.path.append(os.path.abspath("../models/nem_forecast"))
-from features import INTERVAL, REGIONS, load_wide, region_features  # models/nem_forecast/features.py
+from features import (  # models/nem_forecast/features.py
+    INTERVAL,
+    REGIONS,
+    load_wide,
+    region_features,
+)
 
 dbutils.widgets.text("catalog", "energy_copilot_catalog")
 dbutils.widgets.text("horizons", "6,12,48")

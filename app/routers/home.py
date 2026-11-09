@@ -6,9 +6,9 @@ from typing import Optional
 from fastapi import APIRouter, Query
 
 from .shared import (
-    _no_real_data,
     _CATALOG,
     _NEM_REGIONS,
+    _no_real_data,
     _query_gold_async,
     _query_lakebase_fresh,
 )

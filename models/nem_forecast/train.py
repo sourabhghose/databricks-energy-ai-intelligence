@@ -33,10 +33,9 @@ import lightgbm as lgb
 import mlflow
 import numpy as np
 import pandas as pd
+from features import REGIONS, feature_columns, load_wide, region_features, stack_horizons
 from mlflow.models import infer_signature
 from sklearn.metrics import average_precision_score, roc_auc_score
-
-from features import REGIONS, feature_columns, load_wide, region_features, stack_horizons
 
 dbutils.widgets.text("catalog", "energy_copilot_catalog")
 dbutils.widgets.text("lookback_days", "90")

@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter
 
-from .shared import _sample_data, _CATALOG, _NEM_REGIONS, _query_gold
+from .shared import _CATALOG, _NEM_REGIONS, _query_gold, _sample_data
 
 router = APIRouter()
 

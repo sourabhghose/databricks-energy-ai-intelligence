@@ -21,11 +21,14 @@ from datetime import datetime, timezone
 from urllib.parse import urljoin
 
 import requests
+from nemweb_parse import (  # pipelines/nemweb_parse.py
+    PriceRecord,
+    parse_dispatchis_zip,
+    to_bronze_row,
+)
+from pyspark.sql.types import StringType, StructField, StructType, TimestampType
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from pyspark.sql.types import StringType, StructField, StructType, TimestampType
-
-from nemweb_parse import PriceRecord, parse_dispatchis_zip, to_bronze_row  # pipelines/nemweb_parse.py
 
 dbutils.widgets.text("catalog", "energy_copilot_catalog")
 dbutils.widgets.text("max_files", "288")  # bootstrap window: 288 files = last 24h
