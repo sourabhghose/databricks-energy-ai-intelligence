@@ -1,3 +1,4 @@
+# Execution evidence: evidence/captured_runs.py::EVIDENCE_VERIFICATION (job run 63172587989947): Genie question -> generated SQL -> rows [["NSW1","87","23200.0"]], matched by an independent query. See tests/test_execution_evidence.py.
 from __future__ import annotations
 
 from fastapi import APIRouter, Request

@@ -153,6 +153,7 @@ from routers.environmentals import router as environmentals_router  # noqa: E402
 from routers.fleet_electrification import router as fleet_electrification_router  # noqa: E402
 from routers.gas import router as gas_router  # noqa: E402
 from routers.genie import router as genie_router  # noqa: E402
+from routers.governance import router as governance_router  # noqa: E402
 from routers.health import router as health_router  # noqa: E402
 from routers.home import router as home_router  # noqa: E402
 from routers.hosting_capacity import router as hosting_capacity_router  # noqa: E402
@@ -193,6 +194,7 @@ app.include_router(market_events_router)
 app.include_router(spike_analysis_router)
 app.include_router(genie_router)
 app.include_router(batch_forecasting_router)
+app.include_router(governance_router)  # Unity Catalog governance status (row filter, mask, grants, DQ, lineage)
 app.include_router(batch_futures_hedging_router)
 app.include_router(batch_bidding_router)
 app.include_router(anomaly_router)

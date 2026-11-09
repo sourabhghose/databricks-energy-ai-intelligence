@@ -2,6 +2,8 @@
 # MAGIC %md
 # MAGIC # NEM price, spike and demand forecast — training and back-test
 # MAGIC
+# MAGIC **Execution evidence:** `evidence/captured_runs.py::MODEL_TRAINING` (job run 940474602766977: 10 models trained, back-tested vs persistence, registered in UC (v6); MLflow experiment /Shared/energy_copilot_nem_forecast); executed notebook with outputs in `notebooks/executed/`; checked by `tests/test_execution_evidence.py`.
+# MAGIC
 # MAGIC Trains on **real AEMO NEMWEB data** in `gold.nem_prices_5min` (landed by Pipeline 01 / job 36).
 # MAGIC For each region it trains:
 # MAGIC

@@ -1,0 +1,284 @@
+{
+  "as_of_utc": "2026-11-09T15:48:04.300935+00:00",
+  "catalog": "serverless_stable_2b9lj3_catalog",
+  "policies_applied": {
+    "row_filter": "CREATE OR REPLACE FUNCTION serverless_stable_2b9lj3_catalog.tools.trades_row_filter(p_portfolio_id STRING) RETURNS BOOLEAN\nRETURN EXISTS (SELECT 1 FROM serverless_stable_2b9lj3_catalog.gold.desk_entitlements e\n               WHERE (e.portfolio_id = '*' OR e.portfolio_id = p_portfolio_id)\n                 AND (is_account_group_member(e.principal) OR e.principal = current_user()));\nALTER TABLE serverless_stable_2b9lj3_catalog.gold.trades SET ROW FILTER serverless_stable_2b9lj3_catalog.tools.trades_row_filter ON (portfolio_id);",
+    "column_mask": "CREATE OR REPLACE FUNCTION serverless_stable_2b9lj3_catalog.tools.mask_credit_limit(v DOUBLE) RETURNS DOUBLE\nRETURN CASE WHEN is_account_group_member('energy_risk') OR is_account_group_member('energy_compliance')\n            THEN v ELSE NULL END;\nALTER TABLE serverless_stable_2b9lj3_catalog.gold.counterparties ALTER COLUMN credit_limit_aud SET MASK serverless_stable_2b9lj3_catalog.tools.mask_credit_limit;"
+  },
+  "row_filters_and_masks": [
+    {
+      "kind": "row_filter",
+      "table_name": "trades",
+      "policy": "serverless_stable_2b9lj3_catalog.tools.trades_row_filter",
+      "columns": "portfolio_id"
+    },
+    {
+      "kind": "column_mask",
+      "table_name": "counterparties",
+      "policy": "serverless_stable_2b9lj3_catalog.tools.mask_credit_limit",
+      "columns": "credit_limit_aud"
+    }
+  ],
+  "desk_entitlements": [
+    {
+      "principal": "83619056-a863-47f9-afb0-3d7cd6d7307a",
+      "portfolio": "ALL PORTFOLIOS"
+    },
+    {
+      "principal": "energy_analysts",
+      "portfolio": "Renewable PPAs"
+    },
+    {
+      "principal": "energy_compliance",
+      "portfolio": "ALL PORTFOLIOS"
+    },
+    {
+      "principal": "energy_risk",
+      "portfolio": "ALL PORTFOLIOS"
+    },
+    {
+      "principal": "energy_traders",
+      "portfolio": "Hedge Book"
+    },
+    {
+      "principal": "energy_traders",
+      "portfolio": "Trading Book"
+    }
+  ],
+  "trades_visible_to_caller": [
+    {
+      "identity": "sourabh.ghose@databricks.com",
+      "portfolio": "Hedge Book",
+      "trades": 14
+    },
+    {
+      "identity": "sourabh.ghose@databricks.com",
+      "portfolio": "Trading Book",
+      "trades": 28
+    }
+  ],
+  "table_grants": [
+    {
+      "grantee": "83619056-a863-47f9-afb0-3d7cd6d7307a",
+      "table_schema": "gold",
+      "privilege_type": "MODIFY",
+      "tables": 12
+    },
+    {
+      "grantee": "83619056-a863-47f9-afb0-3d7cd6d7307a",
+      "table_schema": "gold",
+      "privilege_type": "SELECT",
+      "tables": 160
+    },
+    {
+      "grantee": "83619056-a863-47f9-afb0-3d7cd6d7307a",
+      "table_schema": "silver",
+      "privilege_type": "SELECT",
+      "tables": 13
+    },
+    {
+      "grantee": "aec5be3d-de3c-404c-8e60-feed0f265fd3",
+      "table_schema": "bronze",
+      "privilege_type": "ALL_PRIVILEGES",
+      "tables": 12
+    },
+    {
+      "grantee": "aec5be3d-de3c-404c-8e60-feed0f265fd3",
+      "table_schema": "bronze",
+      "privilege_type": "MANAGE",
+      "tables": 12
+    },
+    {
+      "grantee": "aec5be3d-de3c-404c-8e60-feed0f265fd3",
+      "table_schema": "gold",
+      "privilege_type": "ALL_PRIVILEGES",
+      "tables": 137
+    },
+    {
+      "grantee": "aec5be3d-de3c-404c-8e60-feed0f265fd3",
+      "table_schema": "gold",
+      "privilege_type": "MANAGE",
+      "tables": 137
+    },
+    {
+      "grantee": "aec5be3d-de3c-404c-8e60-feed0f265fd3",
+      "table_schema": "silver",
+      "privilege_type": "ALL_PRIVILEGES",
+      "tables": 13
+    },
+    {
+      "grantee": "aec5be3d-de3c-404c-8e60-feed0f265fd3",
+      "table_schema": "silver",
+      "privilege_type": "MANAGE",
+      "tables": 13
+    },
+    {
+      "grantee": "allan.leung@databricks.com",
+      "table_schema": "gold",
+      "privilege_type": "SELECT",
+      "tables": 137
+    },
+    {
+      "grantee": "allan.leung@databricks.com",
+      "table_schema": "silver",
+      "privilege_type": "SELECT",
+      "tables": 13
+    },
+    {
+      "grantee": "beyza.yalavac@databricks.com",
+      "table_schema": "gold",
+      "privilege_type": "SELECT",
+      "tables": 137
+    },
+    {
+      "grantee": "beyza.yalavac@databricks.com",
+      "table_schema": "silver",
+      "privilege_type": "SELECT",
+      "tables": 13
+    },
+    {
+      "grantee": "nauman.shah@databricks.com",
+      "table_schema": "gold",
+      "privilege_type": "SELECT",
+      "tables": 137
+    },
+    {
+      "grantee": "nauman.shah@databricks.com",
+      "table_schema": "silver",
+      "privilege_type": "SELECT",
+      "tables": 13
+    },
+    {
+      "grantee": "sourabh.ghose@databricks.com",
+      "table_schema": "bronze",
+      "privilege_type": "ALL_PRIVILEGES",
+      "tables": 12
+    },
+    {
+      "grantee": "sourabh.ghose@databricks.com",
+      "table_schema": "bronze",
+      "privilege_type": "MANAGE",
+      "tables": 12
+    },
+    {
+      "grantee": "sourabh.ghose@databricks.com",
+      "table_schema": "gold",
+      "privilege_type": "ALL_PRIVILEGES",
+      "tables": 137
+    },
+    {
+      "grantee": "sourabh.ghose@databricks.com",
+      "table_schema": "gold",
+      "privilege_type": "MANAGE",
+      "tables": 137
+    },
+    {
+      "grantee": "sourabh.ghose@databricks.com",
+      "table_schema": "silver",
+      "privilege_type": "ALL_PRIVILEGES",
+      "tables": 13
+    },
+    {
+      "grantee": "sourabh.ghose@databricks.com",
+      "table_schema": "silver",
+      "privilege_type": "MANAGE",
+      "tables": 13
+    },
+    {
+      "grantee": "zivile.norkunaite@databricks.com",
+      "table_schema": "gold",
+      "privilege_type": "SELECT",
+      "tables": 137
+    },
+    {
+      "grantee": "zivile.norkunaite@databricks.com",
+      "table_schema": "silver",
+      "privilege_type": "SELECT",
+      "tables": 13
+    }
+  ],
+  "data_quality_rules": [
+    {
+      "rule_name": "demand_non_negative",
+      "runs": 3,
+      "rows_checked": 2880,
+      "rows_failed": 102,
+      "last_run_utc": "2026-11-09T01:45:36.046Z"
+    },
+    {
+      "rule_name": "demand_within_physical_bounds",
+      "runs": 170,
+      "rows_checked": 264385,
+      "rows_failed": 0,
+      "last_run_utc": "2026-11-09T15:45:57.824Z"
+    },
+    {
+      "rule_name": "freshness",
+      "runs": 173,
+      "rows_checked": 173,
+      "rows_failed": 0,
+      "last_run_utc": "2026-11-09T15:45:57.824Z"
+    },
+    {
+      "rule_name": "interval_not_null",
+      "runs": 173,
+      "rows_checked": 267265,
+      "rows_failed": 0,
+      "last_run_utc": "2026-11-09T15:45:57.824Z"
+    },
+    {
+      "rule_name": "interval_on_5min_grid",
+      "runs": 173,
+      "rows_checked": 267265,
+      "rows_failed": 0,
+      "last_run_utc": "2026-11-09T15:45:57.824Z"
+    },
+    {
+      "rule_name": "rrp_is_numeric",
+      "runs": 173,
+      "rows_checked": 267265,
+      "rows_failed": 0,
+      "last_run_utc": "2026-11-09T15:45:57.824Z"
+    },
+    {
+      "rule_name": "rrp_within_market_limits",
+      "runs": 173,
+      "rows_checked": 267265,
+      "rows_failed": 3,
+      "last_run_utc": "2026-11-09T15:45:57.824Z"
+    },
+    {
+      "rule_name": "valid_nem_region",
+      "runs": 173,
+      "rows_checked": 267265,
+      "rows_failed": 0,
+      "last_run_utc": "2026-11-09T15:45:57.824Z"
+    }
+  ],
+  "quarantined_rows": [
+    {
+      "region_id": "SA1",
+      "failed_rules": "demand_non_negative",
+      "n": 102
+    },
+    {
+      "region_id": "NSW1",
+      "failed_rules": "rrp_within_market_limits",
+      "n": 3
+    }
+  ],
+  "lineage": [
+    {
+      "source_table_full_name": "serverless_stable_2b9lj3_catalog.bronze.nemweb_dispatch_price",
+      "target_table_full_name": "serverless_stable_2b9lj3_catalog.gold.nem_prices_5min",
+      "entity_type": "JOB",
+      "last_seen": "2026-11-09T15:31:21.076Z"
+    },
+    {
+      "source_table_full_name": "serverless_stable_2b9lj3_catalog.bronze.nemweb_dispatch_price",
+      "target_table_full_name": "serverless_stable_2b9lj3_catalog.gold.nem_prices_quarantine",
+      "entity_type": "JOB",
+      "last_seen": "2026-11-09T02:50:42.386Z"
+    }
+  ]
+}

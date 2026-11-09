@@ -2,6 +2,8 @@
 # MAGIC %md
 # MAGIC # Pipeline 05 — NEM price, spike and demand forecasts (every 5 minutes)
 # MAGIC
+# MAGIC **Execution evidence:** `evidence/captured_runs.py::LIVE_INFERENCE` (job run 481037869311618: 15 price + 15 demand forecasts from model v6); executed notebook with outputs in `notebooks/executed/`; checked by `tests/test_execution_evidence.py`.
+# MAGIC
 # MAGIC Loads the `production` alias of each Unity Catalog model trained by `models/nem_forecast/train.py`
 # MAGIC (`{catalog}.ml.nem_price_forecast_{region}`, `{catalog}.ml.nem_demand_forecast_{region}`), builds the
 # MAGIC latest features from real `gold.nem_prices_5min` data, and appends forecasts to `gold.price_forecasts`

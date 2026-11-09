@@ -17,6 +17,7 @@ export default defineConfig({
         {
           label: 'Getting Started',
           items: [
+            { label: 'Evidence & Governance', slug: 'getting-started/evidence' },
             { label: 'Overview', slug: 'getting-started/overview' },
             { label: 'Architecture', slug: 'getting-started/architecture' },
             { label: 'Quick Start', slug: 'getting-started/quickstart' },

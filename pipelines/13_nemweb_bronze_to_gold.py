@@ -2,6 +2,8 @@
 # MAGIC %md
 # MAGIC # NEMWEB Bronze → Gold with data-quality enforcement
 # MAGIC
+# MAGIC **Execution evidence:** `evidence/captured_runs.py::INGEST_LIVE_DQ / DQ_QUARANTINE` (job run 230199744739803 / 645430909659288: freshness PASS; a rule quarantined 102 rows); executed notebook with outputs in `notebooks/executed/`; checked by `tests/test_execution_evidence.py`.
+# MAGIC
 # MAGIC Reads new rows from `{catalog}.bronze.nemweb_dispatch_price` (landed by Pipeline 01),
 # MAGIC applies **data-quality rules**, and:
 # MAGIC

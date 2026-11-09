@@ -5,6 +5,11 @@ description: XGBoost vegetation risk classifier — 88.7% accuracy, F1-macro 86.
 
 import { Aside } from '@astrojs/starlight/components';
 
+<Aside type="caution" title="Illustrative metrics">
+  The metrics on this page come from a synthetic DNSP dataset and are illustrative. They are not backed by a training run in this build. Evidenced models (NEM price and demand forecasts) are documented in [evidence/03_models.md](https://github.com/sourabhghose/databricks-energy-ai-intelligence/blob/main/docs/evidence/03_models.md).
+</Aside>
+
+
 ## Overview
 
 The Vegetation Risk ML model is an XGBoost multi-class classifier that scores each network span (section of overhead conductor between two poles) into one of four risk categories: Low, Medium, High, or Critical. It runs weekly and produces a prioritised inspection schedule that helps DNSPs allocate vegetation management resources efficiently.
