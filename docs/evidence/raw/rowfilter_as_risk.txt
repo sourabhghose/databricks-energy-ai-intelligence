@@ -1,0 +1,12 @@
+## As trader + risk (middle office)
+user | in_traders | in_risk | portfolio | trades
+sourabh.ghose@databricks.com | true | true | Hedge Book | 14
+sourabh.ghose@databricks.com | true | true | Renewable PPAs | 3
+sourabh.ghose@databricks.com | true | true | Trading Book | 28
+
+name | credit_rating | credit_limit_aud
+AGL Energy | BBB+ | 5.0E8
+EnergyAustralia | BBB | 3.5E8
+Iberdrola Australia | BBB+ | 3.0E8
+Origin Energy | BBB | 4.0E8
+Snowy Hydro | AAA | 1.0E9

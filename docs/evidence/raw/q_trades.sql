@@ -1,0 +1,1 @@
+SELECT current_user() AS user, is_member('energy_traders') AS in_traders, is_member('energy_risk') AS in_risk, p.name AS portfolio, count(*) AS trades FROM serverless_stable_2b9lj3_catalog.gold.trades t JOIN serverless_stable_2b9lj3_catalog.gold.portfolios p USING (portfolio_id) GROUP BY ALL ORDER BY portfolio

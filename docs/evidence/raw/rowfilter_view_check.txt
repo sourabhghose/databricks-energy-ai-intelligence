@@ -1,0 +1,2 @@
+in_risk | via_table | via_view
+false | 42 | 42

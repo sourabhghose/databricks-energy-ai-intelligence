@@ -1,0 +1,54 @@
+## SHOW GRANTS (app service principal) ON SCHEMA gold
+Principal | ActionType | ObjectType | ObjectKey
+83619056-a863-47f9-afb0-3d7cd6d7307a | SELECT | SCHEMA | serverless_stable_2b9lj3_catalog.gold
+83619056-a863-47f9-afb0-3d7cd6d7307a | USE SCHEMA | SCHEMA | serverless_stable_2b9lj3_catalog.gold
+account users | READ METADATA | METASTORE | metastore_aws_us_east_2
+
+## SHOW GRANTS ON SCHEMA bronze (no business roles or app SP)
+Principal | ActionType | ObjectType | ObjectKey
+account users | READ METADATA | METASTORE | metastore_aws_us_east_2
+sourabh.ghose@databricks.com | ALL PRIVILEGES | CATALOG | serverless_stable_2b9lj3_catalog
+sourabh.ghose@databricks.com | MANAGE | CATALOG | serverless_stable_2b9lj3_catalog
+aec5be3d-de3c-404c-8e60-feed0f265fd3 | ALL PRIVILEGES | CATALOG | serverless_stable_2b9lj3_catalog
+aec5be3d-de3c-404c-8e60-feed0f265fd3 | MANAGE | CATALOG | serverless_stable_2b9lj3_catalog
+
+## Row filter + column mask policies
+kind | table_name | policy | target_columns
+row_filter | trades | serverless_stable_2b9lj3_catalog.tools.trades_row_filter | portfolio_id
+column_mask | counterparties | serverless_stable_2b9lj3_catalog.tools.mask_credit_limit | credit_limit_aud
+
+## Desk entitlements
+principal | portfolio
+83619056-a863-47f9-afb0-3d7cd6d7307a | ALL PORTFOLIOS
+energy_analysts | Renewable PPAs
+energy_compliance | ALL PORTFOLIOS
+energy_risk | ALL PORTFOLIOS
+energy_traders | Hedge Book
+energy_traders | Trading Book
+
+## CHECK constraints on gold.nem_prices_5min
+delta.constraints.interval_not_null | interval_datetime IS NOT NULL
+delta.constraints.rrp_within_market_limits | rrp BETWEEN -1000.0 AND 20300.0
+delta.constraints.valid_nem_region | region_id IN ('NSW1','QLD1','VIC1','SA1','TAS1')
+delta.feature.checkConstraints | supported
+
+## Tags
+table_name | tag_name | tag_value
+counterparties | ec_classification | confidential
+counterparties | ec_domain | middle_office
+dq_results | ec_classification | internal
+dq_results | ec_domain | governance
+nem_prices_5min | ec_classification | public_market_data
+nem_prices_5min | ec_domain | front_office
+nem_prices_5min | ec_source | aemo_nemweb
+portfolios | ec_classification | confidential
+portfolios | ec_domain | middle_office
+trades | ec_classification | confidential
+trades | ec_domain | middle_office
+table_name | column_name | tag_name | tag_value
+counterparties | credit_limit_aud | ec_sensitivity | restricted
+
+## Lineage (system.access.table_lineage)
+source_table_full_name | target_table_full_name | entity_type | last_seen
+serverless_stable_2b9lj3_catalog.bronze.nemweb_dispatch_price | serverless_stable_2b9lj3_catalog.gold.nem_prices_5min | JOB | 2026-11-09T02:01:17.543Z
+serverless_stable_2b9lj3_catalog.bronze.nemweb_dispatch_price | serverless_stable_2b9lj3_catalog.gold.nem_prices_quarantine | JOB | 2026-11-09T01:42:25.979Z

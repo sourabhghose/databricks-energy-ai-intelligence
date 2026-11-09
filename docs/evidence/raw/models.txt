@@ -1,0 +1,79 @@
+## Unity Catalog registered models (alias production)
+model | versions | production | created_utc | mlflow_run_id
+serverless_stable_2b9lj3_catalog.ml.nem_price_forecast_nsw1 | 6 | v6 | 2026-11-09 04:42 | 13bcce5c5684408c9981b7bead02f994
+serverless_stable_2b9lj3_catalog.ml.nem_price_forecast_qld1 | 6 | v6 | 2026-11-09 04:43 | a4b2dddc471847bfb872e6c8faed39ab
+serverless_stable_2b9lj3_catalog.ml.nem_price_forecast_sa1 | 6 | v6 | 2026-11-09 04:45 | a2ebb855d15b4a34b6048385af7f761f
+serverless_stable_2b9lj3_catalog.ml.nem_price_forecast_tas1 | 6 | v6 | 2026-11-09 04:46 | c41ecdd3ece84b73870c1963f5c8d475
+serverless_stable_2b9lj3_catalog.ml.nem_price_forecast_vic1 | 6 | v6 | 2026-11-09 04:44 | f5d7dc2c381944ff9d1e1e76d7685ba8
+serverless_stable_2b9lj3_catalog.ml.nem_demand_forecast_nsw1 | 6 | v6 | 2026-11-09 04:43 | 5b023657048d42518e481d2dabdfca09
+serverless_stable_2b9lj3_catalog.ml.nem_demand_forecast_qld1 | 6 | v6 | 2026-11-09 04:44 | 63a63a4f0b124d56ba3211c2ad759cd2
+serverless_stable_2b9lj3_catalog.ml.nem_demand_forecast_sa1 | 6 | v6 | 2026-11-09 04:45 | 2052a7ffeb33488daf5714a23d46db9b
+serverless_stable_2b9lj3_catalog.ml.nem_demand_forecast_tas1 | 6 | v6 | 2026-11-09 04:46 | d70d76888d33444c8dc002308aead261
+serverless_stable_2b9lj3_catalog.ml.nem_demand_forecast_vic1 | 6 | v6 | 2026-11-09 04:44 | 0c9cbfde3a6444fea89cbc9a0125c293
+
+## gold.forecast_model_metrics (held-out test window, latest training run)
+target | region | horizon_min | mae | persistence_mae | skill | mape_pct | cov80 | n_test | model_version | mlflow_run
+demand | NSW1 | 30 | 132.56 | 205.17 | 0.354 | 2.3 | 0.756 | 4025 | 6 | 5b023657048d
+demand | NSW1 | 60 | 204.53 | 381.98 | 0.465 | 3.5 | 0.77 | 4019 | 6 | 5b023657048d
+demand | NSW1 | 240 | 493.24 | 1236.13 | 0.601 | 8.8 | 0.714 | 3983 | 6 | 5b023657048d
+demand | QLD1 | 30 | 102.37 | 167.9 | 0.39 | 1.7 | 0.795 | 4025 | 6 | 63a63a4f0b12
+demand | QLD1 | 60 | 168.3 | 313.21 | 0.463 | 2.9 | 0.75 | 4019 | 6 | 63a63a4f0b12
+demand | QLD1 | 240 | 433.1 | 1010.08 | 0.571 | 7.2 | 0.721 | 3983 | 6 | 63a63a4f0b12
+demand | SA1 | 30 | 51.79 | 76.8 | 0.326 | 9.1 | 0.771 | 4025 | 6 | 2052a7ffeb33
+demand | SA1 | 60 | 77.25 | 133.9 | 0.423 | 13.7 | 0.762 | 4019 | 6 | 2052a7ffeb33
+demand | SA1 | 240 | 161.35 | 391.66 | 0.588 | 31.7 | 0.764 | 3983 | 6 | 2052a7ffeb33
+demand | TAS1 | 30 | 20.02 | 24.58 | 0.185 | 2.0 | 0.78 | 4025 | 6 | d70d76888d33
+demand | TAS1 | 60 | 27.89 | 42.56 | 0.345 | 2.8 | 0.791 | 4019 | 6 | d70d76888d33
+demand | TAS1 | 240 | 55.23 | 124.76 | 0.557 | 5.7 | 0.771 | 3983 | 6 | d70d76888d33
+demand | VIC1 | 30 | 106.08 | 168.75 | 0.371 | 2.4 | 0.819 | 4025 | 6 | 0c9cbfde3a64
+demand | VIC1 | 60 | 166.79 | 301.46 | 0.447 | 3.7 | 0.812 | 4019 | 6 | 0c9cbfde3a64
+demand | VIC1 | 240 | 404.46 | 876.58 | 0.539 | 9.4 | 0.797 | 3983 | 6 | 0c9cbfde3a64
+price | NSW1 | 30 | 10.76 | 11.21 | 0.041 | 14.2 | 0.845 | 4025 | 6 | 13bcce5c5684
+price | NSW1 | 60 | 12.83 | 14.56 | 0.119 | 16.8 | 0.847 | 4019 | 6 | 13bcce5c5684
+price | NSW1 | 240 | 17.99 | 28.37 | 0.366 | 21.0 | 0.83 | 3983 | 6 | 13bcce5c5684
+price | QLD1 | 30 | 9.59 | 9.87 | 0.028 | 12.9 | 0.881 | 4025 | 6 | a4b2dddc4718
+price | QLD1 | 60 | 12.01 | 13.51 | 0.111 | 16.0 | 0.881 | 4019 | 6 | a4b2dddc4718
+price | QLD1 | 240 | 19.78 | 32.16 | 0.385 | 24.0 | 0.841 | 3983 | 6 | a4b2dddc4718
+price | SA1 | 30 | 32.35 | 29.64 | -0.091 | 36.5 | 0.681 | 4025 | 6 | a2ebb855d15b
+price | SA1 | 60 | 38.14 | 39.94 | 0.045 | 42.1 | 0.699 | 4019 | 6 | a2ebb855d15b
+price | SA1 | 240 | 52.09 | 80.05 | 0.349 | 57.9 | 0.708 | 3983 | 6 | a2ebb855d15b
+price | TAS1 | 30 | 17.06 | 13.64 | -0.251 | 20.9 | 0.782 | 4025 | 6 | c41ecdd3ece8
+price | TAS1 | 60 | 20.1 | 18.11 | -0.11 | 24.3 | 0.782 | 4019 | 6 | c41ecdd3ece8
+price | TAS1 | 240 | 31.69 | 36.69 | 0.136 | 36.3 | 0.768 | 3983 | 6 | c41ecdd3ece8
+price | VIC1 | 30 | 12.87 | 13.26 | 0.029 | 19.5 | 0.779 | 4025 | 6 | f5d7dc2c3819
+price | VIC1 | 60 | 16.15 | 18.38 | 0.122 | 23.9 | 0.782 | 4019 | 6 | f5d7dc2c3819
+price | VIC1 | 240 | 26.17 | 39.97 | 0.345 | 35.0 | 0.823 | 3983 | 6 | f5d7dc2c3819
+
+## Pooled spike classifier (held-out, 1h horizon)
+region | spike_events | recall | precision | auc | avg_precision | spike_threshold
+NSW1 | 0.0 |  | 0.0 |  |  | 1.0
+QLD1 | 0.0 |  | 0.0 |  |  | 1.0
+SA1 | 21.0 | 0.0 | 0.0 | 0.5 | 0.005 | 1.0
+TAS1 | 2.0 | 0.0 | 0.0 | 0.716 | 0.003 | 1.0
+VIC1 | 0.0 |  | 0.0 |  |  | 1.0
+
+## Live forecasts (job 05) scored against actuals that have since arrived
+region_id | scored | live_mae | first_run_utc | last_run_utc | model_version
+NSW1 | 50 | 13.59 | 2026-11-09T04:00:14.187Z | 2026-11-09T08:07:23.858Z | 6
+QLD1 | 50 | 13.12 | 2026-11-09T04:00:14.187Z | 2026-11-09T08:07:23.858Z | 6
+SA1 | 50 | 32.29 | 2026-11-09T04:00:14.187Z | 2026-11-09T08:07:23.858Z | 6
+TAS1 | 50 | 26.69 | 2026-11-09T04:00:14.187Z | 2026-11-09T08:07:23.858Z | 6
+VIC1 | 50 | 16.84 | 2026-11-09T04:00:14.187Z | 2026-11-09T08:07:23.858Z | 6
+
+## Latest live forecast run
+region_id | horizon_min | interval_datetime | predicted_rrp | lo80 | hi80 | spike_p | model_version | forecast_run_at
+NSW1 | 30 | 2026-11-09T09:30:00.000Z | 108.73 | 94.67 | 138.62 | 0.0 | 6 | 2026-11-09T09:02:25.534Z
+NSW1 | 60 | 2026-11-09T10:00:00.000Z | 107.89 | 91.72 | 144.99 | 0.0 | 6 | 2026-11-09T09:02:25.534Z
+NSW1 | 240 | 2026-11-09T13:00:00.000Z | 101.37 | 78.45 | 161.95 | 0.0 | 6 | 2026-11-09T09:02:25.534Z
+QLD1 | 30 | 2026-11-09T09:30:00.000Z | 104.81 | 91.16 | 137.18 | 0.0 | 6 | 2026-11-09T09:02:25.534Z
+QLD1 | 60 | 2026-11-09T10:00:00.000Z | 103.06 | 86.89 | 142.58 | 0.0 | 6 | 2026-11-09T09:02:25.534Z
+QLD1 | 240 | 2026-11-09T13:00:00.000Z | 90.94 | 69.13 | 148.69 | 0.0 | 6 | 2026-11-09T09:02:25.534Z
+SA1 | 30 | 2026-11-09T09:30:00.000Z | 99.08 | 68.2 | 125.79 | 0.0 | 6 | 2026-11-09T09:02:25.534Z
+SA1 | 60 | 2026-11-09T10:00:00.000Z | 93.03 | 51.81 | 128.19 | 0.0 | 6 | 2026-11-09T09:02:25.534Z
+SA1 | 240 | 2026-11-09T13:00:00.000Z | 71.07 | 15.4 | 126.31 | 0.0 | 6 | 2026-11-09T09:02:25.534Z
+TAS1 | 30 | 2026-11-09T09:30:00.000Z | 98.07 | 87.68 | 143.11 | 0.0 | 6 | 2026-11-09T09:02:25.534Z
+TAS1 | 60 | 2026-11-09T10:00:00.000Z | 95.79 | 81.9 | 144.0 | 0.0 | 6 | 2026-11-09T09:02:25.534Z
+TAS1 | 240 | 2026-11-09T13:00:00.000Z | 81.8 | 57.0 | 141.1 | 0.0 | 6 | 2026-11-09T09:02:25.534Z
+VIC1 | 30 | 2026-11-09T09:30:00.000Z | 103.84 | 88.53 | 124.78 | 0.0 | 6 | 2026-11-09T09:02:25.534Z
+VIC1 | 60 | 2026-11-09T10:00:00.000Z | 100.11 | 80.16 | 126.99 | 0.0 | 6 | 2026-11-09T09:02:25.534Z
+VIC1 | 240 | 2026-11-09T13:00:00.000Z | 87.78 | 48.49 | 139.39 | 0.0 | 6 | 2026-11-09T09:02:25.534Z

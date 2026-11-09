@@ -1,0 +1,44 @@
+## gold.copilot_interactions (audit log of assistant turns)
+interaction_id | created_at | model | source | input_tokens | output_tokens | latency_ms | question
+82d07d16-d2c8-4ab8-a4fb-173d2e109525 | 2026-11-09T08:56:05.000Z | databricks-claude-sonnet-4-6 | local | 24269 | 1189 | 49805 | Using your tools, give me the current SA1 and NSW1 spot prices and the models 1-
+0b7fc9b7-56b1-4454-8b96-a37bb572e0bf | 2026-11-09T09:00:15.000Z | databricks-claude-sonnet-4-6 | local | 23395 | 1158 | 41629 | Using your tools, give me the current SA1 and NSW1 spot prices and the models 1-
+
+## Tool calls for interaction 0b7fc9b7-56b1-4454-8b96-a37bb572e0bf
+{
+ "round": 1,
+ "name": "query_spot_prices",
+ "arguments": {
+  "region": "SA1"
+ },
+ "result_chars": 289,
+ "result_preview": "{\"source\": \"gold.nem_prices_5min (AEMO NEMWEB DispatchIS)\", \"window_hours\": 1, \"regions\": [{\"region_id\": \"SA1\", \"latest_rrp\": 115.89764, \"as_of_utc\": \"2026-11-09T08:55:00.000Z\", \"avg_rrp\": 119.83, \"min_rrp\": 112.45, \"max_rrp\": 137.44, \"intervals_over_300\": 0, \"latest_demand_mw\": 1384.0}]}"
+}
+{
+ "round": 1,
+ "name": "query_spot_prices",
+ "arguments": {
+  "region": "NSW1"
+ },
+ "result_chars": 286,
+ "result_preview": "{\"source\": \"gold.nem_prices_5min (AEMO NEMWEB DispatchIS)\", \"window_hours\": 1, \"regions\": [{\"region_id\": \"NSW1\", \"latest_rrp\": 121.01, \"as_of_utc\": \"2026-11-09T08:55:00.000Z\", \"avg_rrp\": 117.17, \"min_rrp\": 107.3, \"max_rrp\": 130.25, \"intervals_over_300\": 0, \"latest_demand_mw\": 8227.0}]}"
+}
+{
+ "round": 1,
+ "name": "query_price_forecasts",
+ "arguments": {
+  "region": "SA1",
+  "hours": 1
+ },
+ "result_chars": 1193,
+ "result_preview": "{\"source\": \"gold.price_forecasts (UC model serverless_stable_2b9lj3_catalog.ml.nem_price_forecast_sa1 v6)\", \"region\": \"SA1\", \"forecasts\": [{\"interval_datetime\": \"2026-11-09T09:25:00.000Z\", \"horizon_minutes\": 30, \"forecast\": 101.96, \"lower_80\": 71.07, \"upper_80\": 128.67, \"spike_probability\": 0.0, \"forecast_run_at\": \"2026-11-09T08:57:23.866Z\", \"model_name\": \"serverless_stable_2b9lj3_catalog.ml.nem_price_forecast_sa1\", \"model_version\": \"6\"}, {\"interval_datetime\": \"2026-11-09T09:55:00.000Z\", \"horizon_minutes\": 60, \"forecast\": 97.29, \"lower_80\": 56.06, \"upper_80\": 132.44, \"spike_probability\": 0.0, "
+}
+{
+ "round": 1,
+ "name": "query_price_forecasts",
+ "arguments": {
+  "region": "NSW1",
+  "hours": 1
+ },
+ "result_chars": 1195,
+ "result_preview": "{\"source\": \"gold.price_forecasts (UC model serverless_stable_2b9lj3_catalog.ml.nem_price_forecast_nsw1 v6)\", \"region\": \"NSW1\", \"forecasts\": [{\"interval_datetime\": \"2026-11-09T09:25:00.000Z\", \"horizon_minutes\": 30, \"forecast\": 115.8, \"lower_80\": 101.75, \"upper_80\": 145.7, \"spike_probability\": 0.0, \"forecast_run_at\": \"2026-11-09T08:57:23.866Z\", \"model_name\": \"serverless_stable_2b9lj3_catalog.ml.nem_price_forecast_nsw1\", \"model_version\": \"6\"}, {\"interval_datetime\": \"2026-11-09T09:55:00.000Z\", \"horizon_minutes\": 60, \"forecast\": 114.88, \"lower_80\": 98.7, \"upper_80\": 151.98, \"spike_probability\": 0.0"
+}
