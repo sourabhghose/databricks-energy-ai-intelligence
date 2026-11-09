@@ -28,6 +28,7 @@
 import json
 import re
 from datetime import datetime, timedelta, timezone
+from typing import TYPE_CHECKING, Any
 
 import lightgbm as lgb
 import mlflow
@@ -36,6 +37,10 @@ import pandas as pd
 from features import REGIONS, feature_columns, load_wide, region_features, stack_horizons
 from mlflow.models import infer_signature
 from sklearn.metrics import average_precision_score, roc_auc_score
+
+if TYPE_CHECKING:  # provided by the Databricks notebook runtime
+    spark: Any
+    dbutils: Any
 
 dbutils.widgets.text("catalog", "energy_copilot_catalog")
 dbutils.widgets.text("lookback_days", "90")
@@ -209,7 +214,7 @@ def fit_target(stacked: pd.DataFrame, feats: list[str], target: str, region: str
     for h in HORIZONS:
         m = (test["horizon"] == h).to_numpy()
         row = regression_metrics(test[y_col].to_numpy()[m], pred[m], test[base_col].to_numpy()[m], MAPE_FLOORS[target])
-        if clf is not None:
+        if clf is not None and threshold is not None:
             row.update(spike_metrics(test[y_col].to_numpy()[m] > SPIKE, prob[m], threshold))
         lo, hi = resid_q[h]
         row["interval_coverage_80"] = float(np.mean((residuals[m] >= lo) & (residuals[m] <= hi)))
@@ -255,7 +260,9 @@ def register(info: dict, target: str, region: str, metric_rows: list[dict]) -> t
     return name, str(version), run_id
 
 
-metric_rows_all, backtests, importances = [], [], []
+metric_rows_all: list[dict] = []
+backtests: list[pd.DataFrame] = []
+importances: list[dict] = []
 with mlflow.start_run(run_name=f"nem_forecast_{TRAINED_AT:%Y%m%d_%H%M}") as parent:
     stacks = {region: stack_horizons(region_features(wide, region), wide, region, HORIZONS) for region in REGIONS}
     spike_model, spike_stats = train_pooled_spike(stacks)
