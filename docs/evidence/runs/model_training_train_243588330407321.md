@@ -143,8 +143,32 @@ QLD1 demand: v6 | h6 MAE 102.4 (persistence 167.9), h12 MAE 168.3 (persistence 3
   warnings.warn(
 Registered model 'serverless_stable_2b9lj3_catalog.ml.nem_price_forecast_vic1' already exists. Creating a new version of this model...
 Created version '6' of model 'serverless_stable_2b9lj3_catalog.ml.nem_price_forecast_vic1'.
-VIC1 price: v6 | h6 MAE 12.9 (persistence 13.3), h12 MAE 16.1 (persistence 1
-… (truncated)
+VIC1 price: v6 | h6 MAE 12.9 (persistence 13.3), h12 MAE 16.1 (persistence 18.4), h48 MAE 26.2 (persistence 40.0)
+/databricks/python/lib/python3.11/site-packages/mlflow/types/utils.py:393: UserWarning: Hint: Inferred schema contains integer column(s). Integer columns in Python cannot represent missing values. If your input data contains missing values at inference time, it will be encoded as floats and will cause a schema enforcement error. The best way to avoid this problem is to infer the model schema based on a realistic data sample (training dataset) that includes missing values. Alternatively, you can declare integer columns as doubles (float64) whenever these columns may have missing values. See `Handling Integers With Missing Values <https://www.mlflow.org/docs/latest/models.html#handling-integers-with-missing-values>`_ for more details.
+  warnings.warn(
+Registered model 'serverless_stable_2b9lj3_catalog.ml.nem_demand_forecast_vic1' already exists. Creating a new version of this model...
+Created version '6' of model 'serverless_stable_2b9lj3_catalog.ml.nem_demand_forecast_vic1'.
+VIC1 demand: v6 | h6 MAE 106.1 (persistence 168.8), h12 MAE 166.8 (persistence 301.5), h48 MAE 404.5 (persistence 876.6)
+/databricks/python/lib/python3.11/site-packages/mlflow/types/utils.py:393: UserWarning: Hint: Inferred schema contains integer column(s). Integer columns in Python cannot represent missing values. If your input data contains missing values at inference time, it will be encoded as floats and will cause a schema enforcement error. The best way to avoid this problem is to infer the model schema based on a realistic data sample (training dataset) that includes missing values. Alternatively, you can declare integer columns as doubles (float64) whenever these columns may have missing values. See `Handling Integers With Missing Values <https://www.mlflow.org/docs/latest/models.html#handling-integers-with-missing-values>`_ for more details.
+  warnings.warn(
+Registered model 'serverless_stable_2b9lj3_catalog.ml.nem_price_forecast_sa1' already exists. Creating a new version of this model...
+Created version '6' of model 'serverless_stable_2b9lj3_catalog.ml.nem_price_forecast_sa1'.
+SA1 price: v6 | h6 MAE 32.4 (persistence 29.6), h12 MAE 38.1 (persistence 39.9), h48 MAE 52.1 (persistence 80.0)
+/databricks/python/lib/python3.11/site-packages/mlflow/types/utils.py:393: UserWarning: Hint: Inferred schema contains integer column(s). Integer columns in Python cannot represent missing values. If your input data contains missing values at inference time, it will be encoded as floats and will cause a schema enforcement error. The best way to avoid this problem is to infer the model schema based on a realistic data sample (training dataset) that includes missing values. Alternatively, you can declare integer columns as doubles (float64) whenever these columns may have missing values. See `Handling Integers With Missing Values <https://www.mlflow.org/docs/latest/models.html#handling-integers-with-missing-values>`_ for more details.
+  warnings.warn(
+Registered model 'serverless_stable_2b9lj3_catalog.ml.nem_demand_forecast_sa1' already exists. Creating a new version of this model...
+Created version '6' of model 'serverless_stable_2b9lj3_catalog.ml.nem_demand_forecast_sa1'.
+SA1 demand: v6 | h6 MAE 51.8 (persistence 76.8), h12 MAE 77.3 (persistence 133.9), h48 MAE 161.3 (persistence 391.7)
+/databricks/python/lib/python3.11/site-packages/mlflow/types/utils.py:393: UserWarning: Hint: Inferred schema contains integer column(s). Integer columns in Python cannot represent missing values. If your input data contains missing values at inference time, it will be encoded as floats and will cause a schema enforcement error. The best way to avoid this problem is to infer the model schema based on a realistic data sample (training dataset) that includes missing values. Alternatively, you can declare integer columns as doubles (float64) whenever these columns may have missing values. See `Handling Integers With Missing Values <https://www.mlflow.org/docs/latest/models.html#handling-integers-with-missing-values>`_ for more details.
+  warnings.warn(
+Registered model 'serverless_stable_2b9lj3_catalog.ml.nem_price_forecast_tas1' already exists. Creating a new version of this model...
+Created version '6' of model 'serverless_stable_2b9lj3_catalog.ml.nem_price_forecast_tas1'.
+TAS1 price: v6 | h6 MAE 17.1 (persistence 13.6), h12 MAE 20.1 (persistence 18.1), h48 MAE 31.7 (persistence 36.7)
+/databricks/python/lib/python3.11/site-packages/mlflow/types/utils.py:393: UserWarning: Hint: Inferred schema contains integer column(s). Integer columns in Python cannot represent missing values. If your input data contains missing values at inference time, it will be encoded as floats and will cause a schema enforcement error. The best way to avoid this problem is to infer the model schema based on a realistic data sample (training dataset) that includes missing values. Alternatively, you can declare integer columns as doubles (float64) whenever these columns may have missing values. See `Handling Integers With Missing Values <https://www.mlflow.org/docs/latest/models.html#handling-integers-with-missing-values>`_ for more details.
+  warnings.warn(
+Registered model 'serverless_stable_2b9lj3_catalog.ml.nem_demand_forecast_tas1' already exists. Creating a new version of this model...
+Created version '6' of model 'serverless_stable_2b9lj3_catalog.ml.nem_demand_forecast_tas1'.
+TAS1 demand: v6 | h6 MAE 20.0 (persistence 24.6), h12 MAE 27.9 (persistence 42.6), h48 MAE 55.2 (persistence 124.8)
 ```
 
 ## Cell 5

@@ -22,7 +22,7 @@ from pathlib import Path
 
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 MAX_CODE_LINES = 25
-MAX_OUTPUT_CHARS = 6000
+MAX_OUTPUT_CHARS = 20000
 
 
 def cli(profile: str, *args: str) -> dict:

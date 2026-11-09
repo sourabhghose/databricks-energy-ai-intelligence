@@ -9,9 +9,15 @@
 
 AI-powered market intelligence for the Australian National Electricity Market — built entirely on Databricks.
 
-> **Reviewers:** every step below links to the code that implements it and to the captured run output that proves it ran.
+> **Reviewers — start with [`EVIDENCE.md`](EVIDENCE.md)** (real notebook output cells, displayed query results and a captured API response)
+> **and [`GOVERNANCE.sql`](GOVERNANCE.sql)** (the Unity Catalog row filter, column mask, grants and CHECK constraints).
+> The governance is implemented in [`setup/30_governance.py`](setup/30_governance.py) and served live by
+> [`app/routers/governance.py`](app/routers/governance.py) (`GET /api/governance/status`); data-quality rules are in
+> [`pipelines/13_nemweb_bronze_to_gold.py`](pipelines/13_nemweb_bronze_to_gold.py).
+>
+> Every step below links to the code that implements it and to the captured run output that proves it ran.
 > All evidence was captured on 2026-11-09 on `fevm-serverless-stable-2b9lj3.cloud.databricks.com`
-> (catalog `serverless_stable_2b9lj3_catalog`). Start here: **[docs/evidence/README.md](https://github.com/sourabhghose/databricks-energy-ai-intelligence/blob/main/docs/evidence/README.md)**
+> (catalog `serverless_stable_2b9lj3_catalog`). Start here: **[docs/evidence/README.md](docs/evidence/README.md)**
 >
 > **Real notebook run outputs** (exported job runs with every cell's printed output): **[docs/evidence/runs/](docs/evidence/runs/README.md)**.
 > Start with the one-run summary [`docs/evidence/runs/evidence_verification_…md`](docs/evidence/runs/evidence_verification_evidence_verification_197619732568832.md),
@@ -21,11 +27,11 @@ AI-powered market intelligence for the Australian National Electricity Market �
 
 | # | Step | Implemented in | Proof it ran |
 |---|---|---|---|
-| 1 | **Ingest** real AEMO NEMWEB DispatchIS every 5 min → `bronze.nemweb_dispatch_price` | [`pipelines/01_nemweb_price_ingest.py`](https://github.com/sourabhghose/databricks-energy-ai-intelligence/blob/main/pipelines/01_nemweb_price_ingest.py), [`pipelines/nemweb_parse.py`](https://github.com/sourabhghose/databricks-energy-ai-intelligence/blob/main/pipelines/nemweb_parse.py) | [job runs](https://github.com/sourabhghose/databricks-energy-ai-intelligence/blob/main/docs/evidence/raw/job_runs.txt) |
-| 2 | **Data-quality rules** + quarantine + freshness rule → `gold.nem_prices_5min`, `gold.dq_results`, `gold.nem_prices_quarantine` | [`pipelines/13_nemweb_bronze_to_gold.py`](https://github.com/sourabhghose/databricks-energy-ai-intelligence/blob/main/pipelines/13_nemweb_bronze_to_gold.py) (`DQ_RULES`) | [DQ results](https://github.com/sourabhghose/databricks-energy-ai-intelligence/blob/main/docs/evidence/raw/data_quality.txt), [02_pipeline_runs.md](https://github.com/sourabhghose/databricks-energy-ai-intelligence/blob/main/docs/evidence/02_pipeline_runs.md) |
-| 3 | **Unity Catalog governance:** grants, row filter, column mask, CHECK constraints, tags, lineage | [`governance/unity_catalog_governance.sql`](https://github.com/sourabhghose/databricks-energy-ai-intelligence/blob/main/governance/unity_catalog_governance.sql), [`setup/30_governance.py`](https://github.com/sourabhghose/databricks-energy-ai-intelligence/blob/main/setup/30_governance.py) | [row-filter results](https://github.com/sourabhghose/databricks-energy-ai-intelligence/blob/main/docs/evidence/raw/rowfilter_as_trader.txt), [controls](https://github.com/sourabhghose/databricks-energy-ai-intelligence/blob/main/docs/evidence/raw/governance_controls.txt), [01_governance.md](https://github.com/sourabhghose/databricks-energy-ai-intelligence/blob/main/docs/evidence/01_governance.md) |
-| 4 | **Models:** LightGBM price/demand per region, held-out back-test vs persistence, registered in UC, live inference every 5 min | [`models/nem_forecast/train.py`](https://github.com/sourabhghose/databricks-energy-ai-intelligence/blob/main/models/nem_forecast/train.py), [`pipelines/05_forecast_pipeline.py`](https://github.com/sourabhghose/databricks-energy-ai-intelligence/blob/main/pipelines/05_forecast_pipeline.py) | [model registry + metrics](https://github.com/sourabhghose/databricks-energy-ai-intelligence/blob/main/docs/evidence/raw/models.txt), [03_models.md](https://github.com/sourabhghose/databricks-energy-ai-intelligence/blob/main/docs/evidence/03_models.md) |
-| 5 | **App + AI:** FastAPI/React Databricks App; Claude assistant with tools on gold, audit-logged; Genie spaces | [`app/routers/copilot.py`](https://github.com/sourabhghose/databricks-energy-ai-intelligence/blob/main/app/routers/copilot.py), [`app/routers/copilot_tools.py`](https://github.com/sourabhghose/databricks-energy-ai-intelligence/blob/main/app/routers/copilot_tools.py) | [assistant answer](https://github.com/sourabhghose/databricks-energy-ai-intelligence/blob/main/docs/evidence/raw/copilot_answer_0b7fc9b7.txt), [audit log](https://github.com/sourabhghose/databricks-energy-ai-intelligence/blob/main/docs/evidence/raw/copilot_interactions.txt), [Genie](https://github.com/sourabhghose/databricks-energy-ai-intelligence/blob/main/docs/evidence/raw/genie_conversation.json), [04_ai_assistant_and_genie.md](https://github.com/sourabhghose/databricks-energy-ai-intelligence/blob/main/docs/evidence/04_ai_assistant_and_genie.md) |
+| 1 | **Ingest** real AEMO NEMWEB DispatchIS every 5 min → `bronze.nemweb_dispatch_price` | [`pipelines/01_nemweb_price_ingest.py`](pipelines/01_nemweb_price_ingest.py), [`pipelines/nemweb_parse.py`](pipelines/nemweb_parse.py) | [job runs](docs/evidence/raw/job_runs.txt) |
+| 2 | **Data-quality rules** + quarantine + freshness rule → `gold.nem_prices_5min`, `gold.dq_results`, `gold.nem_prices_quarantine` | [`pipelines/13_nemweb_bronze_to_gold.py`](pipelines/13_nemweb_bronze_to_gold.py) (`DQ_RULES`) | [DQ results](docs/evidence/raw/data_quality.txt), [02_pipeline_runs.md](docs/evidence/02_pipeline_runs.md) |
+| 3 | **Unity Catalog governance:** grants, row filter, column mask, CHECK constraints, tags, lineage | [`GOVERNANCE.sql`](GOVERNANCE.sql), [`setup/30_governance.py`](setup/30_governance.py) | [row-filter results](docs/evidence/raw/rowfilter_as_trader.txt), [controls](docs/evidence/raw/governance_controls.txt), [01_governance.md](docs/evidence/01_governance.md) |
+| 4 | **Models:** LightGBM price/demand per region, held-out back-test vs persistence, registered in UC, live inference every 5 min | [`models/nem_forecast/train.py`](models/nem_forecast/train.py), [`pipelines/05_forecast_pipeline.py`](pipelines/05_forecast_pipeline.py) | [model registry + metrics](docs/evidence/raw/models.txt), [03_models.md](docs/evidence/03_models.md) |
+| 5 | **App + AI:** FastAPI/React Databricks App; Claude assistant with tools on gold, audit-logged; Genie spaces | [`app/routers/copilot.py`](app/routers/copilot.py), [`app/routers/copilot_tools.py`](app/routers/copilot_tools.py) | [assistant answer](docs/evidence/raw/copilot_answer_0b7fc9b7.txt), [audit log](docs/evidence/raw/copilot_interactions.txt), [Genie](docs/evidence/raw/genie_conversation.json), [04_ai_assistant_and_genie.md](docs/evidence/04_ai_assistant_and_genie.md) |
 
 ## Key evidence, inline
 
@@ -96,4 +102,4 @@ Built by **Beyza Yalavac** (beyza.yalavac@databricks.com) and **Sourabh Ghose** 
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT.
