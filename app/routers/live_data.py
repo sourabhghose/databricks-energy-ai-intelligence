@@ -13,7 +13,7 @@ from datetime import datetime as _dt
 
 from fastapi import APIRouter
 
-from .shared import _CATALOG, _query_gold
+from .shared import _sample_data, _CATALOG, _query_gold
 
 router = APIRouter()
 
@@ -102,6 +102,7 @@ def _facilities_data():
 # ===========================================================================
 
 @router.get("/api/nem-generation-mix/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def nem_generation_mix_dashboard():
     """NEM Generation Mix — matches NEGMDashboard interface."""
     rows = _generation_data()
@@ -265,6 +266,7 @@ def nem_generation_mix_dashboard():
 # ===========================================================================
 
 @router.get("/api/realtime/generation-mix")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def realtime_generation_mix():
     """Real-time generation mix — matches NemGenMixRecord[] interface."""
     rows = _generation_data()
@@ -291,6 +293,7 @@ def realtime_generation_mix():
 # ===========================================================================
 
 @router.get("/api/realtime/dispatch")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def realtime_dispatch():
     """Real-time dispatch — matches RegionalDispatch[] interface."""
     gen_rows = _generation_data()
@@ -340,6 +343,7 @@ def realtime_dispatch():
 # ===========================================================================
 
 @router.get("/api/natural-gas-trading/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def natural_gas_trading_dashboard():
     """Natural Gas Trading — matches NGTSDashboard interface."""
     try:
@@ -461,6 +465,7 @@ def natural_gas_trading_dashboard():
 # ===========================================================================
 
 @router.get("/api/market-anomaly-detection/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def market_anomaly_detection_dashboard():
     """Market Anomaly Detection — matches NEMADashboard interface."""
     try:
@@ -578,6 +583,7 @@ def market_anomaly_detection_dashboard():
 # ===========================================================================
 
 @router.get("/api/minimum-demand/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def minimum_demand_dashboard():
     """Minimum Demand dashboard — matches MinDemandDashboard interface."""
     rows = _demand_data()
@@ -716,6 +722,7 @@ def minimum_demand_dashboard():
 
 
 @router.get("/api/minimum-demand/duck-curve")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def minimum_demand_duck_curve():
     """Duck curve — matches DuckCurveProfile[] interface."""
     # Reuse the dashboard logic — duck_curve_profiles array
@@ -724,6 +731,7 @@ def minimum_demand_duck_curve():
 
 
 @router.get("/api/minimum-demand/negative-pricing")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def minimum_demand_negative_pricing():
     """Negative pricing — matches NegativePricingRecord[] interface."""
     dash = minimum_demand_dashboard()
@@ -731,6 +739,7 @@ def minimum_demand_negative_pricing():
 
 
 @router.get("/api/minimum-demand/records")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def minimum_demand_records():
     """Minimum demand records — matches MinimumDemandRecord[] interface."""
     dash = minimum_demand_dashboard()
@@ -742,6 +751,7 @@ def minimum_demand_records():
 # ===========================================================================
 
 @router.get("/api/gas-gen/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def gas_gen_dashboard():
     """Gas generation dashboard — matches GasGenEconomicsDashboard interface."""
     try:
@@ -858,6 +868,7 @@ def gas_gen_dashboard():
 
 
 @router.get("/api/gas-gen/generators")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def gas_gen_generators():
     """Gas generators — matches GasGeneratorRecord[] interface."""
     dash = gas_gen_dashboard()
@@ -865,6 +876,7 @@ def gas_gen_generators():
 
 
 @router.get("/api/gas-gen/spark-spreads")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def gas_gen_spark_spreads():
     """Spark spreads — matches SparkSpreadRecord[] interface."""
     dash = gas_gen_dashboard()
@@ -876,6 +888,7 @@ def gas_gen_spark_spreads():
 # ===========================================================================
 
 @router.get("/api/generator-capacity-adequacy/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def generator_capacity_adequacy_dashboard():
     """Generator capacity adequacy — matches NGCADashboard interface."""
     try:

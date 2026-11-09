@@ -11,9 +11,10 @@ from fastapi import APIRouter, Query
 from pydantic import BaseModel
 
 from .shared import (
+    _sample_data,
+    _no_real_data,
     _CATALOG,
     _NEM_REGIONS,
-    _REGION_BASE_PRICES,
     _insert_gold,
     _invalidate_cache,
     _query_gold,
@@ -88,45 +89,9 @@ async def bess_fleet():
                 "units": units,
             }
 
-    # Mock fallback
-    rng = random.Random(int(time.time() // 30))
-    base_units = [
-        {"duid": "HPRG1", "station_name": "Hornsdale Power Reserve", "region": "SA1", "capacity_mwh": 194, "power_mw": 150, "base_soc": 72.5, "mode": "discharging", "base_current_mw": 120.3, "cycles_today": 2, "revenue_today_aud": 45200, "efficiency_pct": 87.5},
-        {"duid": "WRSF1", "station_name": "Waratah Super Battery", "region": "NSW1", "capacity_mwh": 1680, "power_mw": 850, "base_soc": 58.3, "mode": "charging", "base_current_mw": -450.0, "cycles_today": 1, "revenue_today_aud": 89400, "efficiency_pct": 91.2},
-        {"duid": "VBBG1", "station_name": "Victorian Big Battery", "region": "VIC1", "capacity_mwh": 450, "power_mw": 300, "base_soc": 85.1, "mode": "standby", "base_current_mw": 0.0, "cycles_today": 3, "revenue_today_aud": 23100, "efficiency_pct": 88.9},
-        {"duid": "BSLD1", "station_name": "Bouldercombe Battery", "region": "QLD1", "capacity_mwh": 400, "power_mw": 200, "base_soc": 41.7, "mode": "discharging", "base_current_mw": 180.5, "cycles_today": 2, "revenue_today_aud": 31500, "efficiency_pct": 86.3},
-        {"duid": "TLSB1", "station_name": "Torrens Island BESS", "region": "SA1", "capacity_mwh": 500, "power_mw": 250, "base_soc": 63.4, "mode": "charging", "base_current_mw": -200.0, "cycles_today": 1, "revenue_today_aud": 37800, "efficiency_pct": 89.7},
-    ]
-    units = []
-    for u in base_units:
-        soc = round(u["base_soc"] + rng.uniform(-3, 3), 1)
-        current_mw = round(u["base_current_mw"] + rng.uniform(-5, 5), 1) if u["mode"] != "standby" else 0.0
-        units.append({
-            "duid": u["duid"], "station_name": u["station_name"], "region": u["region"],
-            "capacity_mwh": u["capacity_mwh"], "power_mw": u["power_mw"],
-            "soc_pct": soc, "mode": u["mode"], "current_mw": current_mw,
-            "cycles_today": u["cycles_today"], "revenue_today_aud": u["revenue_today_aud"],
-            "efficiency_pct": u["efficiency_pct"],
-        })
-    discharging = sum(1 for u in units if u["mode"] == "discharging")
-    charging = sum(1 for u in units if u["mode"] == "charging")
-    idle = sum(1 for u in units if u["mode"] == "standby")
-    total_soc = sum(u["soc_pct"] for u in units) / len(units)
-    total_rev = sum(u["revenue_today_aud"] for u in units)
-    return {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "total_capacity_mwh": sum(u["capacity_mwh"] for u in units),
-        "total_power_mw": sum(u["power_mw"] for u in units),
-        "units_discharging": discharging,
-        "units_charging": charging,
-        "units_idle": idle,
-        "fleet_avg_soc_pct": round(total_soc, 1),
-        "fleet_revenue_today_aud": total_rev,
-        "units": units,
-    }
+    _no_real_data("bess fleet")
 
 
-# --- 2. BESS Dispatch ---
 @router.get("/api/bess/dispatch", summary="BESS dispatch history", tags=["BESS"])
 async def bess_dispatch(
     duid: str = Query("HPRG1"),
@@ -172,29 +137,9 @@ async def bess_dispatch(
         if points:
             return points
 
-    # Mock fallback
-    now = datetime.now(timezone.utc)
-    rng = random.Random(hash(duid) + int(now.timestamp() // 30))
-    soc = rng.uniform(40, 80)
-    points = []
-    for i in range(count):
-        ts = now - timedelta(minutes=5 * (count - i))
-        mw = round(rng.uniform(-150, 150), 1)
-        soc = max(5, min(95, soc + mw * 5 / 60 / 194 * 100))
-        rrp = round(rng.uniform(30, 180), 2)
-        revenue = round(abs(mw) * rrp * 5 / 60, 2) if mw > 0 else 0.0
-        points.append({
-            "interval_datetime": ts.isoformat(),
-            "duid": duid,
-            "mw": mw,
-            "soc_pct": round(soc, 1),
-            "rrp_at_dispatch": rrp,
-            "revenue_aud": revenue,
-        })
-    return points
+    _no_real_data("bess dispatch")
 
 
-# --- 3. Weather/Demand ---
 @router.get("/api/weather/demand", summary="Weather-adjusted demand", tags=["Weather"])
 async def weather_demand(
     region: str = Query("NSW1"),
@@ -260,38 +205,11 @@ async def weather_demand(
             points.append(point)
         return points
 
-    # Mock fallback
-    now = datetime.now(timezone.utc)
-    rng = random.Random(hash(region) + int(now.timestamp() // 30))
-    base_demand = {"NSW1": 8500, "QLD1": 6200, "VIC1": 5800, "SA1": 1800, "TAS1": 1100}.get(region, 5000)
-    baseline_demand = {"NSW1": 8200, "QLD1": 6000, "VIC1": 5600, "SA1": 1700, "TAS1": 1050}.get(region, 4800)
-    points = []
-    for i in range(hours * 2):  # 30-min intervals
-        ts = now - timedelta(minutes=30 * (hours * 2 - i))
-        hour = (ts.hour + ts.minute / 60.0)
-        daily = math.sin((hour - 6) / 24 * 2 * math.pi) * base_demand * 0.2
-        demand = round(base_demand + daily + rng.gauss(0, base_demand * 0.03), 0)
-        temp = round(22 + 8 * math.sin((hour - 14) / 24 * 2 * math.pi) + rng.gauss(0, 1), 1)
-        apparent = round(temp + rng.uniform(0.5, 2.5), 1)
-        baseline = round(baseline_demand + daily * 0.9, 0)
-        solar_irr = round(max(0, 800 * math.sin(max(0, (hour - 6) / 12 * math.pi))) + rng.gauss(0, 30), 1) if 6 <= hour <= 18 else 0.0
-        wind = round(max(0, 15 + rng.gauss(0, 5)), 1)
-        points.append({
-            "timestamp": ts.isoformat(),
-            "region": region,
-            "temperature_c": temp,
-            "apparent_temp_c": apparent,
-            "demand_mw": demand,
-            "demand_baseline_mw": baseline,
-            "demand_deviation_mw": round(demand - baseline, 0),
-            "wind_speed_kmh": wind,
-            "solar_irradiance_wm2": solar_irr,
-        })
-    return points
+    _no_real_data("weather demand")
 
 
-# --- 4. Sustainability Dashboard ---
 @router.get("/api/sustainability/dashboard", summary="Sustainability metrics", tags=["Sustainability"])
+@_sample_data("Emissions factors and parts of the mix are illustrative")
 async def sustainability_dashboard(region: str = Query("NSW1")):
     """Return SustainabilityDashboard shape."""
     now = datetime.now(timezone.utc)
@@ -435,121 +353,16 @@ async def sustainability_intensity_history(
     except Exception as exc:
         logger.warning(f"intensity_history real-data failed: {exc}")
 
-    # Mock fallback
-    now = datetime.now(timezone.utc)
-    rng = random.Random(hash(region) + int(now.timestamp() // 30))
-    points = []
-    for i in range(hours * 2):
-        ts = now - timedelta(minutes=30 * (hours * 2 - i))
-        hour = ts.hour + ts.minute / 60.0
-        solar_factor = max(0, math.sin((hour - 6) / 12 * math.pi)) if 6 <= hour <= 18 else 0
-        base_intensity = 750 - solar_factor * 300
-        points.append({
-            "region": region,
-            "timestamp": ts.isoformat(),
-            "carbon_intensity_kg_co2_mwh": round(max(100, base_intensity + rng.gauss(0, 30)), 0),
-            "renewable_pct": round(min(90, max(10, 35 + solar_factor * 30 + rng.gauss(0, 3))), 0),
-            "fossil_pct": round(min(85, max(10, 65 - solar_factor * 30 + rng.gauss(0, 3))), 0),
-            "generation_mix": {"coal": 40, "gas": 15, "wind": 20, "solar": round(solar_factor * 25, 0), "hydro": 8, "battery": 5},
-        })
-    return points
+    _no_real_data("sustainability intensity history")
 
 
-# --- 6. Merit Order ---
 @router.get("/api/merit/order", summary="Merit order stack", tags=["Market Data"])
 async def merit_order(region: str = Query("NSW1")):
-    """Return MeritOrderCurve shape with units sorted by offer price."""
-    rng = random.Random(hash(region) + int(time.time() // 30))
-    now = datetime.now(timezone.utc)
-
-    if region not in _NEM_REGIONS:
-        region = "NSW1"
-
-    # Try real SCADA dispatch stack
-    cost_ranges = {"coal": (20, 45), "gas": (55, 120), "solar": (-60, 0), "wind": (-55, 5), "hydro": (10, 70), "battery": (0, 50)}
-    try:
-        scada_rows = _query_gold(f"""
-            SELECT s.duid, MAX(s.generation_MW) AS gen_mw,
-                   MAX(f.fuel_type) AS fuel_type, MAX(f.station_name) AS station_name,
-                   MAX(f.capacity_mw) AS capacity_mw
-            FROM {_CATALOG}.nemweb_analytics.silver_nem_dispatch_unit_scada s
-            LEFT JOIN {_CATALOG}.gold.nem_facilities f ON s.duid = f.duid
-            WHERE s.generation_MW > 1
-              AND s.interval >= current_timestamp() - INTERVAL 30 MINUTES
-            GROUP BY s.duid
-            ORDER BY gen_mw DESC
-            LIMIT 20
-        """)
-    except Exception:
-        scada_rows = None
-
-    if scada_rows and len(scada_rows) >= 3:
-        generators = []
-        for r in scada_rows:
-            ft = str(r.get("fuel_type") or "Unknown").lower()
-            fuel_key = "coal" if "coal" in ft else "gas" if "gas" in ft else "solar" if "solar" in ft else "wind" if "wind" in ft else "hydro" if "hydro" in ft else "battery" if "batter" in ft else "gas"
-            lo, hi = cost_ranges.get(fuel_key, (30, 80))
-            mc = round(rng.uniform(lo, hi), 1)
-            generators.append({
-                "duid": str(r.get("duid", "")),
-                "station_name": str(r.get("station_name") or r.get("duid", "Unknown")),
-                "fuel_type": str(r.get("fuel_type") or "Unknown"),
-                "region": region,
-                "capacity_mw": round(float(r.get("capacity_mw") or r.get("gen_mw") or 100), 0),
-                "marginal_cost_aud_mwh": mc,
-                "current_offer_price": round(mc + rng.uniform(0, 8), 1),
-                "dispatched_mw": round(float(r.get("gen_mw") or 0), 0),
-            })
-    else:
-        generators = [
-            {"duid": "ERGS1", "station_name": "Eraring", "fuel_type": "Black Coal", "region": "NSW1", "capacity_mw": 720, "fuel_key": "coal"},
-            {"duid": "BW01", "station_name": "Bayswater", "fuel_type": "Black Coal", "region": "NSW1", "capacity_mw": 660, "fuel_key": "coal"},
-            {"duid": "BAYSW3", "station_name": "Bayswater 3", "fuel_type": "Black Coal", "region": "NSW1", "capacity_mw": 660, "fuel_key": "coal"},
-            {"duid": "CALL_B_1", "station_name": "Callide B", "fuel_type": "Black Coal", "region": "QLD1", "capacity_mw": 700, "fuel_key": "coal"},
-            {"duid": "TALWA1", "station_name": "Tallawarra", "fuel_type": "Gas (CCGT)", "region": "NSW1", "capacity_mw": 435, "fuel_key": "gas"},
-            {"duid": "MOREESF1", "station_name": "Moree Solar Farm", "fuel_type": "Solar", "region": "NSW1", "capacity_mw": 56, "fuel_key": "solar"},
-            {"duid": "SNWYSF1", "station_name": "Snowy 2.0", "fuel_type": "Hydro", "region": "NSW1", "capacity_mw": 2040, "fuel_key": "hydro"},
-            {"duid": "HDWF1", "station_name": "Hornsdale Wind Farm", "fuel_type": "Wind", "region": "SA1", "capacity_mw": 315, "fuel_key": "wind"},
-            {"duid": "URANQ1", "station_name": "Uranquinty", "fuel_type": "Gas (CCGT)", "region": "NSW1", "capacity_mw": 664, "fuel_key": "gas"},
-            {"duid": "MACARTH1", "station_name": "Macarthur Wind", "fuel_type": "Wind", "region": "VIC1", "capacity_mw": 420, "fuel_key": "wind"},
-        ]
-        for g in generators:
-            lo, hi = cost_ranges.get(g["fuel_key"], (30, 80))
-            g["marginal_cost_aud_mwh"] = round(rng.uniform(lo, hi), 1)
-            g["current_offer_price"] = round(g["marginal_cost_aud_mwh"] + rng.uniform(0, 8), 1)
-            g["dispatched_mw"] = round(g["capacity_mw"] * rng.uniform(0.3, 1.0), 0)
-            del g["fuel_key"]
-
-    generators.sort(key=lambda x: x["current_offer_price"])
-    cumulative = 0
-    for g in generators:
-        cumulative += g["dispatched_mw"]
-        g["cumulative_mw"] = round(cumulative, 0)
-    demand = round(rng.uniform(7500, 9500), 0)
-    marginal_gen = None
-    smc = 0.0
-    for g in generators:
-        if g["cumulative_mw"] >= demand:
-            marginal_gen = g["duid"]
-            smc = g["current_offer_price"]
-            break
-    if marginal_gen is None:
-        marginal_gen = generators[-1]["duid"]
-        smc = generators[-1]["current_offer_price"]
-    for g in generators:
-        g["on_merit"] = g["cumulative_mw"] <= cumulative
-    return {
-        "region": region,
-        "timestamp": now.isoformat(),
-        "demand_mw": demand,
-        "marginal_generator": marginal_gen,
-        "system_marginal_cost": smc,
-        "total_supply_mw": round(cumulative, 0),
-        "units": generators,
-    }
+    """A real merit order needs unit-level dispatch (Dispatch_SCADA) and bid/offer data (BIDPEROFFER), neither of
+    which is ingested in this build; previously this served a hard-coded station list with random costs."""
+    _no_real_data("Merit order (unit dispatch and bid data not ingested)")
 
 
-# --- 7. Trading Dashboard ---
 @router.get("/api/trading/dashboard", summary="Trading P&L dashboard", tags=["Trading"])
 async def trading_dashboard():
     """Return TradingDashboard shape with positions and spreads from real trade + price data."""
@@ -651,32 +464,13 @@ async def trading_dashboard():
             "spreads": spreads,
         }
 
-    # Mock fallback
-    rng = random.Random(int(time.time() // 30))
-    products = ["Base Swap", "Peak Swap", "Cap $300", "Cap $500", "Asian Option", "CfD"]
-    traders = ["Desk-A", "Desk-B", "Desk-C", "Algo-1"]
-    counterparties = ["Origin Energy", "AGL", "EnergyAustralia", "Snowy Hydro", "Shell Energy"]
-    positions = []
-    total_long = total_short = total_pnl = 0
-    for i in range(rng.randint(6, 12)):
-        region = rng.choice(_NEM_REGIONS)
-        direction = rng.choice(["long", "short"])
-        vol = rng.choice([10, 25, 50, 100])
-        entry = round(rng.uniform(40, 150), 2)
-        current = round(entry * rng.uniform(0.8, 1.3), 2)
-        pnl = round((current - entry) * vol * 48, 2) if direction == "long" else round((entry - current) * vol * 48, 2)
-        if direction == "long": total_long += vol
-        else: total_short += vol
-        total_pnl += pnl
-        positions.append({"position_id": f"POS-{1000+i}", "trader": rng.choice(traders), "region": region, "product": rng.choice(products), "direction": direction, "volume_mw": vol, "entry_price_aud_mwh": entry, "current_price_aud_mwh": current, "pnl_aud": pnl, "open_date": (now - timedelta(days=rng.randint(1, 30))).strftime("%Y-%m-%d"), "expiry_date": (now + timedelta(days=rng.randint(7, 180))).strftime("%Y-%m-%d"), "counterparty": rng.choice(counterparties)})
-    return {"timestamp": now.isoformat(), "total_long_mw": total_long, "total_short_mw": total_short, "net_position_mw": total_long - total_short, "total_pnl_aud": round(total_pnl, 2), "daily_volume_mw": total_long + total_short, "regions_active": len(set(p["region"] for p in positions)), "positions": positions, "spreads": []}
+    _no_real_data("trading dashboard")
 
 
-# --- 8. Trading Positions ---
 @router.get("/api/trading/positions", summary="Open trading positions", tags=["Trading"])
 async def trading_positions():
     """Return TradingPosition[] from real trade data."""
-    now = datetime.now(timezone.utc)
+    datetime.now(timezone.utc)
     try:
         trade_rows = _query_gold(
             f"SELECT trade_id, region, product_type, direction, volume_mw, "
@@ -721,13 +515,9 @@ async def trading_positions():
             })
         return positions
 
-    # Mock fallback
-    rng = random.Random(int(time.time() // 30))
-    products = ["Base Swap", "Peak Swap", "Cap $300", "Cap $500", "Asian Option", "CfD"]
-    return [{"position_id": f"POS-{1000+i}", "trader": rng.choice(["Desk-A","Desk-B","Desk-C"]), "region": rng.choice(_NEM_REGIONS), "product": rng.choice(products), "direction": rng.choice(["long","short"]), "volume_mw": rng.choice([10,25,50,100]), "entry_price_aud_mwh": round(rng.uniform(40,150),2), "current_price_aud_mwh": round(rng.uniform(40,150),2), "pnl_aud": round(rng.uniform(-5000,5000),2), "open_date": (now - timedelta(days=rng.randint(1,30))).strftime("%Y-%m-%d"), "expiry_date": (now + timedelta(days=rng.randint(7,180))).strftime("%Y-%m-%d"), "counterparty": rng.choice(["Origin Energy","AGL","EnergyAustralia"])} for i in range(8)]
+    _no_real_data("trading positions")
 
 
-# --- 9. Trading Spreads ---
 @router.get("/api/trading/spreads", summary="Inter-region spreads", tags=["Trading"])
 async def trading_spreads():
     """Return RegionSpread[] matching frontend interface."""
@@ -785,36 +575,13 @@ async def trading_spreads():
         if spreads:
             return spreads
 
-    # Mock fallback
-    rng = random.Random(int(time.time() // 30))
-    interconnectors = {"NSW1-QLD1": "QNI", "VIC1-SA1": "Heywood", "NSW1-VIC1": "VNI", "QLD1-SA1": "Terranora", "VIC1-TAS1": "Basslink"}
-    pairs = [("NSW1", "QLD1"), ("VIC1", "SA1"), ("NSW1", "VIC1"), ("QLD1", "SA1"), ("VIC1", "TAS1")]
-    spreads = []
-    for r1, r2 in pairs:
-        b1 = _REGION_BASE_PRICES.get(r1, 70)
-        b2 = _REGION_BASE_PRICES.get(r2, 70)
-        spot_spread = round((b1 - b2) * rng.uniform(0.5, 2.0), 2)
-        cap = rng.choice([460, 700, 1000, 1350])
-        flow = round(cap * rng.uniform(0.3, 0.95), 0)
-        spreads.append({
-            "region_from": r1,
-            "region_to": r2,
-            "interconnector": interconnectors.get(f"{r1}-{r2}", "Unknown"),
-            "spot_spread_aud_mwh": spot_spread,
-            "forward_spread_aud_mwh": round(spot_spread * rng.uniform(0.7, 1.3), 2),
-            "flow_mw": flow,
-            "capacity_mw": cap,
-            "congestion_revenue_m_aud": round(abs(spot_spread) * flow / 1e6 * 24, 3),
-            "arbitrage_opportunity": abs(spot_spread) > 10,
-        })
-    return spreads
+    _no_real_data("trading spreads")
 
 
-# --- 10. Alerts ---
 @router.get("/api/alerts", summary="Active alerts", tags=["Alerts"])
 async def alerts_list():
     """Return Alert[] matching frontend interface — real NEMWEB data with mock fallback."""
-    now = datetime.now(timezone.utc)
+    datetime.now(timezone.utc)
     alerts: list[dict] = []
     real_data = False
 
@@ -966,45 +733,9 @@ async def alerts_list():
     except Exception as exc:
         logger.warning(f"alerts_list real-data failed: {exc}")
 
-    # --- Mock fallback ---
-    rng = random.Random(int(time.time() // 30))
-    alert_defs = [
-        {"region": "NSW1", "metric": "price", "threshold": 300, "type": "PRICE_SPIKE", "severity": "HIGH"},
-        {"region": "SA1", "metric": "frequency", "threshold": 49.85, "type": "PRICE_SPIKE", "severity": "MEDIUM"},
-        {"region": "QLD1", "metric": "demand", "threshold": 9000, "type": "LOW_RESERVE", "severity": "HIGH"},
-        {"region": "VIC1", "metric": "generation", "threshold": 200, "type": "PRICE_SPIKE", "severity": "MEDIUM"},
-        {"region": "NSW1", "metric": "interconnector", "threshold": 95, "type": "CONGESTION", "severity": "MEDIUM"},
-        {"region": "SA1", "metric": "battery_soc", "threshold": 15, "type": "LOW_RESERVE", "severity": "LOW"},
-        {"region": "VIC1", "metric": "carbon_intensity", "threshold": 0.9, "type": "PRICE_SPIKE", "severity": "LOW"},
-        {"region": "QLD1", "metric": "price", "threshold": 500, "type": "PRICE_SPIKE", "severity": "HIGH"},
-        {"region": "TAS1", "metric": "demand", "threshold": 1500, "type": "LOW_RESERVE", "severity": "MEDIUM"},
-        {"region": "SA1", "metric": "price", "threshold": 1000, "type": "EXTREME_PRICE", "severity": "CRITICAL"},
-        {"region": "NSW1", "metric": "demand", "threshold": 12000, "type": "LOW_RESERVE", "severity": "HIGH"},
-        {"region": "VIC1", "metric": "price", "threshold": 300, "type": "PRICE_SPIKE", "severity": "HIGH"},
-    ]
-    channels = ["SLACK", "EMAIL"]
-    mock_alerts = []
-    for i, a in enumerate(alert_defs):
-        triggered = rng.random() > 0.6
-        mock_alerts.append({
-            "id": f"ALT-{i + 1:03d}",
-            "type": a["type"],
-            "severity": a["severity"],
-            "region": a["region"],
-            "metric": a["metric"],
-            "threshold": a["threshold"],
-            "value": round(a["threshold"] * rng.uniform(1.01, 1.4), 2) if triggered else None,
-            "status": "triggered" if triggered else "armed",
-            "triggeredAt": (now - timedelta(hours=rng.uniform(0, 2))).isoformat() if triggered else None,
-            "message": f"{a['type']} alert in {a['region']}" if triggered else None,
-            "isActive": True,
-            "acknowledged": False,
-            "notificationChannel": rng.choice(channels),
-        })
-    return mock_alerts
+    _no_real_data("alerts list")
 
 
-# --- 11. Alert Stats ---
 @router.get("/api/alerts/stats", summary="Alert statistics", tags=["Alerts"])
 async def alerts_stats():
     """Return AlertStats matching frontend interface — derived from real NEMWEB data."""
@@ -1058,22 +789,11 @@ async def alerts_stats():
     except Exception as exc:
         logger.warning(f"alerts_stats real-data failed: {exc}")
 
-    # --- Mock fallback ---
-    rng = random.Random(int(time.time() // 30))
-    return {
-        "total_alerts": rng.randint(10, 20),
-        "triggered_last_24h": rng.randint(1, 6),
-        "critical_count": rng.randint(0, 2),
-        "high_count": rng.randint(2, 5),
-        "medium_count": rng.randint(3, 8),
-        "notifications_sent": rng.randint(3, 12),
-        "channels": ["SLACK", "EMAIL"],
-        "most_triggered_region": rng.choice(_NEM_REGIONS),
-    }
+    _no_real_data("alerts stats")
 
 
-# --- 12. Demand Response ---
 @router.get("/api/demand/response", summary="Demand response summary", tags=["Demand Response"])
+@_sample_data("No demand-response data ingested")
 async def demand_response(region: str = Query(None)):
     """Return DemandResponseSummary matching frontend interface."""
     rng = random.Random(int(time.time() // 30))
@@ -1113,6 +833,7 @@ async def demand_response(region: str = Query(None)):
 
 # --- 13. Market Notices ---
 @router.get("/api/market-events/dashboard", summary="NEM market events dashboard", tags=["Market Data"])
+@_sample_data("Event attribution fields are illustrative")
 async def market_events_dashboard():
     """Return MarketEventsDashboard matching frontend interface."""
     rng = random.Random(int(time.time() // 300))
@@ -1244,6 +965,7 @@ async def market_events_dashboard():
 
 
 @router.get("/api/surveillance/dashboard", summary="Market surveillance dashboard", tags=["Market Data"])
+@_sample_data("No bid/rebid data ingested; surveillance cases are illustrative")
 async def surveillance_dashboard():
     """Return SurveillanceDashboard matching frontend interface."""
     rng = random.Random(int(time.time() // 300))
@@ -1388,62 +1110,43 @@ async def market_notices():
             })
         return notices
 
-    # Mock fallback
-    rng = random.Random(int(time.time() // 30))
-    now = datetime.now(timezone.utc)
-    notice_types = [
-        ("PRICES UNCHANGED", "Inter-regional prices unchanged for {region}"),
-        ("MARKET INTERVENTION", "AEMO intervention event in {region}"),
-        ("RECLASSIFICATION", "Non-credible contingency reclassified as credible: {region} interconnector"),
-        ("GENERAL NOTICE", "Updated demand forecast for {region} trading interval"),
-        ("CONSTRAINTS", "Constraint set invoked: {region}_XFER_LIMIT"),
-        ("RESERVE NOTICE", "Lack of reserve level 1 (LOR1) in {region}"),
-        ("MARKET SYSTEMS", "Market system update — scheduled maintenance window"),
-    ]
-    notices = []
-    for i in range(rng.randint(5, 12)):
-        ntype, template = rng.choice(notice_types)
-        region = rng.choice(_NEM_REGIONS)
-        notices.append({
-            "id": f"MN-{50000 + rng.randint(0, 9999)}",
-            "type": ntype,
-            "severity": rng.choice(["info", "warning", "critical"]),
-            "message": template.format(region=region),
-            "issued_at": (now - timedelta(minutes=rng.uniform(5, 1440))).isoformat(),
-            "region": region,
-        })
-    notices.sort(key=lambda x: x["issued_at"], reverse=True)
-    return notices
+    _no_real_data("market notices")
 
 
-# --- 14. Live Ops Status ---
 @router.get("/api/live-ops/status", summary="System status overview", tags=["Live Ops"])
 async def live_ops_status():
-    """Return system status overview."""
-    rng = random.Random(int(time.time() // 30))
+    """Data-feed health from the freshness of the gold tables each feed writes (no simulated statuses)."""
     now = datetime.now(timezone.utc)
-    services = ["AEMO MMS", "AEMO NEMWeb", "AEMO NEMDE", "Price Feed", "Generation Feed", "Interconnector Feed", "Forecast Engine"]
+    feeds = (  # (service, table, timestamp column, max healthy age in minutes)
+        ("AEMO NEMWEB dispatch prices", "nem_prices_5min", "interval_datetime", 15),
+        ("Price forecasts (LightGBM)", "price_forecasts", "forecast_run_at", 15),
+        ("Demand forecasts (LightGBM)", "demand_forecasts", "forecast_run_at", 15),
+        ("Facility generation (OpenElectricity)", "facility_generation_ts", "interval_datetime", 90),
+        ("Data-quality checks", "dq_results", "run_ts", 15),
+    )
+    union = " UNION ALL ".join(
+        f"SELECT '{svc}' AS service, max({col}) AS last_ts FROM {_CATALOG}.gold.{tbl}" for svc, tbl, col, _ in feeds)
+    latest = {r["service"]: r["last_ts"] for r in (_query_gold(union) or [])}
     statuses = []
-    for svc in services:
-        up = rng.random() > 0.08
-        statuses.append({
-            "service": svc,
-            "status": "operational" if up else rng.choice(["degraded", "outage"]),
-            "latency_ms": round(rng.uniform(15, 250), 0) if up else None,
-            "last_check": (now - timedelta(seconds=rng.randint(5, 120))).isoformat(),
-        })
-    # Get real notice count from last 24h
-    notice_count_rows = _query_gold(f"""
-        SELECT COUNT(*) AS cnt
-        FROM {_CATALOG}.gold.nem_market_notices
+    for svc, _, _, healthy_min in feeds:
+        last = latest.get(svc)
+        last_dt = datetime.fromisoformat(str(last).replace("Z", "+00:00").replace(" ", "T")) if last else None
+        if last_dt and last_dt.tzinfo is None:
+            last_dt = last_dt.replace(tzinfo=timezone.utc)
+        age = (now - last_dt).total_seconds() / 60 if last_dt else None
+        status = ("operational" if age is not None and age <= healthy_min else
+                  "degraded" if age is not None and age <= healthy_min * 4 else "outage")
+        statuses.append({"service": svc, "status": status, "latency_ms": None,
+                         "last_check": now.isoformat(), "last_data_utc": last_dt.isoformat() if last_dt else None,
+                         "data_age_minutes": round(age, 1) if age is not None else None})
+    notice_rows = _query_gold(f"""
+        SELECT COUNT(*) AS cnt FROM {_CATALOG}.gold.nem_market_notices
         WHERE effective_date >= current_timestamp() - INTERVAL 24 HOURS
     """)
-    active_notices = int((notice_count_rows[0] if notice_count_rows else {}).get("cnt") or rng.randint(2, 8))
-
     return {
         "overall": "operational" if all(s["status"] == "operational" for s in statuses) else "degraded",
         "services": statuses,
-        "active_market_notices": active_notices,
+        "active_market_notices": int((notice_rows[0] if notice_rows else {}).get("cnt") or 0),
         "nem_trading_interval": now.strftime("%Y-%m-%dT%H:%M:00Z"),
     }
 
@@ -1494,43 +1197,9 @@ async def market_notices_frontend(severity: str = Query(None), notice_type: str 
                 break
         return notices
 
-    # Mock fallback
-    rng = random.Random(int(time.time() // 30))
-    now = datetime.now(timezone.utc)
-    notice_types = [
-        ("PRICES UNCHANGED", "Inter-regional prices unchanged"),
-        ("MARKET INTERVENTION", "AEMO intervention event"),
-        ("RECLASSIFICATION", "Non-credible contingency reclassified as credible"),
-        ("GENERAL NOTICE", "Updated demand forecast for trading interval"),
-        ("CONSTRAINTS", "Constraint set invoked"),
-        ("RESERVE NOTICE", "Lack of reserve level (LOR) declared"),
-        ("MARKET SYSTEMS", "Market system update — scheduled maintenance window"),
-    ]
-    severities = ["info", "warning", "critical"]
-    notices = []
-    for i in range(min(limit, rng.randint(8, 18))):
-        ntype_label, reason_base = rng.choice(notice_types)
-        affected = rng.sample(_NEM_REGIONS, rng.randint(1, 3))
-        sev = rng.choice(severities)
-        if severity and sev != severity:
-            continue
-        if notice_type and ntype_label != notice_type:
-            continue
-        notices.append({
-            "notice_id": f"MN-{50000 + rng.randint(0, 9999)}",
-            "notice_type": ntype_label,
-            "creation_date": (now - timedelta(minutes=rng.uniform(5, 2880))).isoformat(),
-            "external_reference": f"AEMO-{rng.randint(10000, 99999)}",
-            "reason": f"{reason_base} for {', '.join(affected)}",
-            "regions_affected": affected,
-            "severity": sev,
-            "resolved": rng.random() > 0.4,
-        })
-    notices.sort(key=lambda x: x["creation_date"], reverse=True)
-    return notices
+    _no_real_data("market notices frontend")
 
 
-# --- Dispatch Intervals ---
 @router.get("/api/dispatch/intervals", summary="Dispatch interval analysis", tags=["Market Data"])
 async def dispatch_intervals(region: str = Query("NSW1"), count: int = Query(12)):
     """Return DispatchSummary matching frontend interface."""
@@ -1578,41 +1247,9 @@ async def dispatch_intervals(region: str = Query("NSW1"), count: int = Query(12)
             "surprise_intervals": surprise_count,
         }
 
-    # Fallback to mock
-    rng = random.Random(hash(region) + int(time.time() // 30))
-    now = datetime.now(timezone.utc)
-    base_price = _REGION_BASE_PRICES.get(region, 70.0)
-    intervals = []
-    deviations = []
-    for i in range(safe_count):
-        ts = now - timedelta(minutes=5 * (safe_count - i))
-        rrp = round(base_price + rng.gauss(0, base_price * 0.15), 2)
-        pd_rrp = round(rrp + rng.gauss(0, 10), 2)
-        dev = round(rrp - pd_rrp, 2)
-        deviations.append(abs(dev))
-        intervals.append({
-            "interval_datetime": ts.isoformat(),
-            "region": region,
-            "rrp": rrp,
-            "predispatch_rrp": pd_rrp,
-            "rrp_deviation": dev,
-            "totaldemand": round(rng.uniform(5000, 10000), 0),
-            "dispatchablegeneration": round(rng.uniform(6000, 12000), 0),
-            "net_interchange": round(rng.uniform(-500, 500), 0),
-            "lower_reg_mw": round(rng.uniform(100, 400), 0),
-        })
-    max_dev = max(deviations) if deviations else 0
-    surprise_count = sum(1 for d in deviations if d > base_price * 0.1)
-    return {
-        "region": region,
-        "intervals": intervals,
-        "mean_deviation": round(sum(deviations) / len(deviations), 2) if deviations else 0,
-        "max_surprise": round(max_dev, 2),
-        "surprise_intervals": surprise_count,
-    }
+    _no_real_data("dispatch intervals")
 
 
-# --- Settlement Summary ---
 @router.get("/api/settlement/summary", summary="Settlement records", tags=["Market Data"])
 async def settlement_summary():
     """Return SettlementRecord[] matching frontend interface."""
@@ -1628,7 +1265,6 @@ async def settlement_summary():
         ORDER BY region_id, interval_datetime
     """)
     if rows and len(rows) > 5:
-        rng = random.Random(42)
         records = []
         for r in rows:
             records.append({
@@ -1637,36 +1273,16 @@ async def settlement_summary():
                 "totaldemand_mw": round(float(r.get("total_demand_mw") or 0), 0),
                 "net_interchange_mw": round(float(r.get("net_interchange_mw") or 0), 0),
                 "rrp_aud_mwh": round(float(r["rrp"]), 2),
-                "raise_reg_rrp": round(rng.uniform(5, 25), 2),
-                "lower_reg_rrp": round(rng.uniform(3, 15), 2),
-                "raise6sec_rrp": round(rng.uniform(2, 20), 2),
-                "lower6sec_rrp": round(rng.uniform(1, 12), 2),
+                "raise_reg_rrp": None,  # FCAS not ingested
+                "lower_reg_rrp": None,  # FCAS not ingested
+                "raise6sec_rrp": None,  # FCAS not ingested
+                "lower6sec_rrp": None,  # FCAS not ingested
             })
         return records
 
-    # Fallback to mock
-    rng = random.Random(int(time.time() // 30))
-    now = datetime.now(timezone.utc)
-    records = []
-    for region in _NEM_REGIONS:
-        base = _REGION_BASE_PRICES.get(region, 70.0)
-        for i in range(6):
-            ts = now - timedelta(minutes=30 * (6 - i))
-            records.append({
-                "trading_interval": ts.isoformat(),
-                "region": region,
-                "totaldemand_mw": round(rng.uniform(4000, 12000), 0),
-                "net_interchange_mw": round(rng.uniform(-600, 600), 0),
-                "rrp_aud_mwh": round(base + rng.gauss(0, base * 0.2), 2),
-                "raise_reg_rrp": round(rng.uniform(5, 25), 2),
-                "lower_reg_rrp": round(rng.uniform(3, 15), 2),
-                "raise6sec_rrp": round(rng.uniform(2, 20), 2),
-                "lower6sec_rrp": round(rng.uniform(1, 12), 2),
-            })
-    return records
+    _no_real_data("settlement summary")
 
 
-# --- Alert History ---
 @router.get("/api/alerts/history", summary="Alert trigger history", tags=["Alerts"])
 async def alert_history(region: str = Query(None), hours_back: int = Query(24)):
     """Return AlertTriggerEvent[] matching frontend interface — real NEMWEB data with mock fallback."""
@@ -1747,32 +1363,9 @@ async def alert_history(region: str = Query(None), hours_back: int = Query(24)):
     except Exception as exc:
         logger.warning(f"alert_history real-data failed: {exc}")
 
-    # --- Mock fallback ---
-    rng = random.Random(int(time.time() // 30))
-    now = datetime.now(timezone.utc)
-    alert_types = ["PRICE_SPIKE", "EXTREME_PRICE", "NEGATIVE_PRICE", "LOW_RESERVE", "CONGESTION"]
-    events = []
-    for i in range(rng.randint(5, 15)):
-        r = region if region else rng.choice(_NEM_REGIONS)
-        at = rng.choice(alert_types)
-        threshold = round(rng.uniform(100, 1000), 0)
-        events.append({
-            "event_id": f"ATE-{i + 1:04d}",
-            "alert_id": f"ALT-{rng.randint(1, 12):03d}",
-            "triggered_at": (now - timedelta(hours=rng.uniform(0, hours_back))).isoformat(),
-            "resolved_at": (now - timedelta(hours=rng.uniform(0, hours_back * 0.8))).isoformat(),
-            "region": r,
-            "alert_type": at,
-            "threshold": threshold,
-            "actual_value": round(threshold * rng.uniform(1.01, 1.5), 2),
-            "notification_sent": rng.random() > 0.1,
-            "channel": rng.choice(["SLACK", "EMAIL", "IN_APP"]),
-        })
-    events.sort(key=lambda x: x["triggered_at"], reverse=True)
-    return events
+    _no_real_data("alert history")
 
 
-# --- Forecast Summary ---
 @router.get("/api/forecasts/summary", summary="Forecast model summary", tags=["Forecasts"])
 async def forecast_summary():
     """Return ForecastSummary matching frontend interface."""
@@ -1833,24 +1426,9 @@ async def forecast_summary():
     except Exception as exc:
         logger.warning(f"forecast_summary real-data failed: {exc}")
 
-    # Mock fallback
-    rng = random.Random(int(time.time() // 300))
-    return {
-        "regions": list(_NEM_REGIONS),
-        "horizons_available": [1, 4, 12, 24, 48],
-        "models_loaded": rng.randint(8, 15),
-        "avg_confidence": round(rng.uniform(0.72, 0.92), 2),
-        "price_mape_1hr": round(rng.uniform(3, 8), 1),
-        "price_mape_4hr": round(rng.uniform(6, 14), 1),
-        "price_mape_24hr": round(rng.uniform(12, 25), 1),
-        "demand_mape_1hr": round(rng.uniform(1.5, 4), 1),
-        "demand_mape_4hr": round(rng.uniform(3, 7), 1),
-        "demand_mape_24hr": round(rng.uniform(5, 12), 1),
-        "last_evaluation": datetime.now(timezone.utc).isoformat(),
-    }
+    _no_real_data("forecast summary")
 
 
-# --- Forecast Accuracy ---
 @router.get("/api/forecasts/accuracy", summary="Forecast accuracy by region", tags=["Forecasts"])
 async def forecast_accuracy(region: str = Query("NSW1")):
     """Return AccuracyRow[] matching frontend interface: [{horizon, mae, mape}]."""
@@ -1893,21 +1471,16 @@ async def forecast_accuracy(region: str = Query("NSW1")):
     except Exception as exc:
         logger.warning(f"forecast_accuracy real-data failed: {exc}")
 
-    # Mock fallback
-    rng = random.Random(hash(region) + int(time.time() // 300))
-    return [
-        {"horizon": "1hr",  "mae": round(8 + rng.uniform(-2, 4), 1),  "mape": round(6 + rng.uniform(-1, 4), 1)},
-        {"horizon": "4hr",  "mae": round(12 + rng.uniform(-2, 4), 1), "mape": round(10 + rng.uniform(-1, 4), 1)},
-        {"horizon": "24hr", "mae": round(17 + rng.uniform(-3, 5), 1), "mape": round(15 + rng.uniform(-2, 4), 1)},
-    ]
+    _no_real_data("forecast accuracy")
 
 
-# --- Constraints ---
 @router.get("/api/constraints", summary="Binding constraints", tags=["Market Data"])
 async def constraints(region: str = Query("NSW1"), hours_back: int = Query(24), binding_only: str = Query("true")):
     """Return ConstraintRecord[] matching frontend interface."""
     safe_hours = min(max(1, hours_back), 168)
     binding_filter = "AND is_binding = true" if binding_only == "true" else ""
+    if region != "NEM" and region not in _NEM_REGIONS:
+        region = "NSW1"  # whitelist: never interpolate an unvalidated query parameter into SQL
     region_filter = f"AND region = '{region}'" if region != "NEM" else ""
 
     try:
@@ -1936,28 +1509,9 @@ async def constraints(region: str = Query("NSW1"), hours_back: int = Query(24), 
             for r in rows
         ]
 
-    # Mock fallback
-    rng = random.Random(hash(region) + int(time.time() // 30))
-    now = datetime.now(timezone.utc)
-    constraint_names = [
-        f"{region}_XFER_LIMIT", "N_Q_MNSP1_LIMIT", "V_SA_FLOW_LIMIT",
-        f"SYSTEM_NORMAL_{region}", "N_NIL_CLWP_LIMIT", "V_T_FLOW_LIMIT",
-    ]
-    records = []
-    for i in range(rng.randint(4, 10)):
-        ts = now - timedelta(hours=rng.uniform(0, hours_back))
-        mv = round(rng.uniform(0, 150), 2)
-        records.append({
-            "interval_datetime": ts.isoformat(),
-            "constraintid": rng.choice(constraint_names),
-            "rhs": round(rng.uniform(200, 1500), 0),
-            "marginalvalue": mv,
-            "violationdegree": round(rng.uniform(0, 20), 2) if mv > 50 else 0.0,
-        })
-    return records
+    _no_real_data("binding constraints")
 
 
-# --- FCAS Market (E7 — wired to real data) ---
 _FCAS_SERVICES = [
     {"service": "RAISE6SEC", "service_name": "Raise 6-Second", "direction": "RAISE", "type": "CONTINGENCY"},
     {"service": "RAISE60SEC", "service_name": "Raise 60-Second", "direction": "RAISE", "type": "CONTINGENCY"},
@@ -1977,216 +1531,10 @@ _FCAS_PRICE_FACTORS = {
 
 
 def _build_fcas_dashboard(region: str = "NSW1") -> Dict:
-    """Build FCAS market dashboard from real gold table data."""
-    now = datetime.now(timezone.utc)
-
-    # Get spot price and volatility to derive FCAS service prices
-    price_data = _query_gold(f"""
-        SELECT AVG(rrp) AS avg_price, STDDEV(rrp) AS price_vol,
-               MAX(rrp) AS max_price, MIN(rrp) AS min_price,
-               AVG(total_demand_mw) AS avg_demand
-        FROM {_CATALOG}.gold.nem_prices_5min
-        WHERE region_id = '{region}'
-          AND interval_datetime >= current_timestamp() - INTERVAL 24 HOURS
-    """)
-
-    # Get FCAS-capable facilities
-    facility_rows = _query_gold(f"""
-        SELECT duid, station_name, fuel_type, region_id AS region, capacity_mw
-        FROM {_CATALOG}.gold.nem_facilities
-        WHERE LOWER(fuel_type) IN ({','.join(repr(f) for f in _FCAS_CAPABLE_FUELS)})
-          AND region_id = '{region}'
-        ORDER BY capacity_mw DESC
-        LIMIT 30
-    """)
-
-    # Get latest generation from FCAS-capable units
-    gen_rows = _query_gold(f"""
-        SELECT fuel_type, SUM(total_mw) AS total_mw
-        FROM {_CATALOG}.gold.nem_generation_by_fuel
-        WHERE region_id = '{region}'
-          AND LOWER(fuel_type) IN ({','.join(repr(f) for f in _FCAS_CAPABLE_FUELS)})
-          AND interval_datetime = (SELECT MAX(interval_datetime) FROM {_CATALOG}.gold.nem_generation_by_fuel WHERE region_id = '{region}')
-        GROUP BY fuel_type
-    """)
-
-    rng = random.Random(hash(region) + int(time.time() // 60))
-
-    if price_data and price_data[0].get("avg_price"):
-        avg_price = float(price_data[0]["avg_price"])
-        price_vol = float(price_data[0].get("price_vol") or 20)
-        max_price = float(price_data[0].get("max_price") or avg_price * 2)
-        min_price = float(price_data[0].get("min_price") or 0)
-        avg_demand = float(price_data[0].get("avg_demand") or 7000)
-    else:
-        avg_price = _REGION_BASE_PRICES.get(region, 70)
-        price_vol = 20
-        max_price = avg_price * 2
-        min_price = max(0, avg_price * 0.3)
-        avg_demand = 7000
-
-    # Volatility factor: higher vol → higher FCAS prices
-    vol_factor = 1 + min(price_vol / 100, 1.5)
-
-    # Try real FCAS prices from gold_nem_fcas_prices (nemweb-accelerator pipeline)
-    real_fcas_prices: Dict[str, Dict[str, float]] = {}  # service -> {avg, max, min}
-    try:
-        _fcas_rows = _query_gold(f"""
-            SELECT service,
-                   AVG(clearing_price_aud_mw) AS avg_price,
-                   MAX(clearing_price_aud_mw) AS max_price,
-                   MIN(clearing_price_aud_mw) AS min_price
-            FROM {_CATALOG}.nemweb_analytics.gold_nem_fcas_prices
-            WHERE region_id = '{region}'
-              AND interval_datetime >= current_timestamp() - INTERVAL 24 HOURS
-            GROUP BY service
-        """)
-        if _fcas_rows:
-            for r in _fcas_rows:
-                svc_name = r.get("service", "")
-                if svc_name:
-                    real_fcas_prices[svc_name] = {
-                        "avg": float(r.get("avg_price") or 0),
-                        "max": float(r.get("max_price") or 0),
-                        "min": float(r.get("min_price") or 0),
-                    }
-    except Exception:
-        pass  # Fall back to heuristic derivation
-
-    # Derive 8 FCAS service prices
-    services = []
-    total_fcas_cost = 0
-    regulation_cost = 0
-    contingency_cost = 0
-    total_enabled = 0
-
-    for svc in _FCAS_SERVICES:
-        # Use real FCAS price if available, else derive heuristically
-        real = real_fcas_prices.get(svc["service"])
-        if real and real["avg"] > 0:
-            clearing = round(real["avg"], 2)
-        else:
-            lo, hi = _FCAS_PRICE_FACTORS[svc["service"]]
-            base_clearing = avg_price * rng.uniform(lo, hi) * vol_factor
-            clearing = round(max(1.0, base_clearing), 2)
-
-        # Requirements based on demand
-        if svc["direction"] == "RAISE":
-            req_mw = round(avg_demand * rng.uniform(0.04, 0.06), 0)
-        else:
-            req_mw = round(avg_demand * rng.uniform(0.025, 0.04), 0)
-
-        enabled_mw = round(req_mw * rng.uniform(0.85, 1.15), 0)
-        cost = clearing * enabled_mw
-        total_fcas_cost += cost
-        if svc["type"] == "REGULATION":
-            regulation_cost += cost
-        else:
-            contingency_cost += cost
-        total_enabled += enabled_mw
-
-        # Top provider from facilities
-        main_prov = "Unknown"
-        if facility_rows:
-            preferred = [f for f in facility_rows
-                         if svc["type"] == "REGULATION" and f.get("fuel_type", "").lower() in ("battery", "hydro")]
-            if not preferred:
-                preferred = facility_rows[:5]
-            main_prov = rng.choice(preferred)["station_name"] if preferred else "Unknown"
-
-        real = real_fcas_prices.get(svc["service"])
-        max_clearing = round(real["max"], 2) if real and real["max"] > 0 else round(clearing * rng.uniform(1.5, 4.0), 2)
-        min_clearing = round(real["min"], 2) if real and real["min"] > 0 else round(clearing * rng.uniform(0.2, 0.6), 2)
-
-        services.append({
-            **svc,
-            "clearing_price_aud_mw": clearing,
-            "volume_mw": enabled_mw,
-            "requirement_mw": req_mw,
-            "enabled_mw": enabled_mw,
-            "utilisation_pct": round(enabled_mw / max(req_mw, 1) * 100, 1),
-            "max_clearing_today": max_clearing,
-            "min_clearing_today": min_clearing,
-            "main_provider": main_prov,
-        })
-
-    # Build provider list from facilities (match FcasProvider interface)
-    providers = []
-    if facility_rows:
-        gen_by_fuel = {}
-        if gen_rows:
-            for g in gen_rows:
-                gen_by_fuel[g["fuel_type"].lower()] = float(g["total_mw"] or 0)
-
-        avg_svc_price = sum(s["clearing_price_aud_mw"] for s in services) / max(len(services), 1)
-        for f in facility_rows[:20]:
-            cap = float(f.get("capacity_mw") or 0)
-            ft = str(f.get("fuel_type", "")).lower()
-            if ft in ("battery", "hydro"):
-                svc_enabled = ["RAISE6SEC", "RAISE60SEC", "RAISE5MIN", "RAISEREG",
-                               "LOWER6SEC", "LOWER60SEC", "LOWER5MIN", "LOWERREG"]
-            else:
-                svc_enabled = ["RAISE6SEC", "RAISE60SEC", "RAISE5MIN", "LOWER6SEC", "LOWER60SEC", "LOWER5MIN"]
-
-            raise_mw = round(cap * rng.uniform(0.3, 0.6), 0)
-            lower_mw = round(cap * rng.uniform(0.2, 0.5), 0)
-            reg_mw = round(cap * rng.uniform(0.1, 0.3), 0) if ft in ("battery", "hydro") else 0
-            cont_mw = round(raise_mw + lower_mw - reg_mw, 0)
-            rev_today = round((raise_mw + lower_mw) * avg_svc_price * rng.uniform(0.3, 0.7), 0)
-
-            providers.append({
-                "duid": f["duid"],
-                "station_name": f["station_name"],
-                "fuel_type": f.get("fuel_type", "unknown"),
-                "region": f.get("region", region),
-                "services_enabled": svc_enabled,
-                "raise_mw": raise_mw,
-                "lower_mw": lower_mw,
-                "regulation_mw": reg_mw,
-                "contingency_mw": cont_mw,
-                "revenue_today_aud": rev_today,
-                "cost_per_mw": round(avg_svc_price * rng.uniform(0.8, 1.3), 2),
-            })
-
-    # Trap records (match FcasTrapRecord interface)
-    trap_records = []
-    _trap_types = ["CAUSER_PAYS", "NON_CONFORMANCE", "SHORTFALL"]
-    for i in range(rng.randint(1, 4)):
-        prov = rng.choice(providers) if providers else None
-        trap_records.append({
-            "duid": prov["duid"] if prov else f"GEN-{i}",
-            "station_name": prov["station_name"] if prov else "Unknown",
-            "region": prov["region"] if prov else region,
-            "service": rng.choice(["RAISE6SEC", "RAISEREG", "LOWER6SEC"]),
-            "trap_type": rng.choice(_trap_types),
-            "constraint_id": f"F_T_{region}_{rng.randint(1000, 9999)}",
-            "mw_limited": round(rng.uniform(5, 40), 0),
-            "revenue_foregone_est": round(rng.uniform(500, 10000), 0),
-            "period": (now - timedelta(hours=rng.uniform(0, 48))).strftime("%Y-%m-%d %H:%M"),
-        })
-
-    # Regional requirements
-    regional_req = []
-    for r in _NEM_REGIONS:
-        r_demand = avg_demand if r == region else avg_demand * rng.uniform(0.6, 1.2)
-        regional_req.append({
-            "region": r,
-            "raise_req_mw": round(r_demand * 0.05, 0),
-            "lower_req_mw": round(r_demand * 0.03, 0),
-        })
-
-    return {
-        "timestamp": now.isoformat(),
-        "total_fcas_cost_today_aud": round(total_fcas_cost, 0),
-        "regulation_cost_aud": round(regulation_cost, 0),
-        "contingency_cost_aud": round(contingency_cost, 0),
-        "total_enabled_mw": round(total_enabled, 0),
-        "shortfall_risk": "LOW" if total_enabled > avg_demand * 0.04 else "MEDIUM",
-        "services": services,
-        "providers": providers,
-        "trap_records": trap_records,
-        "regional_requirement": regional_req,
-    }
+    """FCAS prices/enablement are not ingested in this build (gold.nem_fcas_prices is empty); the previous version
+    derived FCAS prices from energy prices with random factors. FCAS RRPs are published in NEMWEB DispatchIS
+    PRICE rows and are the planned next ingest."""
+    _no_real_data("FCAS market (FCAS prices not ingested)")
 
 
 @router.get("/api/fcas/market", summary="FCAS market dashboard", tags=["Market Data"])
@@ -2225,6 +1573,7 @@ from .settlement import _build_settlement_reconciliation  # noqa: F401
 
 # --- DSP Dashboard ---
 @router.get("/api/dsp/dashboard", summary="DSP dashboard", tags=["Demand Response"])
+@_sample_data("No DSP programme data ingested")
 async def dsp_dashboard():
     """Return DspDashboard matching frontend interface."""
     rng = random.Random(int(time.time() // 30))
@@ -2295,7 +1644,6 @@ async def dsp_dashboard():
 @router.get("/api/realtime-ops/dashboard", summary="Realtime ops dashboard", tags=["Live Ops"])
 async def realtime_ops_dashboard():
     """Return RealtimeOpsDashboard matching frontend interface."""
-    rng = random.Random(int(time.time() // 30))
     now = datetime.now(timezone.utc)
 
     # --- Try real data for regions ---
@@ -2344,49 +1692,15 @@ async def realtime_ops_dashboard():
                 "rooftop_solar_mw": round(solar_mw * 0.3, 0),  # Estimate rooftop as ~30% of total solar
                 "net_interchange_mw": round(nic, 0),
                 "spot_price_aud_mwh": round(price, 2),
-                "frequency_hz": round(50 + rng.gauss(0, 0.02), 3),
+                "frequency_hz": None,  # not ingested (AEMO frequency data)
                 "reserve_mw": round(max(0, gen - demand), 0),
                 "generation_mix": mix,
             })
 
     if not regions:
-        # Fallback to mock
-        region_configs = {
-            "NSW1": {"demand": 8500, "gen": 9200, "pv": 1800, "base_price": 85},
-            "QLD1": {"demand": 6200, "gen": 6800, "pv": 2200, "base_price": 72},
-            "VIC1": {"demand": 5800, "gen": 6100, "pv": 1200, "base_price": 58},
-            "SA1":  {"demand": 1800, "gen": 2100, "pv": 900,  "base_price": 81},
-            "TAS1": {"demand": 1100, "gen": 1300, "pv": 100,  "base_price": 42},
-        }
-        fuel_bases = {
-            "NSW1": {"coal": 4800, "gas": 800, "wind": 1200, "solar": 1400, "hydro": 700, "battery": 300},
-            "QLD1": {"coal": 3600, "gas": 600, "wind": 500,  "solar": 1500, "hydro": 200, "battery": 400},
-            "VIC1": {"coal": 3200, "gas": 500, "wind": 1600, "solar": 400,  "hydro": 200, "battery": 200},
-            "SA1":  {"gas": 500,   "wind": 900, "solar": 400, "battery": 300},
-            "TAS1": {"hydro": 900, "wind": 250, "gas": 50,    "solar": 100},
-        }
-        for reg, cfg in region_configs.items():
-            demand = round(cfg["demand"] + rng.gauss(0, cfg["demand"] * 0.04), 0)
-            gen = round(cfg["gen"] + rng.gauss(0, cfg["gen"] * 0.03), 0)
-            pv = round(cfg["pv"] * rng.uniform(0.3, 1.0), 0)
-            price = round(cfg["base_price"] + rng.gauss(0, cfg["base_price"] * 0.2), 2)
-            mix = {}
-            for fuel, base_mw in fuel_bases.get(reg, {}).items():
-                mix[fuel] = round(base_mw * rng.uniform(0.6, 1.2), 0)
-            regions.append({
-                "region": reg,
-                "timestamp": now.isoformat(),
-                "total_demand_mw": demand,
-                "generation_mw": gen,
-                "rooftop_solar_mw": pv,
-                "net_interchange_mw": round(gen - demand, 0),
-                "spot_price_aud_mwh": price,
-                "frequency_hz": round(50 + rng.gauss(0, 0.02), 3),
-                "reserve_mw": round(max(0, gen - demand + rng.uniform(200, 800)), 0),
-                "generation_mix": mix,
-            })
+        _no_real_data("real-time operations dashboard")
 
-    # Interconnectors — real or mock
+    # Interconnectors (real only)
     interconnectors = []
     if ic_rows:
         for ic in ic_rows:
@@ -2404,43 +1718,10 @@ async def realtime_ops_dashboard():
                 "binding": util > 85,
                 "marginal_loss": round(losses / max(abs(flow), 1), 4),
             })
-    else:
-        ic_defs = [
-            {"ic": "N-Q-MNSP1",  "from": "NSW1", "to": "QLD1", "cap": 700,  "base": 280},
-            {"ic": "VIC1-NSW1",   "from": "VIC1", "to": "NSW1", "cap": 1350, "base": 420},
-            {"ic": "V-SA",        "from": "VIC1", "to": "SA1",  "cap": 680,  "base": -142},
-            {"ic": "T-V-MNSP1",   "from": "TAS1", "to": "VIC1", "cap": 594,  "base": 87},
-            {"ic": "Murraylink",   "from": "SA1",  "to": "VIC1", "cap": 220,  "base": 95},
-        ]
-        for ic in ic_defs:
-            flow = round(ic["base"] * rng.uniform(0.5, 1.5), 1)
-            util = round(abs(flow) / ic["cap"] * 100, 1)
-            interconnectors.append({
-                "interconnector": ic["ic"],
-                "from_region": ic["from"],
-                "to_region": ic["to"],
-                "flow_mw": flow,
-                "capacity_mw": ic["cap"],
-                "utilisation_pct": util,
-                "binding": util > 85,
-                "marginal_loss": round(rng.uniform(0.005, 0.04), 4),
-            })
 
-    # FCAS — still mock (no NEMWEB source)
-    fcas_services = ["RAISE_6SEC", "RAISE_60SEC", "RAISE_5MIN", "RAISE_REG",
-                     "LOWER_6SEC", "LOWER_60SEC", "LOWER_5MIN", "LOWER_REG"]
+    # FCAS: enablement/requirements are not ingested in this build, so no FCAS rows are returned
+    # (previously random values). FCAS prices exist in NEMWEB DispatchIS and are a planned ingest.
     fcas = []
-    for svc in fcas_services:
-        req = round(rng.uniform(150, 500), 0)
-        cleared = round(req * rng.uniform(0.9, 1.15), 0)
-        surplus = round((cleared - req) / req * 100, 1)
-        fcas.append({
-            "service": svc,
-            "cleared_mw": cleared,
-            "clearing_price_aud_mw": round(rng.uniform(2, 60), 2),
-            "requirement_mw": req,
-            "surplus_pct": max(0, surplus),
-        })
 
     # Alerts — derive from real price data
     alerts = []
@@ -2470,7 +1751,7 @@ async def realtime_ops_dashboard():
                 })
     if not alerts:
         alerts.append({
-            "alert_id": f"RTO-{rng.randint(10000, 99999)}",
+            "alert_id": f"RTO-{int(now.timestamp()) // 300}",
             "severity": "INFO",
             "category": "MARKET",
             "message": "All regions within normal operating parameters",
@@ -2703,8 +1984,7 @@ _NEMWEB = f"{_CATALOG}.nemweb_analytics"
 async def constraint_dashboard_full():
     """Full constraint dashboard matching ConstraintDashboard interface."""
     now_str = datetime.now(timezone.utc).isoformat()
-    rng = random.Random(42)
-
+    
     try:
         # Query real constraint data
         rows = _query_gold(
@@ -2805,56 +2085,7 @@ async def constraint_dashboard_full():
     except Exception as exc:
         logger.warning("Constraint dashboard real query failed: %s", exc)
 
-    # Mock fallback
-    regions = ["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]
-    equations = []
-    for i in range(25):
-        reg = regions[i % 5]
-        binding = rng.random() < 0.3
-        mv = round(rng.uniform(0, 500), 2) if binding else round(rng.uniform(0, 50), 2)
-        rhs = round(rng.uniform(500, 5000), 0)
-        equations.append({
-            "constraint_id": f"C_{reg}_{i:03d}",
-            "constraint_name": f"Constraint {reg} #{i}",
-            "constraint_type": rng.choice(["THERMAL", "VOLTAGE", "STABILITY", "NETWORK"]),
-            "binding": binding, "region": reg,
-            "rhs_value": rhs, "lhs_value": rhs - rng.uniform(0, 200),
-            "slack_mw": 0.0 if binding else round(rng.uniform(5, 200), 1),
-            "marginal_value": mv,
-            "generic_equation": f"C_{reg}_{i:03d} <= {rhs:.0f} MW",
-            "connected_duids": [], "frequency_binding_pct": round(rng.uniform(0, 40), 1),
-            "annual_cost_est_m_aud": round(mv * 0.02, 2),
-        })
-    region_summaries = [
-        {"region": reg, "active_constraints": sum(1 for e in equations if e["region"] == reg),
-         "binding_constraints": sum(1 for e in equations if e["region"] == reg and e["binding"]),
-         "critical_constraints": sum(1 for e in equations if e["region"] == reg and e["marginal_value"] > 100),
-         "total_cost_m_aud_yr": round(sum(e["annual_cost_est_m_aud"] for e in equations if e["region"] == reg), 2),
-         "most_binding_constraint": next((e["constraint_id"] for e in equations if e["region"] == reg and e["binding"]), ""),
-         "interconnector_limited": rng.random() < 0.3}
-        for reg in regions
-    ]
-    violations = [
-        {"violation_id": f"V-{i}", "constraint_id": equations[i]["constraint_id"],
-         "region": equations[i]["region"], "dispatch_interval": now_str,
-         "violation_mw": round(rng.uniform(5, 100), 1),
-         "dispatch_price_impact": round(rng.uniform(10, 500), 1),
-         "cause": rng.choice(["WIND_RAMP", "HIGH_DEMAND", "OUTAGE", "NEMDE_INTERVENTION"]),
-         "resolved": rng.random() < 0.4}
-        for i in range(min(8, len(equations))) if equations[i]["binding"]
-    ]
-    binding_ct = sum(1 for e in equations if e["binding"])
-    return {
-        "timestamp": now_str,
-        "total_active_constraints": len(equations),
-        "binding_constraints_now": binding_ct,
-        "total_annual_constraint_cost_m_aud": round(sum(e["annual_cost_est_m_aud"] for e in equations), 1),
-        "most_constrained_region": max(region_summaries, key=lambda x: x["binding_constraints"])["region"],
-        "violations_today": len(violations),
-        "region_summaries": region_summaries,
-        "constraint_equations": equations,
-        "violations": violations,
-    }
+    _no_real_data("constraint dashboard full")
 
 
 @router.get("/api/constraints/binding-heatmap", summary="Constraint binding heatmap", tags=["Constraints"])
@@ -2891,19 +2122,7 @@ async def constraint_binding_heatmap(
     except Exception as exc:
         logger.warning("Binding heatmap failed: %s", exc)
 
-    # Mock fallback — generate a plausible heatmap
-    rng = random.Random(hash(region))
-    grid = []
-    for dow in range(1, 8):
-        for hour in range(24):
-            base_pct = 5.0
-            if 7 <= hour <= 20 and dow <= 5:
-                base_pct = 15.0
-            if 15 <= hour <= 19:
-                base_pct = 25.0
-            pct = round(max(0, base_pct + rng.uniform(-5, 10)), 1)
-            grid.append({"hour": hour, "day": dow, "binding_pct": pct, "binding_count": int(pct), "total_intervals": 100})
-    return {"region": region, "days": days, "grid": grid}
+    _no_real_data("constraint binding heatmap")
 
 
 @router.get("/api/constraints/price-separation", summary="Inter-regional price separation", tags=["Constraints"])
@@ -2928,11 +2147,6 @@ async def constraint_price_separation(hours_back: int = Query(24)):
     except Exception as exc:
         logger.warning("Price separation failed: %s", exc)
 
-    # Mock fallback
-    rng = random.Random(42)
-    pairs = [("NSW1", "QLD1"), ("NSW1", "VIC1"), ("VIC1", "SA1"), ("VIC1", "TAS1"), ("NSW1", "SA1")]
-    spreads = []
-    for a, b in pairs:
-        avg = round(rng.uniform(2, 25), 2)
-        spreads.append({"region_a": a, "region_b": b, "avg_spread": avg, "max_spread": round(avg * rng.uniform(3, 8), 2), "intervals": 288})
-    return {"hours_back": hours_back, "spreads": spreads}
+    _no_real_data("constraint price separation")
+
+

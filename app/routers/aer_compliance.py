@@ -14,6 +14,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from .shared import (
+    _sample_data,
     _CATALOG,
     _cache_get,
     _cache_set,
@@ -30,6 +31,7 @@ _DNSPS = ["AusNet Services", "Ergon Energy", "Energex"]
 # =========================================================================
 
 @router.get("/api/aer/summary")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def aer_summary() -> JSONResponse:
     """KPI summary — total RINs submitted, STPIS exposure, revenue variance."""
     cache_key = "aer:summary"
@@ -94,6 +96,7 @@ async def aer_summary() -> JSONResponse:
 # =========================================================================
 
 @router.get("/api/aer/rin")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def aer_rin(
     dnsp: Optional[str] = Query(None),
     year: Optional[int] = Query(None),
@@ -150,6 +153,7 @@ async def aer_rin(
 # =========================================================================
 
 @router.get("/api/aer/stpis")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def aer_stpis(
     dnsp: Optional[str] = Query(None),
     year: Optional[int] = Query(None),
@@ -208,6 +212,7 @@ async def aer_stpis(
 # =========================================================================
 
 @router.get("/api/aer/stpis/risk")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def aer_stpis_risk() -> JSONResponse:
     """Revenue at risk breakdown by DNSP."""
     rows = _query_gold(f"""
@@ -238,6 +243,7 @@ async def aer_stpis_risk() -> JSONResponse:
 # =========================================================================
 
 @router.get("/api/aer/revenue")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def aer_revenue(dnsp: Optional[str] = Query(None)) -> JSONResponse:
     """Revenue cap monitoring."""
     where = f"WHERE dnsp = '{dnsp}'" if dnsp else ""
@@ -282,6 +288,7 @@ async def aer_revenue(dnsp: Optional[str] = Query(None)) -> JSONResponse:
 # =========================================================================
 
 @router.get("/api/aer/pricing-proposals")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def aer_pricing_proposals() -> JSONResponse:
     """Pricing proposal status by DNSP and regulatory year."""
     rows = _query_gold(f"""
@@ -320,6 +327,7 @@ async def aer_pricing_proposals() -> JSONResponse:
 # =========================================================================
 
 @router.get("/api/aer/milestones")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def aer_milestones(
     dnsp: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
@@ -375,6 +383,7 @@ async def aer_milestones(
 # =========================================================================
 
 @router.get("/api/aer/milestones/upcoming")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def aer_milestones_upcoming() -> JSONResponse:
     """Next 90 days milestones."""
     today_dt = date.today()

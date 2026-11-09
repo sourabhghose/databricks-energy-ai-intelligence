@@ -13,6 +13,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from .shared import (
+    _sample_data,
     _CATALOG,
     _cache_get,
     _cache_set,
@@ -25,6 +26,7 @@ _DNSPS = ["AusNet Services", "Ergon Energy", "Energex"]
 
 
 @router.get("/api/capex/summary")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def capex_summary() -> JSONResponse:
     """Capital program KPI summary."""
     cache_key = "capex:summary"
@@ -81,6 +83,7 @@ async def capex_summary() -> JSONResponse:
 
 
 @router.get("/api/capex/projects")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def capex_projects(
     dnsp: Optional[str] = Query(None),
     category: Optional[str] = Query(None),
@@ -144,6 +147,7 @@ async def capex_projects(
 
 
 @router.get("/api/capex/maintenance")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def capex_maintenance(
     dnsp: Optional[str] = Query(None),
     priority: Optional[str] = Query(None),
@@ -203,6 +207,7 @@ async def capex_maintenance(
 
 
 @router.get("/api/capex/fault-response")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def capex_fault_response(
     dnsp: Optional[str] = Query(None),
     region: Optional[str] = Query(None),
@@ -256,6 +261,7 @@ async def capex_fault_response(
 
 
 @router.get("/api/capex/contractors")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def capex_contractors(dnsp: Optional[str] = Query(None)) -> JSONResponse:
     """Contractor performance scorecard."""
     where = f"WHERE dnsp = '{dnsp}'" if dnsp else ""
@@ -293,6 +299,7 @@ async def capex_contractors(dnsp: Optional[str] = Query(None)) -> JSONResponse:
 
 
 @router.get("/api/capex/capex-opex")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def capex_opex(dnsp: Optional[str] = Query(None)) -> JSONResponse:
     """Capex vs opex analysis by asset."""
     where = f"WHERE dnsp = '{dnsp}'" if dnsp else ""
@@ -331,6 +338,7 @@ async def capex_opex(dnsp: Optional[str] = Query(None)) -> JSONResponse:
 
 
 @router.get("/api/capex/delivery-trend")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def capex_delivery_trend() -> JSONResponse:
     """Monthly capex delivery trend — last 12 months."""
     rows = _query_gold(f"""

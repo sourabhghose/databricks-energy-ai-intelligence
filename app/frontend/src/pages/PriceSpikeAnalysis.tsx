@@ -246,9 +246,9 @@ export default function PriceSpikeAnalysis() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
           icon={AlertTriangle}
-          label="Spike Events 2024"
+          label="Spike Events"
           value={String(data.total_spike_events_2024)}
-          sub="EXTREME and HIGH severity"
+          sub="runs of >$300/MWh intervals in the data window"
           color="text-red-400"
         />
         <KpiCard
@@ -401,7 +401,7 @@ export default function PriceSpikeAnalysis() {
                       ${e.peak_price_aud_mwh.toLocaleString()}
                     </td>
                     <td className="py-2.5 pr-4 text-right text-amber-300">
-                      {e.price_multiple.toFixed(1)}x
+                      {e.price_multiple != null ? `${e.price_multiple.toFixed(1)}x` : '—'}
                     </td>
                     <td className="py-2.5 pr-4 text-right text-red-300">
                       ${e.consumer_cost_m_aud.toFixed(1)}M

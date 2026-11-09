@@ -11,6 +11,8 @@ from typing import Optional
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
+from .shared import _sample_data
+
 router = APIRouter()
 
 _DNSPS = ["AusNet Services", "Ergon Energy", "Energex", "Ausgrid", "Essential Energy"]
@@ -25,6 +27,7 @@ _MONTHS = [
 
 
 @router.get("/api/reliability-dnsp/summary")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def reliability_dnsp_summary() -> JSONResponse:
     """Aggregate reliability KPI summary across all DNSPs."""
     _r.seed(540)
@@ -41,6 +44,7 @@ async def reliability_dnsp_summary() -> JSONResponse:
 
 
 @router.get("/api/reliability-dnsp/kpis")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def reliability_dnsp_kpis() -> JSONResponse:
     """Per-DNSP reliability KPI breakdown."""
     _r.seed(541)
@@ -73,6 +77,7 @@ async def reliability_dnsp_kpis() -> JSONResponse:
 
 
 @router.get("/api/reliability-dnsp/worst-feeders")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def reliability_dnsp_worst_feeders(
     dnsp: Optional[str] = Query(None, description="Filter by DNSP"),
     limit: int = Query(20, description="Max feeders to return"),
@@ -100,6 +105,7 @@ async def reliability_dnsp_worst_feeders(
 
 
 @router.get("/api/reliability-dnsp/interruption-causes")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def reliability_dnsp_interruption_causes() -> JSONResponse:
     """SAIDI contribution breakdown by interruption cause."""
     _r.seed(543)
@@ -120,6 +126,7 @@ async def reliability_dnsp_interruption_causes() -> JSONResponse:
 
 
 @router.get("/api/reliability-dnsp/trend")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def reliability_dnsp_trend() -> JSONResponse:
     """12-month rolling reliability trend."""
     _r.seed(544)

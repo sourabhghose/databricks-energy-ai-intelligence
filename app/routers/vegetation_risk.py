@@ -12,6 +12,8 @@ from datetime import date, timedelta
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from .shared import _sample_data
+
 router = APIRouter()
 
 _DNSPS = ["AusNet Services", "Ergon Energy", "Energex", "Ausgrid", "Essential Energy", "SA Power Networks"]
@@ -42,6 +44,7 @@ _BUSHFIRE_ZONES = [
 # =========================================================================
 
 @router.get("/api/veg-risk/summary")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def veg_risk_summary() -> JSONResponse:
     """Network-wide vegetation risk and ELC compliance summary."""
     _r.seed(800)
@@ -65,6 +68,7 @@ async def veg_risk_summary() -> JSONResponse:
 # =========================================================================
 
 @router.get("/api/veg-risk/spans")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def veg_risk_spans() -> JSONResponse:
     """Span-level vegetation risk scores and inspection status."""
     _r.seed(801)
@@ -109,6 +113,7 @@ async def veg_risk_spans() -> JSONResponse:
 # =========================================================================
 
 @router.get("/api/veg-risk/elc-compliance")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def veg_risk_elc_compliance() -> JSONResponse:
     """Electrical line clearance compliance by DNSP."""
     _r.seed(802)
@@ -151,6 +156,7 @@ async def veg_risk_elc_compliance() -> JSONResponse:
 # =========================================================================
 
 @router.get("/api/veg-risk/bushfire-forecast")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def veg_risk_bushfire_forecast() -> JSONResponse:
     """Seasonal bushfire risk forecast by network zone."""
     _r.seed(803)
@@ -216,6 +222,7 @@ _VEG_TOP_FEATURES = ["fire_history_score", "inspection_age_days", "tree_species_
 
 
 @router.get("/api/veg-risk/ml-scores")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def veg_risk_ml_scores() -> JSONResponse:
     """ML-scored span risk classification — XGBoost Classifier with MLflow metadata."""
     _r.seed(805)

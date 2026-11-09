@@ -4,8 +4,6 @@ Generator bid management, optimisation, conformance monitoring, and revenue attr
 """
 from __future__ import annotations
 
-import random
-from datetime import datetime
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Query
@@ -60,7 +58,6 @@ def _optimize_bid_core(generator_id: str, region: str = "NSW1",
         vol = float(recent[0].get("vol") or 40)
 
     # Build optimised bands
-    random.seed(hash(f"{generator_id}{strategy}{datetime.now().date()}"))
     bands = []
     remaining = capacity
 

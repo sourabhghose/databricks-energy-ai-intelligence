@@ -12,6 +12,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Query
 
 from .shared import (
+    _sample_data,
     _CATALOG,
     _NEM_REGIONS,
     _cache_get,
@@ -269,42 +270,49 @@ def _core_outage_summary() -> Dict[str, Any]:
 # =========================================================================
 
 @router.get("/api/outages/summary")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def outage_summary():
     """Active outages count, SAIDI YTD vs target, worst region."""
     return _core_outage_summary()
 
 
 @router.get("/api/outages/active")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def active_outages():
     """Currently active outages."""
     return _core_active_outages()
 
 
 @router.get("/api/outages/reliability")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def reliability(region: Optional[str] = Query(default=None)):
     """SAIDI/SAIFI/CAIDI KPIs by region with AER targets."""
     return _core_reliability(region)
 
 
 @router.get("/api/outages/causes")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def outage_causes(days: int = Query(default=90, ge=1, le=365)):
     """Outage cause breakdown."""
     return _core_cause_breakdown(days)
 
 
 @router.get("/api/outages/worst-feeders")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def worst_feeders():
     """Bottom 5% feeders by reliability."""
     return _core_worst_feeders()
 
 
 @router.get("/api/outages/gsl")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def gsl_tracking():
     """GSL tracking — eligible customers, projected payments."""
     return _core_gsl()
 
 
 @router.get("/api/outages")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def outage_list(
     region: Optional[str] = Query(default=None),
     cause: Optional[str] = Query(default=None),
@@ -315,6 +323,7 @@ async def outage_list(
 
 
 @router.get("/api/outages/{event_id}")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def outage_detail(event_id: str):
     """Outage event detail with timeline."""
     rows = _query_gold(f"""

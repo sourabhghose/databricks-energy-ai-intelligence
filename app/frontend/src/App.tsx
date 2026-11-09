@@ -624,6 +624,7 @@ import AssetIntelligenceHub from './pages/AssetIntelligenceHub'
 import AssetRiskMatrix from './pages/AssetRiskMatrix'
 import ExpenditureJustification from './pages/ExpenditureJustification'
 import BenchmarkingHub from './pages/BenchmarkingHub'
+import SampleDataBanner from './components/SampleDataBanner'
 import PeerComparison from './pages/PeerComparison'
 import ResetPreparation from './pages/ResetPreparation'
 import HostingCapacityHub from './pages/HostingCapacityHub'
@@ -2496,6 +2497,7 @@ export default function App() {
         <Sidebar />
         <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
           <TopBar />
+          <SampleDataBanner />
           <main className="flex-1 overflow-auto">
             <Routes>
               <Route path="/cat/:groupKey" element={<CategoryPage />} />

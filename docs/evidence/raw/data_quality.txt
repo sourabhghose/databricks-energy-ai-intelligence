@@ -1,0 +1,38 @@
+## gold.dq_results — per run (latest 12 runs)
+job_run_id | run_ts_utc | rows_checked | rows_failed | rules_failed | freshness
+230199744739803 | 2026-11-09T09:06:03.764Z | 5 | 0 | 0 | PASS
+388125770552595 | 2026-11-09T09:01:13.712Z | 5 | 0 | 0 | PASS
+1080049346804617 | 2026-11-09T08:55:59.436Z | 5 | 0 | 0 | PASS
+715831389980142 | 2026-11-09T08:51:00.532Z | 5 | 0 | 0 | PASS
+25310466835369 | 2026-11-09T08:45:58.978Z | 5 | 0 | 0 | PASS
+618370741137814 | 2026-11-09T08:41:03.595Z | 5 | 0 | 0 | PASS
+334772633307127 | 2026-11-09T08:35:59.477Z | 5 | 0 | 0 | PASS
+478619041337795 | 2026-11-09T08:31:04.348Z | 5 | 0 | 0 | PASS
+779431872569806 | 2026-11-09T08:26:04.595Z | 5 | 0 | 0 | PASS
+491064940148347 | 2026-11-09T08:21:05.379Z | 5 | 0 | 0 | PASS
+89466792758178 | 2026-11-09T08:16:03.231Z | 5 | 0 | 0 | PASS
+17370394649532 | 2026-11-09T08:11:05.446Z | 5 | 0 | 0 | PASS
+
+## gold.dq_results — rule totals across all runs
+rule_name | runs | rows_checked | rows_failed | failed_runs
+demand_non_negative | 3 | 2880 | 102 | 1
+demand_within_physical_bounds | 90 | 263985 | 0 | 0
+freshness | 93 | 93 | 0 | 0
+interval_not_null | 93 | 266865 | 0 | 0
+interval_on_5min_grid | 93 | 266865 | 0 | 0
+rrp_is_numeric | 93 | 266865 | 0 | 0
+rrp_within_market_limits | 93 | 266865 | 3 | 1
+valid_nem_region | 93 | 266865 | 0 | 0
+
+## gold.nem_prices_quarantine
+region_id | failed_rules | n | min_rrp | max_rrp | first_quarantined
+SA1 | ["demand_non_negative"] | 102 | -328.6 | 12.01 | 2026-11-09T01:42:03.444Z
+NSW1 | ["rrp_within_market_limits"] | 3 | 23107.0 | 23200.0 | 2026-11-09T02:50:32.064Z
+
+## gold.nem_prices_5min coverage
+region_id | intervals | first_utc | last_utc | avg_rrp | max_rrp | min_rrp
+NSW1 | 26436 | 2026-08-09T14:05:00.000Z | 2026-11-09T09:05:00.000Z | 89.54 | 23200.0 | -23.5
+QLD1 | 26436 | 2026-08-09T14:05:00.000Z | 2026-11-09T09:05:00.000Z | 70.51 | 860.05142 | -245.64113
+SA1 | 26436 | 2026-08-09T14:05:00.000Z | 2026-11-09T09:05:00.000Z | 50.91 | 3290.0 | -496.76722
+TAS1 | 26436 | 2026-08-09T14:05:00.000Z | 2026-11-09T09:05:00.000Z | 54.53 | 490.01 | -1000.0
+VIC1 | 26436 | 2026-08-09T14:05:00.000Z | 2026-11-09T09:05:00.000Z | 50.44 | 406.11105 | -365.23294

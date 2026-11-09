@@ -13,6 +13,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from .shared import (
+    _sample_data,
     _CATALOG,
     _cache_get,
     _cache_set,
@@ -28,6 +29,7 @@ _BMO_ZONES = [
 
 
 @router.get("/api/bushfire/summary")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def bushfire_summary() -> JSONResponse:
     """BMP compliance KPI summary."""
     cache_key = "bushfire:summary"
@@ -94,6 +96,7 @@ async def bushfire_summary() -> JSONResponse:
 
 
 @router.get("/api/bushfire/assets")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def bushfire_assets(
     dnsp: Optional[str] = Query(None, description="DNSP filter"),
     risk_rating: Optional[str] = Query(None, description="EXTREME/HIGH/MEDIUM/LOW"),
@@ -152,6 +155,7 @@ async def bushfire_assets(
 
 
 @router.get("/api/bushfire/elc")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def bushfire_elc(
     dnsp: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
@@ -200,6 +204,7 @@ async def bushfire_elc(
 
 
 @router.get("/api/bushfire/incidents")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def bushfire_incidents(
     dnsp: Optional[str] = Query(None),
     year: Optional[int] = Query(None),
@@ -254,6 +259,7 @@ async def bushfire_incidents(
 
 
 @router.get("/api/bushfire/spend")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def bushfire_spend(dnsp: Optional[str] = Query(None)) -> JSONResponse:
     """BMP capex vs AER allowance."""
     where = f"WHERE dnsp = '{dnsp}'" if dnsp else "WHERE dnsp = 'AusNet Services'"
@@ -290,6 +296,7 @@ async def bushfire_spend(dnsp: Optional[str] = Query(None)) -> JSONResponse:
 
 
 @router.get("/api/bushfire/seasonal-readiness")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def bushfire_seasonal_readiness(dnsp: Optional[str] = Query(None)) -> JSONResponse:
     """Pre-summer seasonal readiness checklist."""
     where = f"WHERE dnsp = '{dnsp}'" if dnsp else "WHERE dnsp = 'AusNet Services'"
@@ -338,6 +345,7 @@ async def bushfire_seasonal_readiness(dnsp: Optional[str] = Query(None)) -> JSON
 
 
 @router.get("/api/bushfire/risk-zones")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def bushfire_risk_zones() -> JSONResponse:
     """Zone risk summary by BMO region."""
     rows = _query_gold(f"""

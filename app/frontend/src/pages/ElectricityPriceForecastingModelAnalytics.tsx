@@ -63,10 +63,10 @@ const REGIONS = ['NSW1', 'QLD1', 'VIC1', 'SA1', 'TAS1']
 // Helpers
 // ---------------------------------------------------------------------------
 
-function fmt2(v: number): string { return v.toFixed(2) }
-function fmt1(v: number): string { return v.toFixed(1) }
-function fmtPct(v: number): string { return `${v.toFixed(1)}%` }
-function fmtAUD(v: number): string { return `$${v.toFixed(2)}` }
+function fmt2(v: number | null): string { return v == null ? '—' : v.toFixed(2) }
+function fmt1(v: number | null): string { return v == null ? '—' : v.toFixed(1) }
+function fmtPct(v: number | null): string { return v == null ? '—' : `${v.toFixed(1)}%` }
+function fmtAUD(v: number | null): string { return v == null ? '—' : `$${v.toFixed(2)}` }
 
 // ---------------------------------------------------------------------------
 // KPI Card

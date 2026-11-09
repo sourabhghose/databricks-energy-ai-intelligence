@@ -11,6 +11,8 @@ from datetime import date, timedelta
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
+from .shared import _sample_data
+
 router = APIRouter()
 
 _CONTRACTORS = [
@@ -22,6 +24,7 @@ _RISK_LEVELS = ["Critical", "High", "Medium", "Low"]
 
 
 @router.get("/api/vegetation/summary")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def vegetation_summary() -> JSONResponse:
     """Vegetation clearance compliance summary."""
     _r.seed(520)
@@ -41,6 +44,7 @@ async def vegetation_summary() -> JSONResponse:
 
 
 @router.get("/api/vegetation/by-zone")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def vegetation_by_zone(
     dnsp: str = Query("AusNet Services", description="DNSP filter"),
 ) -> JSONResponse:
@@ -70,6 +74,7 @@ async def vegetation_by_zone(
 
 
 @router.get("/api/vegetation/contractor-performance")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def vegetation_contractor_performance() -> JSONResponse:
     """Contractor KPI dashboard — month-to-date clearance performance."""
     _r.seed(522)
@@ -91,6 +96,7 @@ async def vegetation_contractor_performance() -> JSONResponse:
 
 
 @router.get("/api/vegetation/clearance-schedule")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def vegetation_clearance_schedule() -> JSONResponse:
     """12-week vegetation clearance schedule."""
     _r.seed(523)

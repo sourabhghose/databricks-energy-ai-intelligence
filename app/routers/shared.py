@@ -9,7 +9,14 @@ import threading
 import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, NoReturn, Optional
+
+import functools
+import inspect
+
+from fastapi import HTTPException
+from fastapi.encoders import jsonable_encoder
+from fastapi.responses import JSONResponse
 
 # ---------------------------------------------------------------------------
 # Structured JSON logging
@@ -121,7 +128,7 @@ _AEST = timezone(timedelta(hours=10))
 # SQL query helper — query gold tables via Databricks Statement Execution API
 # ---------------------------------------------------------------------------
 _CATALOG = os.environ.get("DATABRICKS_CATALOG", "energy_copilot_catalog")
-_SQL_WAREHOUSE_ID = os.environ.get("SQL_WAREHOUSE_ID", "4d5388b3d6cbcb6e")
+_SQL_WAREHOUSE_ID = os.environ.get("SQL_WAREHOUSE_ID", "")
 
 # WorkspaceClient singleton — used for both SQL and Lakebase cred generation
 _workspace_client = None
@@ -405,7 +412,7 @@ def _query_gold(sql: str, params: Optional[dict] = None) -> Optional[List[Dict[s
         return None
     t0 = time.monotonic()
     try:
-        from databricks.sdk.service.sql import StatementState, Format, Disposition
+        from databricks.sdk.service.sql import Format, Disposition
         resp = w.statement_execution.execute_statement(
             statement=sql,
             warehouse_id=_SQL_WAREHOUSE_ID,
@@ -475,6 +482,37 @@ def _query_gold(sql: str, params: Optional[dict] = None) -> Optional[List[Dict[s
         return None
 
 
+def _no_real_data(what: str) -> NoReturn:
+    """Fail loudly instead of serving illustrative numbers when no real data could be read."""
+    logger.warning("no real data for %s — returning 503 (illustrative fallback disabled)", what)
+    raise HTTPException(status_code=503, detail=f"{what}: no real data available right now (the query failed or "
+                                                "returned no rows). Illustrative fallbacks are disabled.")
+
+
+SAMPLE_HEADER = "X-Data-Source"
+
+
+def _sample_data(reason: str):
+    """Mark an endpoint whose payload contains illustrative (non-real) values.
+
+    Adds ``data_source: "sample"`` and ``sample_reason`` to dict payloads and an ``X-Data-Source: sample`` header to
+    every response, so the UI can show a "sample data" banner. Use only where no real source is ingested yet.
+    """
+    def decorator(fn):
+        @functools.wraps(fn)
+        async def wrapper(*args, **kwargs):
+            out = await fn(*args, **kwargs) if inspect.iscoroutinefunction(fn) else fn(*args, **kwargs)
+            if isinstance(out, JSONResponse):
+                out.headers[SAMPLE_HEADER] = "sample"
+                return out
+            body = jsonable_encoder(out)
+            if isinstance(body, dict):
+                body = {**body, "data_source": "sample", "sample_reason": reason}
+            return JSONResponse(content=body, headers={SAMPLE_HEADER: "sample"})
+        return wrapper
+    return decorator
+
+
 async def _query_gold_async(sql: str, params: Optional[dict] = None) -> Optional[List[Dict[str, Any]]]:
     """Non-blocking version of _query_gold — runs in a thread pool."""
     import asyncio
@@ -492,7 +530,6 @@ def _execute_gold(sql: str, params: Optional[dict] = None) -> bool:
         return False
     t0 = time.monotonic()
     try:
-        from databricks.sdk.service.sql import StatementState
         resp = w.statement_execution.execute_statement(
             statement=sql,
             warehouse_id=_SQL_WAREHOUSE_ID,

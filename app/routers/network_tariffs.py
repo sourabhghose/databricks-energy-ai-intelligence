@@ -12,6 +12,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from .shared import (
+    _sample_data,
     _CATALOG,
     _cache_get,
     _cache_set,
@@ -24,6 +25,7 @@ _DNSPS = ["AusNet Services", "Ergon Energy", "Energex"]
 
 
 @router.get("/api/tariffs/summary")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def tariff_summary() -> JSONResponse:
     """Tariff KPI summary."""
     cache_key = "tariffs:summary"
@@ -66,6 +68,7 @@ async def tariff_summary() -> JSONResponse:
 
 
 @router.get("/api/tariffs/structures")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def tariff_structures(
     dnsp: Optional[str] = Query(None),
     customer_class: Optional[str] = Query(None),
@@ -114,6 +117,7 @@ async def tariff_structures(
 
 
 @router.get("/api/tariffs/migration")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def tariff_migration(dnsp: Optional[str] = Query(None)) -> JSONResponse:
     """Customer migration progress to cost-reflective tariffs."""
     where = f"WHERE dnsp = '{dnsp}'" if dnsp else ""
@@ -154,6 +158,7 @@ async def tariff_migration(dnsp: Optional[str] = Query(None)) -> JSONResponse:
 
 
 @router.get("/api/tariffs/revenue-by-class")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def tariff_revenue_by_class() -> JSONResponse:
     """Revenue by tariff class vs allocated cost."""
     rows = _query_gold(f"""
@@ -185,6 +190,7 @@ async def tariff_revenue_by_class() -> JSONResponse:
 
 
 @router.get("/api/tariffs/demand-performance")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def tariff_demand_performance(dnsp: Optional[str] = Query(None)) -> JSONResponse:
     """Demand tariff customer performance."""
     where = f"WHERE dnsp = '{dnsp}'" if dnsp else ""
@@ -218,6 +224,7 @@ async def tariff_demand_performance(dnsp: Optional[str] = Query(None)) -> JSONRe
 
 
 @router.get("/api/tariffs/reform-tracker")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def tariff_reform_tracker() -> JSONResponse:
     """Reform progress vs AER targets — latest year snapshot by DNSP."""
     rows = _query_gold(f"""

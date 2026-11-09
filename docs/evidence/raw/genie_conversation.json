@@ -1,0 +1,19 @@
+{
+  "space": "NEM Spot Market Intelligence (01f1bdbddc6b1db5854c987326a7e67f)",
+  "conversation_id": "01f1dc1cb03e13b9911787894150f467",
+  "message_id": "01f1dc1cb0a714f0b085d0316ac50292",
+  "status": "COMPLETED",
+  "question": "For October 2026, which NEM region had the most 5-minute intervals with a spot price above 300 dollars per MWh, how many such intervals were there, and what was that region's maximum price?",
+  "attachments": [
+    {
+      "sql": "WITH region_counts AS (\n  SELECT\n    `region_id`,\n    COUNT(*) AS `interval_count_above_300`,\n    MAX(`rrp`) AS `max_price_aud_mwh`\n  FROM `serverless_stable_2b9lj3_catalog`.`gold`.`nem_prices_5min`\n  WHERE `interval_datetime` >= TIMESTAMP('2026-10-01 00:00:00')\n    AND `interval_datetime` < TIMESTAMP('2026-11-01 00:00:00')\n    AND `rrp` > 300\n    AND `region_id` IS NOT NULL\n    AND `rrp` IS NOT NULL\n  GROUP BY `region_id`\n), ranked_regions AS (\n  SELECT\n    `region_id`,\n    `interval_count_above_300`,\n    `max_price_aud_mwh`,\n    RANK() OVER (ORDER BY `interval_count_above_300` DESC) AS `region_rank`\n  FROM region_counts\n)\nSELECT\n  `region_id`,\n  `interval_count_above_300`,\n  `max_price_aud_mwh`\nFROM ranked_regions\nWHERE `region_rank` = 1\nORDER BY `region_id`",
+      "description": "You want to find which NEM region had the highest number of 5-minute intervals during October 2026 where the spot price exceeded 300 dollars per MWh, how many such intervals there were, and the maximum spot price in that region during that month."
+    },
+    {
+      "text": "For **October 2026**, **NSW1** had the most 5-minute intervals with spot prices above **$300/MWh**, with **87** intervals. In **NSW1**, the maximum spot price during those intervals was **$23,200.0/MWh**."
+    },
+    {
+      "text": null
+    }
+  ]
+}

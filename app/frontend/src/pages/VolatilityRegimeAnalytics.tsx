@@ -68,7 +68,7 @@ function buildTimelineData(data: VolatilityRegimeDashboard) {
     const nswRec = nsw.find(r => r.month === m)
     const saRec  = sa.find(r => r.month === m)
     return {
-      month: m.replace('2024-', ''),
+      month: m,
       nsw_vi: nswRec?.volatility_index ?? 0,
       sa_vi:  saRec?.volatility_index ?? 0,
       nsw_regime: nswRec?.regime ?? 'NORMAL',
@@ -98,7 +98,7 @@ function buildTransitionMatrix(data: VolatilityRegimeDashboard) {
 
 function buildClusterBarData(data: VolatilityRegimeDashboard) {
   return data.clusters.map(c => ({
-    id:      c.cluster_id.replace('VCE-2024-', '#'),
+    id:      c.cluster_id,
     region:  c.region,
     cost:    c.total_cost_impact_m_aud,
     maxP:    c.max_price,
@@ -112,8 +112,11 @@ function computeKpis(data: VolatilityRegimeDashboard) {
   const highestVI     = Math.max(...data.regimes.map(r => r.volatility_index))
   const totalClusterCost = data.clusters.reduce((s, c) => s + c.total_cost_impact_m_aud, 0)
   const extremeHedge  = data.hedging.find(h => h.regime === 'EXTREME')
-  const optimalCap    = extremeHedge?.cap_strike_optimal_aud ?? 750
-  return { extremeMonths, highestVI, totalClusterCost, optimalCap }
+  const optimalCap    = extremeHedge?.cap_strike_optimal_aud ?? null
+  const peak          = data.regimes.find(r => r.volatility_index === highestVI)
+  const months        = [...new Set(data.regimes.map(r => r.month))].sort()
+  const period        = months.length ? `${months[0]} to ${months[months.length - 1]}` : 'no data'
+  return { extremeMonths, highestVI, totalClusterCost, optimalCap, peak, period }
 }
 
 export default function VolatilityRegimeAnalytics() {
@@ -149,7 +152,7 @@ export default function VolatilityRegimeAnalytics() {
         <div>
           <h1 className="text-2xl font-bold text-white">Wholesale Price Volatility Regime Analytics</h1>
           <p className="text-slate-400 text-sm mt-0.5">
-            Regime detection, volatility clustering and hedging implications — NEM 2024
+            Regime detection and spike clustering from real AEMO NEMWEB 5-minute prices — {kpi.period}
           </p>
         </div>
       </div>
@@ -162,7 +165,7 @@ export default function VolatilityRegimeAnalytics() {
             <span className="text-xs font-semibold uppercase tracking-wide">EXTREME Regime Months</span>
           </div>
           <p className="text-3xl font-bold text-white">{kpi.extremeMonths}</p>
-          <p className="text-xs text-slate-400 mt-1">region-months across 5 NEM regions in 2024</p>
+          <p className="text-xs text-slate-400 mt-1">region-months across 5 NEM regions ({kpi.period})</p>
         </div>
 
         <div className="bg-slate-800 border border-amber-700/50 rounded-xl p-4">
@@ -171,7 +174,7 @@ export default function VolatilityRegimeAnalytics() {
             <span className="text-xs font-semibold uppercase tracking-wide">Highest Volatility Index</span>
           </div>
           <p className="text-3xl font-bold text-white">{fmt(kpi.highestVI, 2)}</p>
-          <p className="text-xs text-slate-400 mt-1">peak VI observed (SA1, Feb 2024)</p>
+          <p className="text-xs text-slate-400 mt-1">peak VI observed ({kpi.peak ? `${kpi.peak.region}, ${kpi.peak.month}` : 'n/a'})</p>
         </div>
 
         <div className="bg-slate-800 border border-orange-700/50 rounded-xl p-4">
@@ -180,7 +183,7 @@ export default function VolatilityRegimeAnalytics() {
             <span className="text-xs font-semibold uppercase tracking-wide">Cluster Cost Impact</span>
           </div>
           <p className="text-3xl font-bold text-white">${fmt(kpi.totalClusterCost, 1)}M</p>
-          <p className="text-xs text-slate-400 mt-1">AUD across 8 volatility cluster events</p>
+          <p className="text-xs text-slate-400 mt-1">energy cost above $300/MWh across {data.clusters.length} spike clusters</p>
         </div>
 
         <div className="bg-slate-800 border border-indigo-700/50 rounded-xl p-4">
@@ -188,15 +191,15 @@ export default function VolatilityRegimeAnalytics() {
             <TrendingUp className="w-5 h-5" />
             <span className="text-xs font-semibold uppercase tracking-wide">Optimal Cap Strike</span>
           </div>
-          <p className="text-3xl font-bold text-white">${fmt(kpi.optimalCap)}/MWh</p>
-          <p className="text-xs text-slate-400 mt-1">recommended strike in EXTREME regime</p>
+          <p className="text-3xl font-bold text-white">{kpi.optimalCap === null ? 'n/a' : `$${fmt(kpi.optimalCap)}/MWh`}</p>
+          <p className="text-xs text-slate-400 mt-1">{kpi.optimalCap === null ? 'hedge optimisation model not deployed' : 'recommended strike in EXTREME regime'}</p>
         </div>
       </div>
 
       {/* ---- Regime Timeline Chart ---- */}
       <div className="bg-slate-800 rounded-xl p-5 border border-slate-700">
-        <h2 className="text-lg font-semibold text-white mb-1">Volatility Index Timeline — NSW1 &amp; SA1 (2024)</h2>
-        <p className="text-xs text-slate-400 mb-4">Monthly volatility index by region. SA1 shows persistent high-volatility behaviour driven by low inertia and gas dependency.</p>
+        <h2 className="text-lg font-semibold text-white mb-1">Volatility Index Timeline — NSW1 &amp; SA1 ({kpi.period})</h2>
+        <p className="text-xs text-slate-400 mb-4">Monthly volatility index (price standard deviation ÷ |mean price|) by region; regimes are quartiles across all region-months.</p>
         <ResponsiveContainer width="100%" height={280}>
           <AreaChart data={timelineD} margin={{ top: 10, right: 20, left: 0, bottom: 0 }}>
             <defs>
@@ -229,7 +232,7 @@ export default function VolatilityRegimeAnalytics() {
       {/* ---- Volatility Cluster Cost Bar Chart ---- */}
       <div className="bg-slate-800 rounded-xl p-5 border border-slate-700">
         <h2 className="text-lg font-semibold text-white mb-1">Cluster Event Cost Impact (M AUD)</h2>
-        <p className="text-xs text-slate-400 mb-4">8 identified high-volatility cluster events in 2024, ranked by total market cost impact.</p>
+        <p className="text-xs text-slate-400 mb-4">{data.clusters.length} runs of consecutive days with a &gt;$300/MWh interval, ranked by energy cost above $300/MWh.</p>
         <ResponsiveContainer width="100%" height={220}>
           <BarChart data={barD} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
             <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -289,6 +292,9 @@ export default function VolatilityRegimeAnalytics() {
       {/* ---- Hedging Implication Cards ---- */}
       <div>
         <h2 className="text-lg font-semibold text-white mb-4">Hedging Implications by Regime</h2>
+        {data.hedging.length === 0 && (
+          <p className="text-sm text-slate-400">No hedge optimisation model is deployed in this build, so no regime-specific hedging recommendations are shown.</p>
+        )}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
           {data.hedging.map(h => {
             const style = HEDGE_REGIME_STYLES[h.regime] ?? HEDGE_REGIME_STYLES['NORMAL']
@@ -387,7 +393,7 @@ export default function VolatilityRegimeAnalytics() {
 
       {/* ---- Regional Summary Table ---- */}
       <div className="bg-slate-800 rounded-xl p-5 border border-slate-700">
-        <h2 className="text-lg font-semibold text-white mb-4">2024 Regional Regime Summary</h2>
+        <h2 className="text-lg font-semibold text-white mb-4">Regional Regime Summary ({kpi.period})</h2>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -428,7 +434,7 @@ export default function VolatilityRegimeAnalytics() {
       </div>
 
       <p className="text-xs text-slate-500 text-right">
-        Data: NEM 2024 wholesale market. Last updated: {new Date(data.timestamp).toLocaleString('en-AU')}
+        Data: AEMO NEMWEB 5-minute prices (gold.nem_prices_5min), {kpi.period}. Last updated: {new Date(data.timestamp).toLocaleString('en-AU')}
       </p>
     </div>
   )

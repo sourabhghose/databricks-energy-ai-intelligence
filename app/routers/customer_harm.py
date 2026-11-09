@@ -12,6 +12,8 @@ from typing import Optional
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
+from .shared import _sample_data
+
 router = APIRouter()
 
 _MONTHS = [
@@ -31,6 +33,7 @@ _STATUSES = ["On Track", "At Risk", "Exceeds Target", "Below Target"]
 
 
 @router.get("/api/customer-harm/summary")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def customer_harm_summary() -> JSONResponse:
     """Customer harm index and key harm metrics summary."""
     _r.seed(600)
@@ -46,6 +49,7 @@ async def customer_harm_summary() -> JSONResponse:
 
 
 @router.get("/api/customer-harm/metrics")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def customer_harm_metrics(
     dnsp: Optional[str] = Query(None, description="Filter by DNSP"),
 ) -> JSONResponse:
@@ -95,6 +99,7 @@ async def customer_harm_metrics(
 
 
 @router.get("/api/customer-harm/trend")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def customer_harm_trend() -> JSONResponse:
     """12-month customer harm trend."""
     _r.seed(602)
@@ -110,6 +115,7 @@ async def customer_harm_trend() -> JSONResponse:
 
 
 @router.get("/api/customer-harm/improvement-actions")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def customer_harm_improvement_actions() -> JSONResponse:
     """Improvement actions targeting customer harm reduction."""
     _r.seed(603)

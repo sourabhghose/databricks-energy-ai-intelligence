@@ -158,7 +158,7 @@ export default function NemDemandForecastingAccuracyAnalytics() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         <KpiCard label="Best Performing Model" value={summary.best_model} />
-        <KpiCard label="Avg Day-Ahead MAPE" value={String(summary.avg_day_ahead_mape_pct)} unit="%" />
+        <KpiCard label="Avg 4h-Ahead MAPE" value={String(summary.avg_day_ahead_mape_pct)} unit="%" />
         <KpiCard label="Avg 30-min MAE" value={String(summary.avg_30min_mae_mw)} unit="MW" />
         <KpiCard label="Worst Region (Day-Ahead)" value={summary.worst_performing_region} sub="Highest avg MAPE" />
         <KpiCard label="Extreme Event Avg Error" value={String(summary.extreme_event_avg_error_pct)} unit="%" sub="Absolute avg" />
@@ -280,7 +280,7 @@ export default function NemDemandForecastingAccuracyAnalytics() {
         <dl className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
           {[
             { label: 'Best Model', value: summary.best_model },
-            { label: 'Avg Day-Ahead MAPE', value: `${summary.avg_day_ahead_mape_pct}%` },
+            { label: 'Avg 4h-Ahead MAPE', value: `${summary.avg_day_ahead_mape_pct}%` },
             { label: 'Avg 30-min MAE', value: `${summary.avg_30min_mae_mw} MW` },
             { label: 'Worst Region', value: summary.worst_performing_region },
             { label: 'Extreme Event Avg Error', value: `${summary.extreme_event_avg_error_pct}%` },

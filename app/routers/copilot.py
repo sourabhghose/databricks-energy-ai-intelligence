@@ -4,7 +4,7 @@ import json
 import os
 import uuid
 from datetime import datetime, timezone
-from typing import Dict, List
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -20,7 +20,8 @@ from .home import (
     prices_spikes,
     prices_volatility,
 )
-from .shared import _AEST, _CATALOG, _NEM_REGIONS, _query_gold, _sql_escape, logger
+from . import copilot_tools as _copilot_tools
+from .shared import _AEST, _CATALOG, _NEM_REGIONS, _insert_gold, _query_gold, _sql_escape, logger
 from .sidebar import alerts_list, bess_fleet, demand_response, merit_order
 
 router = APIRouter()
@@ -907,6 +908,8 @@ _VS_INDEX_NAME = os.environ.get("VS_INDEX_NAME", f"{_CATALOG}.gold.aemo_docs_vs_
 
 
 def _dispatch_tool(name: str, arguments: dict) -> str:
+    if name in _copilot_tools.TOOLS:  # validated queries on real gold tables (see copilot_tools.py)
+        return _copilot_tools.TOOLS[name](arguments)
     """Execute a tool call and return JSON result string."""
     try:
         if name == "query_spot_prices":
@@ -1606,8 +1609,8 @@ def _dispatch_tool(name: str, arguments: dict) -> str:
             return json.dumps({"text": "\n".join(lines), "runs_summary": runs_summary, "journals_summary": journals_summary, "total_accrued_aud": total_accrued}, default=str)
 
         elif name == "query_dnsp_summary":
-            dnsp = args.get("dnsp")
-            module = args.get("module")
+            dnsp = arguments.get("dnsp")
+            module = arguments.get("module")
             import httpx
             results = {}
             try:
@@ -1657,7 +1660,7 @@ def _dispatch_tool(name: str, arguments: dict) -> str:
             except Exception as e:
                 return json.dumps({"error": str(e)})
         elif name == "query_aer_compliance":
-            dnsp = args.get("dnsp", "")
+            dnsp = arguments.get("dnsp", "")
             import httpx
             try:
                 params = {"dnsp": dnsp} if dnsp else {}
@@ -1762,8 +1765,17 @@ async def _build_market_context() -> str:
     except Exception:
         pass
 
+    # Freshness gate: never present stale/simulated feeds as current
+    import asyncio as _aio
+    stale = await _aio.to_thread(_copilot_tools.stale_sources)
+    if stale:
+        parts.append("NOT AVAILABLE (feeds not ingested recently — do NOT quote values for these):\n" + "\n".join(
+            f"  {name}: last data {last or 'none'}" for name, last in stale.items()))
+
     # 4. Interconnector flows
     try:
+        if "interconnector flows" in stale:
+            raise LookupError("stale")
         ic_data = await interconnectors()
         lines = []
         for ic in ic_data.get("interconnectors", []):
@@ -1783,7 +1795,7 @@ async def _build_market_context() -> str:
     nem_total_gen = 0.0
     nem_total_renew = 0.0
     try:
-        for r in _NEM_REGIONS:
+        for r in ([] if "generation mix" in stale else _NEM_REGIONS):
             mix = await generation_mix_pct(region=r)
             total_mw = mix.get("total_generation_mw", 0)
             renew_pct = mix.get("renewable_percentage", 0)
@@ -1985,6 +1997,8 @@ async def _build_market_context() -> str:
 
     # 14. Renewable penetration — NEM-wide renewable vs non-renewable share
     try:
+        if "generation mix" in stale:
+            raise LookupError("stale")
         rows = _query_gold(
             f"SELECT is_renewable, "
             f"ROUND(SUM(total_mw), 1) AS total_mw, "
@@ -2016,6 +2030,8 @@ async def _build_market_context() -> str:
 
     # 15. Weather conditions per region
     try:
+        if "weather" in stale:
+            raise LookupError("stale")
         rows = _query_gold(
             f"SELECT nem_region, temperature_c, wind_speed_100m_kmh, "
             f"solar_radiation_wm2, cloud_cover_pct "
@@ -2039,6 +2055,8 @@ async def _build_market_context() -> str:
 
     # 16. Interconnector congestion — currently congested interconnectors
     try:
+        if "interconnector flows" in stale:
+            raise LookupError("stale")
         rows = _query_gold(
             f"SELECT interconnector_id, from_region, to_region, "
             f"mw_flow, export_limit_mw, import_limit_mw, utilization_pct "
@@ -2083,6 +2101,21 @@ class ChatRequest(BaseModel):
     history: List[Dict[str, str]] = Field(default_factory=list)
 
 
+_INTERACTIONS_TABLE = f"{_CATALOG}.gold.copilot_interactions"
+
+
+def _log_interaction(record: Dict[str, Any]) -> None:
+    """Append one assistant turn (question, tool calls, answer, tokens, latency) to gold.copilot_interactions so every
+    AI answer is auditable. Failures are logged, never raised, so logging can't break the chat stream."""
+    try:
+        row = {**record, "tool_calls": json.dumps(record["tool_calls"], default=str)[:20000],
+               "answer": (record.get("answer") or "")[:20000]}
+        if not _insert_gold(_INTERACTIONS_TABLE, row):
+            logger.warning("copilot interaction log insert returned False (id=%s)", record.get("interaction_id"))
+    except Exception as exc:
+        logger.warning("copilot interaction log failed (id=%s): %s", record.get("interaction_id"), exc)
+
+
 @router.post("/api/chat")
 async def copilot_chat(req: ChatRequest):
     """
@@ -2123,8 +2156,14 @@ async def copilot_chat(req: ChatRequest):
         return resp.json(), None
 
     async def _stream():
+        import asyncio as _asyncio
+        import time as _time
+        import uuid as _uuid
         input_tokens = 0
         output_tokens = 0
+        started = _time.monotonic()
+        trace_calls: list[dict] = []
+        answer_parts: list[str] = []
         yield ": keepalive\n\n"  # prevent proxy 504 before first byte
 
         # Build market context INSIDE the stream so keepalive is sent first
@@ -2138,9 +2177,9 @@ async def copilot_chat(req: ChatRequest):
             f"=== LIVE NEM MARKET DATA ===\n{market_context}\n"
             f"=== END MARKET DATA ===\n\n"
             f"CRITICAL INSTRUCTIONS:\n"
-            f"- You HAVE full live data above. NEVER say 'I don't have access to data' or "
-            f"'real-time data is not included'. The data above IS real-time.\n"
-            f"- Always answer with specific numbers from the data above.\n"
+            f"- The data above is read from live gold tables at request time. Answer with specific numbers from it.\n"
+            f"- If a source is listed under NOT AVAILABLE, or a tool returns an error, say plainly that it is not "
+            f"available. NEVER invent, estimate or carry over values that are not in the data or tool results.\n"
             f"- For generation questions: use the GENERATION MIX sections which show fuel type, MW, and percentages per region.\n"
             f"- For renewable questions: use renewable_percentage and renewable_mw from each region.\n"
             f"- For total NEM output: use the NEM TOTAL GENERATION line.\n"
@@ -2190,6 +2229,7 @@ async def copilot_chat(req: ChatRequest):
                         # No tool calls — stream the final content
                         content = msg.get("content", "")
                         if content:
+                            answer_parts.append(content)
                             yield f'data: {json.dumps({"content": content})}\n\n'
                         break
 
@@ -2210,6 +2250,8 @@ async def copilot_chat(req: ChatRequest):
                         except json.JSONDecodeError:
                             args = {}
                         tool_result = _dispatch_tool(fn["name"], args)
+                        trace_calls.append({"round": _round + 1, "name": fn["name"], "arguments": args,
+                                            "result_chars": len(tool_result), "result_preview": tool_result[:600]})
                         tool_messages.append({
                             "role": "tool",
                             "tool_call_id": tc["id"],
@@ -2249,6 +2291,7 @@ async def copilot_chat(req: ChatRequest):
                                         delta = choices[0].get("delta", {})
                                         content = delta.get("content", "")
                                         if content:
+                                            answer_parts.append(content)
                                             yield f'data: {json.dumps({"content": content})}\n\n'
                                     u = data_obj.get("usage")
                                     if u:
@@ -2261,8 +2304,18 @@ async def copilot_chat(req: ChatRequest):
             logger.exception("Chat stream error")
             yield f'data: {json.dumps({"content": f"Error: {str(exc)[:200]}"})}\n\n'
 
+        interaction_id = str(_uuid.uuid4())
+        await _asyncio.to_thread(_log_interaction, {
+            "interaction_id": interaction_id,
+            "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S"),
+            "model": _CHAT_MODEL, "question": req.message, "tool_calls": trace_calls,
+            "answer": "".join(answer_parts), "input_tokens": input_tokens, "output_tokens": output_tokens,
+            "latency_ms": int((_time.monotonic() - started) * 1000),
+            "source": os.environ.get("DATABRICKS_APP_NAME", "local"),
+        })
+
         # Send done event with token usage
-        yield f'event: done\ndata: {json.dumps({"input_tokens": input_tokens, "output_tokens": output_tokens})}\n\n'
+        yield f'event: done\ndata: {json.dumps({"input_tokens": input_tokens, "output_tokens": output_tokens, "interaction_id": interaction_id})}\n\n'
         yield "data: [DONE]\n\n"
 
     return StreamingResponse(_stream(), media_type="text/event-stream")

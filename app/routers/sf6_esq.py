@@ -11,6 +11,8 @@ from datetime import date, timedelta
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from .shared import _sample_data
+
 router = APIRouter()
 
 _DNSPS = ["AusNet Services", "Ergon Energy", "Energex", "Ausgrid", "Essential Energy"]
@@ -26,6 +28,7 @@ _VEHICLE_TYPES = [
 
 
 @router.get("/api/esq/summary")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def esq_summary() -> JSONResponse:
     """ESQ headline — SF6 inventory, emissions, fleet EV %, and net-zero target."""
     _r.seed(680)
@@ -45,6 +48,7 @@ async def esq_summary() -> JSONResponse:
 
 
 @router.get("/api/esq/sf6")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def esq_sf6() -> JSONResponse:
     """SF6 asset inventory and leakage rates by asset type and DNSP."""
     _r.seed(681)
@@ -75,6 +79,7 @@ async def esq_sf6() -> JSONResponse:
 
 
 @router.get("/api/esq/emissions-trend")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def esq_emissions_trend() -> JSONResponse:
     """5-year Scope 1 and Scope 2 emissions trend."""
     _r.seed(682)
@@ -95,6 +100,7 @@ async def esq_emissions_trend() -> JSONResponse:
 
 
 @router.get("/api/esq/fleet")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def esq_fleet() -> JSONResponse:
     """Fleet electrification status and CO2e savings."""
     _r.seed(683)

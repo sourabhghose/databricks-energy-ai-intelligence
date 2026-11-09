@@ -11,6 +11,8 @@ from datetime import date, timedelta
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from .shared import _sample_data
+
 router = APIRouter()
 
 _DNSPS = ["AusNet Services", "Ergon Energy", "Energex", "Ausgrid", "Essential Energy"]
@@ -28,6 +30,7 @@ _CUSTOMER_NAMES = [
 
 
 @router.get("/api/large-load/summary")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def large_load_summary() -> JSONResponse:
     """Large load connection pipeline summary by technology type."""
     _r.seed(640)
@@ -53,6 +56,7 @@ async def large_load_summary() -> JSONResponse:
 
 
 @router.get("/api/large-load/pipeline")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def large_load_pipeline() -> JSONResponse:
     """Large load connection application pipeline."""
     _r.seed(641)
@@ -79,6 +83,7 @@ async def large_load_pipeline() -> JSONResponse:
 
 
 @router.get("/api/large-load/capacity-outlook")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def large_load_capacity_outlook() -> JSONResponse:
     """Zone substation capacity outlook for large load uptake."""
     _r.seed(642)
@@ -100,6 +105,7 @@ async def large_load_capacity_outlook() -> JSONResponse:
 
 
 @router.get("/api/large-load/revenue-opportunity")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def large_load_revenue_opportunity() -> JSONResponse:
     """Revenue opportunity by large load type."""
     _r.seed(643)

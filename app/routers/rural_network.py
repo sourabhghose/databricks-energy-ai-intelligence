@@ -13,6 +13,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from .shared import (
+    _sample_data,
     _CATALOG,
     _cache_get,
     _cache_set,
@@ -24,6 +25,7 @@ _SCHEMA = f"{_CATALOG}.gold"
 
 
 @router.get("/api/rural/summary")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def rural_summary() -> JSONResponse:
     """Rural/CSO KPI summary."""
     cache_key = "rural:summary"
@@ -81,6 +83,7 @@ async def rural_summary() -> JSONResponse:
 
 
 @router.get("/api/rural/cso")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def rural_cso(
     dnsp: Optional[str] = Query(None),
     year: Optional[int] = Query(None),
@@ -126,6 +129,7 @@ async def rural_cso(
 
 
 @router.get("/api/rural/feeder-performance")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def rural_feeder_performance(dnsp: Optional[str] = Query(None)) -> JSONResponse:
     """SAIDI by feeder length tier."""
     where = f"WHERE dnsp = '{dnsp}'" if dnsp else "WHERE dnsp = 'Ergon Energy'"
@@ -160,6 +164,7 @@ async def rural_feeder_performance(dnsp: Optional[str] = Query(None)) -> JSONRes
 
 
 @router.get("/api/rural/raps")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def rural_raps(
     dnsp: Optional[str] = Query(None),
     region: Optional[str] = Query(None),
@@ -206,6 +211,7 @@ async def rural_raps(
 
 
 @router.get("/api/rural/non-network")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def rural_non_network() -> JSONResponse:
     """Non-network alternatives register."""
     rows = _query_gold(f"""
@@ -244,6 +250,7 @@ async def rural_non_network() -> JSONResponse:
 
 
 @router.get("/api/rural/ergon-energex")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def rural_ergon_energex() -> JSONResponse:
     """Ergon vs Energex operational and financial comparison."""
     rows = _query_gold(f"""

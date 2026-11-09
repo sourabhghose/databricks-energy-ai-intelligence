@@ -12,6 +12,12 @@ variables:
   catalog:
     description: "Unity Catalog name for the target environment"
     default: energy_copilot_catalog
+  group_scope:
+    description: "account = role groups are account groups (UC GRANTs to groups); workspace = workspace-local groups (row filter/mask via is_member)"
+    default: account
+  app_principal:
+    description: "Application id of the app service principal (entitled to the whole trading book)"
+    default: ""
   lakebase_instance_name:
     description: "Lakebase database instance name"
     default: energy-copilot-db

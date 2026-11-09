@@ -12,6 +12,8 @@ from datetime import date
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from .shared import _sample_data
+
 router = APIRouter()
 
 _DNSPS = ["AusNet Services", "Ergon Energy", "Energex", "Ausgrid", "Essential Energy", "SA Power Networks"]
@@ -28,6 +30,7 @@ _STRENGTH = ["Strong", "Moderate", "Weak"]
 # =========================================================================
 
 @router.get("/api/asset-intel/summary")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def asset_intel_summary() -> JSONResponse:
     """Portfolio-level asset health and regulatory spend summary."""
     _r.seed(740)
@@ -49,6 +52,7 @@ async def asset_intel_summary() -> JSONResponse:
 # =========================================================================
 
 @router.get("/api/asset-intel/health-scores")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def asset_intel_health_scores() -> JSONResponse:
     """Individual asset health scores with failure probability and recommended actions."""
     _r.seed(741)
@@ -95,6 +99,7 @@ async def asset_intel_health_scores() -> JSONResponse:
 # =========================================================================
 
 @router.get("/api/asset-intel/expenditure-justification")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def asset_intel_expenditure_justification() -> JSONResponse:
     """AER expenditure justification by asset category."""
     _r.seed(742)
@@ -143,6 +148,7 @@ async def asset_intel_expenditure_justification() -> JSONResponse:
 # =========================================================================
 
 @router.get("/api/asset-intel/cross-system")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def asset_intel_cross_system() -> JSONResponse:
     """Cross-system asset view combining Maximo, SAP, and GIS data."""
     _r.seed(743)
@@ -212,6 +218,7 @@ _TOP_DRIVERS = [
 
 
 @router.get("/api/asset-intel/ml-predictions")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def asset_intel_ml_predictions() -> JSONResponse:
     """XGBoost failure predictions per asset — MLflow model metadata included."""
     _r.seed(745)

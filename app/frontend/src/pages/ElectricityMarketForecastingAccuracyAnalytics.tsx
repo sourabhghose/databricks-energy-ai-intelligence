@@ -102,7 +102,7 @@ export default function ElectricityMarketForecastingAccuracyAnalytics() {
       color: 'text-cyan-400',
     },
     {
-      label: 'Spike Prediction Accuracy',
+      label: 'Spike Recall (1h, SA1 only had test-window spikes)',
       value: typeof summary.spike_prediction_accuracy_pct === 'number' ? summary.spike_prediction_accuracy_pct.toFixed(1) : '—',
       unit: '%',
       color: 'text-amber-400',
@@ -231,7 +231,7 @@ export default function ElectricityMarketForecastingAccuracyAnalytics() {
           {summary.best_model_name}
           {' — '}
           Avg Renewable Error:{' '}
-          <span className="font-semibold text-emerald-400">{summary.avg_renewable_error_pct.toFixed(2)}%</span>
+          <span className="font-semibold text-emerald-400">{typeof summary.avg_renewable_error_pct === 'number' ? `${summary.avg_renewable_error_pct.toFixed(2)}%` : 'n/a (no renewable model)'}</span>
         </p>
       </div>
 

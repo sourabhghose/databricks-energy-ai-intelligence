@@ -5,7 +5,7 @@ from datetime import datetime as _dt
 
 from fastapi import APIRouter
 
-from .shared import _CATALOG, _NEM_REGIONS, _query_gold
+from .shared import _sample_data, _CATALOG, _NEM_REGIONS, _query_gold
 
 router = APIRouter()
 
@@ -16,6 +16,7 @@ router = APIRouter()
 # --- Group 1: Bidding Behaviour (5 endpoints) ---
 
 @router.get("/api/bidding-behaviour/withholding")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def bidding_behaviour_withholding():
     # --- real-data block: facility capacity vs actual generation ---
     try:
@@ -113,6 +114,7 @@ def bidding_behaviour_withholding():
 
 
 @router.get("/api/bidding-behaviour/price-distribution")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def bidding_behaviour_price_distribution():
     # --- real-data block: use spot price distribution as proxy for bid price bands ---
     try:
@@ -200,6 +202,7 @@ def bidding_behaviour_price_distribution():
 
 
 @router.get("/api/bidding-behaviour/rebid-patterns")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def bidding_behaviour_rebid_patterns():
     # --- real-data block: derive rebid-like patterns from price volatility and generation ---
     try:
@@ -280,6 +283,7 @@ def bidding_behaviour_rebid_patterns():
 
 
 @router.get("/api/bidding-behaviour/market-concentration")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def bidding_behaviour_market_concentration():
     # Try real facility data for HHI concentration
     try:
@@ -351,6 +355,7 @@ def bidding_behaviour_market_concentration():
 
 
 @router.get("/api/bidding-behaviour/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def bidding_behaviour_dashboard():
     _r.seed(8005)
     withholding = bidding_behaviour_withholding()
@@ -373,6 +378,7 @@ def bidding_behaviour_dashboard():
 # --- Group 2: Bidding Compliance (1 endpoint) ---
 
 @router.get("/api/bidding-compliance/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def bidding_compliance_dashboard():
     # --- real-data block: derive compliance indicators from prices, generation, facilities ---
     try:
@@ -647,6 +653,7 @@ def bidding_compliance_dashboard():
 # --- Group 3: Strategy Dashboards (3 endpoints) ---
 
 @router.get("/api/wholesale-bidding-strategy/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def wholesale_bidding_strategy_dashboard():
     # Try real facility + bid data for portfolio analysis
     try:
@@ -812,6 +819,7 @@ def wholesale_bidding_strategy_dashboard():
 
 
 @router.get("/api/market-bidding-strategy/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def market_bidding_strategy_dashboard():
     # Try real bid stack + facility data
     try:
@@ -1072,6 +1080,7 @@ def market_bidding_strategy_dashboard():
 
 
 @router.get("/api/market-concentration-bidding/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def market_concentration_bidding_dashboard():
     # Try real facility data for market concentration
     try:

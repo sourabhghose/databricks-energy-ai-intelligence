@@ -1,28 +1,23 @@
-# ============================================================
-# Databricks App Resource — Energy Copilot
-# NOTE: App is deployed manually via `databricks apps deploy`.
-# The config below is for reference only — commenting out to
-# avoid conflicts with the already-deployed app.
-# ============================================================
-
-# resources:
-#   apps:
-#     energy_copilot_app:
-#       name: ${var.app_name}
-#       source_code_path: ../app
-#       config:
-#         command: ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
-#         env:
-#           - name: DATABRICKS_CATALOG
-#             value: ${var.catalog}
-#           - name: LAKEBASE_INSTANCE_NAME
-#             value: ${var.lakebase_instance_name}
-#           - name: LAKEBASE_DATABASE
-#             value: ${var.lakebase_database}
-#           - name: VS_ENDPOINT_NAME
-#             value: ${var.vs_endpoint_name}
-#       resources:
-#         - name: sql-warehouse
-#           sql_warehouse:
-#             id: ${var.warehouse_id}
-#             permission: CAN_USE
+resources:
+  apps:
+    energy_copilot_app:
+      name: ${var.app_name}
+      description: "AUS Energy Copilot — real-time NEM market intelligence"
+      source_code_path: ./app
+      resources:
+        - name: sql-warehouse
+          sql_warehouse:
+            id: ${var.warehouse_id}
+            permission: CAN_USE
+      config:
+        env:
+          - name: DATABRICKS_CATALOG
+            value: ${var.catalog}
+          - name: SQL_WAREHOUSE_ID
+            value: ${var.warehouse_id}
+          - name: LAKEBASE_INSTANCE_NAME
+            value: ${var.lakebase_instance_name}
+          - name: LAKEBASE_DATABASE
+            value: ${var.lakebase_database}
+          - name: VS_ENDPOINT_NAME
+            value: ${var.vs_endpoint_name}

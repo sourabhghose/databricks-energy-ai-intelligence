@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter
 
-from .shared import _CATALOG, _NEM_REGIONS, _query_gold
+from .shared import _sample_data, _CATALOG, _NEM_REGIONS, _query_gold
 
 router = APIRouter()
 
@@ -13,6 +13,7 @@ router = APIRouter()
 # =========================================================================
 
 @router.get("/api/nem-suspension/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def nem_suspension_dashboard():
     ts = "2026-02-27T06:00:00+11:00"
     events = [
@@ -60,16 +61,19 @@ async def nem_suspension_dashboard():
     return {"timestamp":ts,"total_events_5yr":len(events),"total_suspension_days":total_days,"total_market_cost_m_aud":round(total_cost,1),"total_load_shed_gwh":round(total_shed,1),"events":events,"interventions":interventions,"timeline":timeline}
 
 @router.get("/api/nem-suspension/events")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def nem_suspension_events():
     d = await nem_suspension_dashboard()
     return d["events"]
 
 @router.get("/api/nem-suspension/interventions")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def nem_suspension_interventions():
     d = await nem_suspension_dashboard()
     return d["interventions"]
 
 @router.get("/api/nem-suspension/timeline")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def nem_suspension_timeline():
     d = await nem_suspension_dashboard()
     return d["timeline"]
@@ -79,6 +83,7 @@ async def nem_suspension_timeline():
 # =========================================================================
 
 @router.get("/api/price-setter/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def price_setter_dashboard(region: str = "SA1"):
     import random as _r
     _r.seed(hash(region) % 10000)
@@ -242,11 +247,13 @@ async def price_setter_dashboard(region: str = "SA1"):
     }
 
 @router.get("/api/price-setter/records")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def price_setter_records(region: str = "SA1"):
     data = await price_setter_dashboard(region)
     return data["price_setter_records"]
 
 @router.get("/api/price-setter/frequency")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def price_setter_frequency(region: str = "SA1"):
     data = await price_setter_dashboard(region)
     return data["frequency_stats"]
@@ -397,10 +404,12 @@ def _build_spot_cap_data():
     }
 
 @router.get("/api/spot-cap/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def spot_cap_dashboard():
     return _build_spot_cap_data()
 
 @router.get("/api/spot-cap/cpt-tracker")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def spot_cap_cpt_tracker(region: str = None, quarter: str = None):
     data = _build_spot_cap_data()
     records = data["cpt_tracker"]
@@ -411,6 +420,7 @@ async def spot_cap_cpt_tracker(region: str = None, quarter: str = None):
     return records
 
 @router.get("/api/spot-cap/cap-events")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def spot_cap_events(region: str = None):
     data = _build_spot_cap_data()
     events = data["cap_events"]
