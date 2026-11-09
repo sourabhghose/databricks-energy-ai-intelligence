@@ -12,6 +12,10 @@ AI-powered market intelligence for the Australian National Electricity Market �
 > **Reviewers:** every step below links to the code that implements it and to the captured run output that proves it ran.
 > All evidence was captured on 2026-11-09 on `fevm-serverless-stable-2b9lj3.cloud.databricks.com`
 > (catalog `serverless_stable_2b9lj3_catalog`). Start here: **[docs/evidence/README.md](https://github.com/sourabhghose/databricks-energy-ai-intelligence/blob/main/docs/evidence/README.md)**
+>
+> **Real notebook run outputs** (exported job runs with every cell's printed output): **[docs/evidence/runs/](docs/evidence/runs/README.md)**.
+> Start with the one-run summary [`docs/evidence/runs/evidence_verification_…md`](docs/evidence/runs/evidence_verification_evidence_verification_197619732568832.md),
+> which shows DQ totals, UC row filter and mask, lineage, model metrics, live forecasts, the AI assistant audit log and a Genie answer, all executed in Databricks.
 
 ## Data journey: raw → governed → AI, with an artifact for every step
 
