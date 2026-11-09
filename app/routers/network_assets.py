@@ -12,6 +12,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Query
 
 from .shared import (
+    _sample_data,
     _CATALOG,
     _NEM_REGIONS,
     _query_gold,
@@ -249,30 +250,35 @@ def _core_replacement_priority() -> Dict[str, Any]:
 # =========================================================================
 
 @router.get("/api/assets/health-ranking")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def health_ranking():
     """Assets ranked by health index (worst first)."""
     return _core_health_ranking()
 
 
 @router.get("/api/assets/failure-risk")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def failure_risk(min_probability: float = Query(default=0.5, ge=0, le=1)):
     """Top failure risk assets (>threshold probability)."""
     return _core_failure_risk(min_probability)
 
 
 @router.get("/api/assets/condition-trends")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def condition_trends():
     """Health index trends over time by asset type."""
     return _core_condition_trends()
 
 
 @router.get("/api/assets/replacement-priority")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def replacement_priority():
     """Replacement priority ranking (risk x cost x criticality)."""
     return _core_replacement_priority()
 
 
 @router.get("/api/assets")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def asset_list(
     asset_type: Optional[str] = Query(default=None),
     region: Optional[str] = Query(default=None),
@@ -283,6 +289,7 @@ async def asset_list(
 
 
 @router.get("/api/assets/{asset_id}")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def asset_detail(asset_id: str):
     """Asset detail: health index, failure prediction, loading history."""
     return _core_asset_detail(asset_id)

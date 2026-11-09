@@ -13,6 +13,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Query
 
 from .shared import (
+    _sample_data,
     _CATALOG,
     _cache_get,
     _cache_set,
@@ -345,12 +346,14 @@ def _core_planning_summary() -> Dict[str, Any]:
 # =========================================================================
 
 @router.get("/api/planning/summary")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def planning_summary():
     """Constraints count, breach-by-2030 count, EV growth rate."""
     return _core_planning_summary()
 
 
 @router.get("/api/planning/demand-forecast")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def demand_forecast(
     zone_substation: Optional[str] = Query(default=None),
     scenario: Optional[str] = Query(default=None),
@@ -360,42 +363,49 @@ async def demand_forecast(
 
 
 @router.get("/api/planning/demand-forecast/{zone_substation}")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def demand_forecast_detail(zone_substation: str):
     """Single zone sub multi-scenario forecast."""
     return _core_demand_forecast_detail(zone_substation)
 
 
 @router.get("/api/planning/constraints")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def constraints(constraint_type: Optional[str] = Query(default=None)):
     """Network constraint register."""
     return _core_constraints(constraint_type)
 
 
 @router.get("/api/planning/constraints/{constraint_id}")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def constraint_detail(constraint_id: str):
     """Constraint detail with options (network vs non-network NPV)."""
     return _core_constraint_detail(constraint_id)
 
 
 @router.get("/api/planning/ev-impact")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def ev_impact(scenario: Optional[str] = Query(default=None)):
     """EV charging impact projections by scenario."""
     return _core_ev_impact(scenario)
 
 
 @router.get("/api/planning/ev-impact/{feeder_id}")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def ev_impact_detail(feeder_id: str):
     """Single feeder EV impact detail."""
     return _core_ev_impact_detail(feeder_id)
 
 
 @router.get("/api/planning/ev-profiles")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def ev_profiles():
     """EV charging load profiles by type."""
     return _core_ev_profiles()
 
 
 @router.get("/api/planning/augmentation-options")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def augmentation_options():
     """Augmentation options ranked by NPV."""
     return _core_augmentation_options()

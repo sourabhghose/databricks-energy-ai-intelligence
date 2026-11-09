@@ -12,6 +12,8 @@ from datetime import date, timedelta
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from .shared import _sample_data
+
 router = APIRouter()
 
 _DNSPS = ["AusNet Services", "Ergon Energy", "Energex", "Ausgrid", "Essential Energy", "SA Power Networks"]
@@ -32,6 +34,7 @@ _CURTAILMENT_CAUSES = ["Voltage", "Thermal", "Protection"]
 # =========================================================================
 
 @router.get("/api/hosting-capacity/summary")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def hosting_capacity_summary() -> JSONResponse:
     """Network-wide DER hosting capacity summary and curtailment statistics."""
     _r.seed(780)
@@ -56,6 +59,7 @@ async def hosting_capacity_summary() -> JSONResponse:
 # =========================================================================
 
 @router.get("/api/hosting-capacity/feeders")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def hosting_capacity_feeders() -> JSONResponse:
     """Feeder-level hosting capacity and DER constraint data."""
     _r.seed(781)
@@ -96,6 +100,7 @@ async def hosting_capacity_feeders() -> JSONResponse:
 # =========================================================================
 
 @router.get("/api/hosting-capacity/scenarios")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def hosting_capacity_scenarios() -> JSONResponse:
     """DER penetration scenarios and network impact modelling."""
     _r.seed(782)
@@ -128,6 +133,7 @@ async def hosting_capacity_scenarios() -> JSONResponse:
 # =========================================================================
 
 @router.get("/api/hosting-capacity/curtailment")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def hosting_capacity_curtailment() -> JSONResponse:
     """Recent DER curtailment events with cause and customer impact."""
     _r.seed(783)

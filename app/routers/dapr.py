@@ -11,6 +11,8 @@ from datetime import date, timedelta
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from .shared import _sample_data
+
 router = APIRouter()
 
 _CONSTRAINT_TYPES = [
@@ -25,6 +27,7 @@ _TECHNOLOGIES = [
 
 
 @router.get("/api/dapr/summary")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def dapr_summary() -> JSONResponse:
     """DAPR high-level summary — constraints, projects, compliance."""
     _r.seed(580)
@@ -39,6 +42,7 @@ async def dapr_summary() -> JSONResponse:
 
 
 @router.get("/api/dapr/constraints")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def dapr_constraints() -> JSONResponse:
     """Network constraints — type, breach year, and proposed solution."""
     _r.seed(581)
@@ -62,6 +66,7 @@ async def dapr_constraints() -> JSONResponse:
 
 
 @router.get("/api/dapr/obligations")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def dapr_obligations() -> JSONResponse:
     """DAPR regulatory obligations and compliance status."""
     _r.seed(582)
@@ -102,6 +107,7 @@ async def dapr_obligations() -> JSONResponse:
 
 
 @router.get("/api/dapr/non-network-alternatives")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def dapr_non_network_alternatives() -> JSONResponse:
     """Non-network alternative projects assessed under DAPR."""
     _r.seed(583)

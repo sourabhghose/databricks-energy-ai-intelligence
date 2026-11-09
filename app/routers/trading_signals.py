@@ -9,12 +9,11 @@ Each signal includes a markdown rationale with traceable chain of reasoning.
 from __future__ import annotations
 
 import json
-import random as _r
 import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Query, HTTPException
 from fastapi.responses import JSONResponse
 
 from .shared import (
@@ -41,12 +40,12 @@ _SCHEMA = f"{_CATALOG}.gold"
 _SIGNAL_TYPES = [
     "FORWARD_MISPRICING", "SPOT_ARBITRAGE", "CONSTRAINT_PLAY",
     "WEATHER_SHIFT", "DEMAND_SURGE", "VOLATILITY_REGIME",
-    "RENEWABLE_SHORTFALL", "PEAK_SPREAD",
+    "RENEWABLE_SHORTFALL", "PEAK_SPREAD", "SPIKE_RISK",
 ]
 _TTL_HOURS = {
     "FORWARD_MISPRICING": 4, "SPOT_ARBITRAGE": 0.5, "CONSTRAINT_PLAY": 1,
     "WEATHER_SHIFT": 2, "DEMAND_SURGE": 1, "VOLATILITY_REGIME": 8,
-    "RENEWABLE_SHORTFALL": 2, "PEAK_SPREAD": 4,
+    "RENEWABLE_SHORTFALL": 2, "PEAK_SPREAD": 4, "SPIKE_RISK": 1,
 }
 
 
@@ -67,6 +66,7 @@ def _generate_signals_core(region: Optional[str] = None) -> List[Dict[str, Any]]
     demand_forecasts = _fetch_demand_forecasts(regions)
     generation = _fetch_generation(regions)
     futures = _fetch_futures()
+    spike_forecasts = _fetch_spike_forecasts()
 
     for r in regions:
         r_prices = [p for p in prices if p.get("region_id") == r]
@@ -110,6 +110,11 @@ def _generate_signals_core(region: Optional[str] = None) -> List[Dict[str, Any]]
 
         # 8. PEAK_SPREAD
         sig = _detect_peak_spread(r, r_prices, futures, now)
+        if sig:
+            signals.append(sig)
+
+        # 9. SPIKE_RISK — live probability from the UC-registered LightGBM spike classifier
+        sig = _detect_spike_risk(r, spike_forecasts.get(r), now)
         if sig:
             signals.append(sig)
 
@@ -650,56 +655,55 @@ def _detect_peak_spread(region: str, prices: List[Dict],
 
 
 # ---------------------------------------------------------------------------
-# Mock signal fallback
+# 9. SPIKE_RISK — driven by the live spike classifier (gold.price_forecasts)
 # ---------------------------------------------------------------------------
 
-def _mock_signals() -> List[Dict[str, Any]]:
-    """Generate mock signals when live data isn't available."""
-    _r.seed(42)
-    now = datetime.now(timezone.utc)
-    signals = []
-    for i, (stype, region) in enumerate([
-        ("FORWARD_MISPRICING", "NSW1"), ("SPOT_ARBITRAGE", "QLD1"),
-        ("CONSTRAINT_PLAY", "SA1"), ("WEATHER_SHIFT", "VIC1"),
-        ("DEMAND_SURGE", "NSW1"), ("VOLATILITY_REGIME", "SA1"),
-        ("RENEWABLE_SHORTFALL", "QLD1"), ("PEAK_SPREAD", "TAS1"),
-    ]):
-        direction = _r.choice(["BUY", "SELL"])
-        confidence = round(_r.uniform(0.55, 0.92), 3)
-        profit = round(_r.uniform(5000, 150000), 2)
-        risk = round(profit * _r.uniform(0.25, 0.5), 2)
-        vol = round(_r.uniform(10, 50), 1)
-        price = round(_r.uniform(40, 200), 2)
-        ttl = _TTL_HOURS.get(stype, 2)
-        signals.append({
-            "signal_id": str(uuid.uuid4()),
-            "signal_type": stype,
-            "region": region,
-            "direction": direction,
-            "confidence": confidence,
-            "expected_profit_aud": profit,
-            "risk_aud": risk,
-            "reward_risk_ratio": round(profit / risk, 2) if risk > 0 else 0,
-            "suggested_volume_mw": vol,
-            "suggested_price": price,
-            "suggested_trade_type": _r.choice(["SWAP", "SPOT", "FORWARD"]),
-            "suggested_profile": _r.choice(["FLAT", "PEAK", "OFF_PEAK"]),
-            "suggested_start_date": (now + timedelta(days=1)).strftime("%Y-%m-%d"),
-            "suggested_end_date": (now + timedelta(days=90)).strftime("%Y-%m-%d"),
-            "rationale": (
-                f"### {stype.replace('_', ' ').title()} — {region}\n\n"
-                f"**What:** Mock signal for demonstration.\n\n"
-                f"**Why:** Simulated market condition detected with {confidence*100:.0f}% confidence.\n\n"
-                f"**Risk:** This is mock data for UI demonstration."
-            ),
-            "market_context": json.dumps({"mock": True}),
-            "status": "ACTIVE",
-            "generated_at": now.strftime("%Y-%m-%d %H:%M:%S"),
-            "expires_at": (now + timedelta(hours=ttl)).strftime("%Y-%m-%d %H:%M:%S"),
-            "executed_trade_id": None,
-            "executed_at": None,
-        })
-    return signals
+def _fetch_spike_forecasts() -> Dict[str, Dict]:
+    """Latest 1-hour-ahead spike probability per region with the region's validation-tuned threshold."""
+    rows = _query_gold(f"""
+        WITH latest AS (
+          SELECT f.*, row_number() OVER (PARTITION BY region_id ORDER BY forecast_run_at DESC) AS rn
+          FROM {_SCHEMA}.price_forecasts f
+          WHERE model_name LIKE '%.ml.nem_price_forecast_%' AND horizon_intervals = 12)
+        SELECT l.region_id, l.forecast_run_at, l.interval_datetime, l.predicted_rrp, l.spike_probability,
+               l.model_name, l.model_version, m.spike_threshold, m.spike_precision, m.spike_recall
+        FROM latest l LEFT JOIN {_SCHEMA}.forecast_model_metrics m
+          ON m.target = 'price' AND m.region = l.region_id AND m.horizon_intervals = 12
+         AND m.trained_at = (SELECT max(trained_at) FROM {_SCHEMA}.forecast_model_metrics)
+        WHERE l.rn = 1
+    """) or []
+    return {r["region_id"]: r for r in rows}
+
+
+def _detect_spike_risk(region: str, fc: Optional[Dict], now: datetime) -> Optional[Dict]:
+    if not fc or fc.get("spike_probability") is None or fc.get("spike_threshold") is None:
+        return None
+    prob, thr = float(fc["spike_probability"]), float(fc["spike_threshold"])
+    if prob < thr:
+        return None
+    precision = float(fc.get("spike_precision") or 0)
+    rationale = (
+        f"### Spike Risk — {region}\n\n"
+        f"**What:** The LightGBM spike classifier ({fc['model_name'].split('.')[-1]} v{fc['model_version']}) gives "
+        f"{prob:.1%} probability that {region} RRP exceeds $300/MWh at {fc['interval_datetime']} UTC "
+        f"(alert threshold {thr:.1%}, tuned on a validation window).\n\n"
+        f"**Why:** Live forecast issued {fc['forecast_run_at']} UTC from real NEMWEB data; predicted RRP "
+        f"${float(fc['predicted_rrp']):.0f}/MWh.\n\n"
+        f"**Risk:** Held-out precision was {precision:.0%} — most alerts do not become spikes. Treat as an early "
+        f"warning to check hedge cover and storage position, not as a trade on its own."
+    )
+    return _make_signal(
+        "SPIKE_RISK", region, "BUY", min(0.95, prob), 0.0, 0.0, 0.0, float(fc["predicted_rrp"]),
+        "CAP", "PEAK", rationale,
+        {"spike_probability": prob, "threshold": thr, "model": fc["model_name"], "model_version": fc["model_version"],
+         "held_out_precision": precision, "held_out_recall": fc.get("spike_recall")},
+        now,
+    )
+
+
+def _live_scan(region: Optional[str] = None) -> List[Dict[str, Any]]:
+    """Run the real detectors now (not persisted) — used when no signals are stored yet."""
+    return _generate_signals_core(region)
 
 
 # =========================================================================
@@ -738,15 +742,10 @@ async def list_signals(
     except Exception as exc:
         logger.warning("list_signals error: %s", exc)
 
-    # Fallback to mock
-    mock = _mock_signals()
-    if region:
-        mock = [s for s in mock if s["region"] == region]
-    if signal_type:
-        mock = [s for s in mock if s["signal_type"] == signal_type]
-    if min_confidence > 0:
-        mock = [s for s in mock if s["confidence"] >= min_confidence]
-    return {"signals": mock, "count": len(mock)}
+    # No stored signals: run the real detectors live (not persisted)
+    live = [s for s in _live_scan(region)
+            if (not signal_type or s["signal_type"] == signal_type) and s["confidence"] >= min_confidence]
+    return {"signals": live, "count": len(live), "source": "live_scan"}
 
 
 @router.post("/api/signals/scan")
@@ -765,11 +764,7 @@ async def scan_signals(region: Optional[str] = Query(None)):
     # Generate new signals
     signals = _generate_signals_core(region)
 
-    if not signals:
-        # Fallback to mock
-        signals = _mock_signals()
-        if region:
-            signals = [s for s in signals if s["region"] == region]
+    # No mock fallback: an empty scan means no detector fired on current real data.
 
     # Persist to Delta
     if signals:
@@ -841,26 +836,8 @@ async def signal_performance():
     except Exception as exc:
         logger.warning("signal_performance error: %s", exc)
 
-    # Mock fallback
-    _r.seed(99)
-    performance = []
-    for stype in _SIGNAL_TYPES:
-        total = _r.randint(10, 80)
-        executed = _r.randint(2, total // 2)
-        expired = _r.randint(1, total // 3)
-        dismissed = total - executed - expired - _r.randint(0, 3)
-        active = max(0, total - executed - expired - dismissed)
-        performance.append({
-            "signal_type": stype,
-            "total_signals": total,
-            "executed": executed,
-            "expired": expired,
-            "dismissed": max(0, dismissed),
-            "active": active,
-            "win_rate": round(_r.uniform(0.3, 0.75), 3),
-            "total_expected_profit": round(_r.uniform(50000, 500000), 2),
-            "avg_confidence": round(_r.uniform(0.55, 0.85), 3),
-        })
+    # No signal history stored yet: performance is genuinely empty
+    performance: List[Dict[str, Any]] = []
     return {"performance": performance, "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
@@ -894,15 +871,16 @@ async def signal_stats():
     except Exception as exc:
         logger.warning("signal_stats error: %s", exc)
 
-    # Mock
+    live = _live_scan()
+    by_type: Dict[str, List[float]] = {}
+    for sig in live:
+        by_type.setdefault(sig["signal_type"], []).append(sig["confidence"])
     return {
-        "total_active": 8,
-        "total_opportunity_aud": 425000.0,
-        "avg_confidence": 0.72,
-        "by_type": [
-            {"signal_type": t, "count": _r.randint(0, 3), "avg_confidence": round(_r.uniform(0.5, 0.9), 3)}
-            for t in _SIGNAL_TYPES
-        ],
+        "total_active": len(live),
+        "total_opportunity_aud": round(sum(sig["expected_profit_aud"] for sig in live), 2),
+        "avg_confidence": round(sum(sig["confidence"] for sig in live) / len(live), 3) if live else 0.0,
+        "by_type": [{"signal_type": t, "count": len(c), "avg_confidence": round(sum(c) / len(c), 3)} for t, c in by_type.items()],
+        "source": "live_scan",
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -935,6 +913,7 @@ async def get_config():
             "min_confidence": {"value": 0.5},
             "enabled_signal_types": {"value": _SIGNAL_TYPES},
         },
+        "source": "engine_defaults",
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -957,7 +936,7 @@ async def update_config(key: str, value: Dict[str, Any] = {}):
         return {"status": "updated", "key": key, "value": value}
     except Exception as exc:
         logger.warning("update_config error: %s", exc)
-        return {"status": "updated", "key": key, "value": value}
+        raise HTTPException(status_code=500, detail="Failed to persist signal config") from exc
 
 
 @router.get("/api/signals/summary")
@@ -982,17 +961,13 @@ async def signal_summary():
     except Exception as exc:
         logger.warning("signal_summary error: %s", exc)
 
-    # Mock
-    mock = _mock_signals()[:5]
-    total_opp = sum(s["expected_profit_aud"] for s in mock)
+    live = sorted(_live_scan(), key=lambda sig: -sig["expected_profit_aud"])[:5]
     return {
-        "top_signals": [
-            {k: s[k] for k in ("signal_id", "signal_type", "region", "direction",
-                                "confidence", "expected_profit_aud", "reward_risk_ratio", "rationale")}
-            for s in mock
-        ],
-        "total_opportunity_aud": round(total_opp, 2),
-        "active_count": len(mock),
+        "top_signals": [{k: sig[k] for k in ("signal_id", "signal_type", "region", "direction", "confidence",
+                                             "expected_profit_aud", "reward_risk_ratio", "rationale")} for sig in live],
+        "total_opportunity_aud": round(sum(sig["expected_profit_aud"] for sig in live), 2),
+        "active_count": len(live),
+        "source": "live_scan",
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -1123,27 +1098,24 @@ def _get_trading_signals_core(region: Optional[str] = None,
                 if r.get("generated_at"):
                     r["generated_at"] = str(r["generated_at"])
             return {"signals": rows, "count": len(rows)}
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("get_trading_signals_core query failed: %s", exc)
 
-    mock = _mock_signals()[:5]
+    live = sorted(_live_scan(region), key=lambda sig: -sig["confidence"])[:5]
     return {
         "signals": [
-            {k: s[k] for k in ("signal_type", "region", "direction", "confidence",
-                                "expected_profit_aud", "reward_risk_ratio", "rationale", "generated_at")}
-            for s in mock
+            {k: sig[k] for k in ("signal_type", "region", "direction", "confidence",
+                                  "expected_profit_aud", "reward_risk_ratio", "rationale", "generated_at")}
+            for sig in live
         ],
-        "count": len(mock),
+        "count": len(live),
+        "source": "live_scan",
     }
 
 
 def _scan_trading_opportunities_core(region: Optional[str] = None) -> Dict[str, Any]:
     """Run a fresh scan — used by copilot tool."""
-    signals = _generate_signals_core(region)
-    if not signals:
-        signals = _mock_signals()
-        if region:
-            signals = [s for s in signals if s["region"] == region]
+    signals = _generate_signals_core(region)  # real detectors only; empty means nothing fired
 
     top = sorted(signals, key=lambda s: s.get("expected_profit_aud", 0), reverse=True)[:5]
     total_opp = sum(s.get("expected_profit_aud", 0) for s in signals)

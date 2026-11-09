@@ -29,6 +29,8 @@ import {
 // ---------------------------------------------------------------------------
 
 const MODEL_COLORS: Record<string, string> = {
+  LightGBM: '#3b82f6',
+  'Persistence baseline': '#9ca3af',
   ARIMA:    '#f59e0b',
   LSTM:     '#3b82f6',
   XGBoost:  '#10b981',
@@ -68,10 +70,10 @@ const FEATURE_COLORS: Record<string, string> = {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function fmt1(v: number): string { return v.toFixed(1) }
-function fmt2(v: number): string { return v.toFixed(2) }
-function fmtMW(v: number): string { return `${v.toFixed(0)} MW` }
-function fmtPct(v: number): string { return `${v.toFixed(2)}%` }
+function fmt1(v: number | null): string { return v == null ? '—' : v.toFixed(1) }
+function fmt2(v: number | null): string { return v == null ? '—' : v.toFixed(2) }
+function fmtMW(v: number | null): string { return v == null ? '—' : `${v.toFixed(0)} MW` }
+function fmtPct(v: number | null): string { return v == null ? '—' : `${v.toFixed(2)}%` }
 
 // ---------------------------------------------------------------------------
 // KPI Card
@@ -157,7 +159,7 @@ function ModelPerformanceTable({ models }: { models: DFMModelRecord[] }) {
   )
 
   const bestMape = useMemo(
-    () => Math.min(...filtered.map(m => m.mape_pct)),
+    () => Math.min(...filtered.map(m => m.mape_pct).filter((v): v is number => v != null)),
     [filtered],
   )
 
@@ -259,19 +261,17 @@ function ForecastChart({ forecasts, region }: { forecasts: DFMForecastRecord[]; 
   const byHour = useMemo(() => {
     const hours: Record<number, Record<string, number | null>> = {}
     for (let h = 0; h < 24; h++) {
-      hours[h] = { hour: h, actual: null, lstm: null, ensemble: null, lstm_lo: null, lstm_hi: null, ens_lo: null, ens_hi: null }
+      hours[h] = { hour: h, actual: null, lgbm: null, persistence: null, lgbm_lo: null, lgbm_hi: null }
     }
     for (const f of regionData) {
-      if (f.model_id === `lstm_${rlower}`) {
-        hours[f.hour].lstm     = f.forecast_mw
-        hours[f.hour].lstm_lo  = f.lower_bound_mw
-        hours[f.hour].lstm_hi  = f.upper_bound_mw
+      if (f.model_id === `lgbm_${rlower}`) {
+        hours[f.hour].lgbm     = f.forecast_mw
+        hours[f.hour].lgbm_lo  = f.lower_bound_mw
+        hours[f.hour].lgbm_hi  = f.upper_bound_mw
         hours[f.hour].actual   = f.actual_mw ?? null
       }
-      if (f.model_id === `ensemble_${rlower}`) {
-        hours[f.hour].ensemble = f.forecast_mw
-        hours[f.hour].ens_lo   = f.lower_bound_mw
-        hours[f.hour].ens_hi   = f.upper_bound_mw
+      if (f.model_id === `persistence_${rlower}`) {
+        hours[f.hour].persistence = f.forecast_mw
       }
     }
     return Array.from({ length: 24 }, (_, h) => ({ ...hours[h], label: `${h}:00` }))
@@ -297,7 +297,7 @@ function ForecastChart({ forecasts, region }: { forecasts: DFMForecastRecord[]; 
         24-Hour Demand Forecast — {region}
       </h2>
       <p className="text-xs text-gray-400 mb-4">
-        LSTM vs Ensemble vs Actual demand with 80% confidence intervals
+        1-hour-ahead LightGBM forecast (80% interval) vs persistence baseline vs actual — latest held-out back-test day
       </p>
       <ResponsiveContainer width="100%" height={340}>
         <ComposedChart data={byHour} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
@@ -317,38 +317,21 @@ function ForecastChart({ forecasts, region }: { forecasts: DFMForecastRecord[]; 
           <Legend
             wrapperStyle={{ color: '#9ca3af', fontSize: 12, paddingTop: 12 }}
           />
-          {/* LSTM confidence band */}
+          {/* LightGBM 80% interval */}
           <Area
-            dataKey="lstm_hi"
+            dataKey="lgbm_hi"
             fill="#3b82f6"
             stroke="none"
             fillOpacity={0.12}
-            name="LSTM CI Upper"
+            name="LightGBM 80% upper"
             legendType="none"
           />
           <Area
-            dataKey="lstm_lo"
+            dataKey="lgbm_lo"
             fill="#3b82f6"
             stroke="none"
             fillOpacity={0}
-            name="LSTM CI Lower"
-            legendType="none"
-          />
-          {/* Ensemble confidence band */}
-          <Area
-            dataKey="ens_hi"
-            fill="#ef4444"
-            stroke="none"
-            fillOpacity={0.12}
-            name="Ensemble CI Upper"
-            legendType="none"
-          />
-          <Area
-            dataKey="ens_lo"
-            fill="#ef4444"
-            stroke="none"
-            fillOpacity={0}
-            name="Ensemble CI Lower"
+            name="LightGBM 80% lower"
             legendType="none"
           />
           {/* Forecast lines */}
@@ -362,21 +345,21 @@ function ForecastChart({ forecasts, region }: { forecasts: DFMForecastRecord[]; 
           />
           <Line
             type="monotone"
-            dataKey="lstm"
+            dataKey="lgbm"
             stroke="#3b82f6"
             strokeWidth={2}
             strokeDasharray="5 3"
             dot={false}
-            name="LSTM"
+            name="LightGBM"
           />
           <Line
             type="monotone"
-            dataKey="ensemble"
-            stroke="#ef4444"
+            dataKey="persistence"
+            stroke="#9ca3af"
             strokeWidth={2}
             strokeDasharray="8 3"
             dot={false}
-            name="Ensemble"
+            name="Persistence baseline"
           />
         </ComposedChart>
       </ResponsiveContainer>
@@ -388,29 +371,17 @@ function ForecastChart({ forecasts, region }: { forecasts: DFMForecastRecord[]; 
 // Feature importance horizontal bar chart
 // ---------------------------------------------------------------------------
 
-const ALL_FEATURES = [
-  'TEMPERATURE', 'TIME_OF_DAY', 'DAY_OF_WEEK',
-  'HOLIDAY', 'SOLAR_OUTPUT', 'ECONOMIC_ACTIVITY', 'HUMIDITY',
-]
-
 function FeatureImportanceChart({ data, region }: { data: DFMFeatureImportanceRecord[]; region: string }) {
   const rlower = region.toLowerCase()
-  const regionModels = [`lstm_${rlower}`, `xgb_${rlower}`, `ensemble_${rlower}`]
-  const regionLabels: Record<string, string> = {
-    [`lstm_${rlower}`]:     'LSTM',
-    [`xgb_${rlower}`]:      'XGBoost',
-    [`ensemble_${rlower}`]: 'Ensemble',
-  }
+  const regionModels = [`lgbm_${rlower}`]
+  const regionLabels: Record<string, string> = { [`lgbm_${rlower}`]: 'LightGBM' }
 
+  // Top features of this region's LightGBM model, by share of total split gain
   const chartData = useMemo(() => {
-    return ALL_FEATURES.map(feat => {
-      const row: Record<string, string | number> = { feature: FEATURE_LABELS[feat] ?? feat }
-      for (const mid of regionModels) {
-        const rec = data.find(d => d.model_id === mid && d.feature === feat)
-        row[mid] = rec ? parseFloat((rec.importance_score * 100).toFixed(1)) : 0
-      }
-      return row
-    })
+    return data
+      .filter(d => d.model_id === `lgbm_${rlower}`)
+      .map(d => ({ feature: FEATURE_LABELS[d.feature] ?? d.feature,
+                   [`lgbm_${rlower}`]: parseFloat((d.importance_score * 100).toFixed(1)) }))
   }, [data, rlower])
 
   const CustomTooltip = ({ active, payload, label }: any) => {
@@ -433,7 +404,7 @@ function FeatureImportanceChart({ data, region }: { data: DFMFeatureImportanceRe
         Feature Importance — {region} Models
       </h2>
       <p className="text-xs text-gray-400 mb-4">
-        Relative importance of each input feature (%) across LSTM, XGBoost, and Ensemble
+        Share of total split gain (%) for the top features of the LightGBM model
       </p>
       <ResponsiveContainer width="100%" height={300}>
         <BarChart
@@ -446,7 +417,7 @@ function FeatureImportanceChart({ data, region }: { data: DFMFeatureImportanceRe
             type="number"
             tick={{ fill: '#9ca3af', fontSize: 11 }}
             tickFormatter={v => `${v}%`}
-            domain={[0, 60]}
+            domain={[0, 'auto']}
           />
           <YAxis
             type="category"
@@ -456,9 +427,7 @@ function FeatureImportanceChart({ data, region }: { data: DFMFeatureImportanceRe
           />
           <Tooltip content={<CustomTooltip />} />
           <Legend wrapperStyle={{ color: '#9ca3af', fontSize: 12, paddingTop: 8 }} />
-          <Bar dataKey={`lstm_${rlower}`}     name="LSTM"     fill="#3b82f6" radius={[0, 3, 3, 0]} />
-          <Bar dataKey={`xgb_${rlower}`}      name="XGBoost"  fill="#10b981" radius={[0, 3, 3, 0]} />
-          <Bar dataKey={`ensemble_${rlower}`} name="Ensemble" fill="#ef4444" radius={[0, 3, 3, 0]} />
+          <Bar dataKey={`lgbm_${rlower}`} name="LightGBM" fill="#3b82f6" radius={[0, 3, 3, 0]} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -548,9 +517,9 @@ function SeasonalPatternsTable({ patterns }: { patterns: DFMSeasonalPatternRecor
                 <td className="px-3 py-2 text-gray-300">{fmtMW(p.avg_demand_mw)}</td>
                 <td className="px-3 py-2 text-gray-400">{fmtMW(p.min_demand_mw)}</td>
                 <td className="px-3 py-2 text-gray-300">{p.peak_hour}:00</td>
-                <td className={`px-3 py-2 font-medium ${sensColor(p.temp_sensitivity_mw_per_degc)}`}>
-                  {p.temp_sensitivity_mw_per_degc > 0 ? '+' : ''}
-                  {fmt1(p.temp_sensitivity_mw_per_degc)} MW/°C
+                <td className={`px-3 py-2 font-medium ${p.temp_sensitivity_mw_per_degc == null ? 'text-gray-500' : sensColor(p.temp_sensitivity_mw_per_degc)}`}>
+                  {p.temp_sensitivity_mw_per_degc == null ? 'n/a (no weather join)' :
+                    `${p.temp_sensitivity_mw_per_degc > 0 ? '+' : ''}${fmt1(p.temp_sensitivity_mw_per_degc)} MW/°C`}
                 </td>
               </tr>
             ))}
@@ -591,9 +560,13 @@ export default function DemandForecastingModels() {
     () => (data?.models ?? []).filter(m => m.region === 'NSW1'),
     [data],
   )
-  const bestMape  = useMemo(() => nsw1Models.length ? Math.min(...nsw1Models.map(m => m.mape_pct)) : 0, [nsw1Models])
-  const bestRmse  = useMemo(() => nsw1Models.length ? Math.min(...nsw1Models.map(m => m.rmse_mw)) : 0, [nsw1Models])
-  const bestR2    = useMemo(() => nsw1Models.length ? Math.max(...nsw1Models.map(m => m.r_squared)) : 0, [nsw1Models])
+  const bestMape  = useMemo(() => nsw1Models.length ? Math.min(...nsw1Models.map(m => m.mape_pct).filter((v): v is number => v != null)) : 0, [nsw1Models])
+  const bestRmse  = useMemo(() => nsw1Models.length ? Math.min(...nsw1Models.map(m => m.rmse_mw).filter((v): v is number => v != null)) : 0, [nsw1Models])
+  const bestR2    = useMemo(() => {
+    const r2 = nsw1Models.map(m => m.r_squared).filter((v): v is number => v != null)
+    return r2.length ? Math.max(...r2) : null
+  }, [nsw1Models])
+  const bestName  = useMemo(() => nsw1Models.find(m => m.mape_pct === bestMape)?.name ?? '—', [nsw1Models, bestMape])
   const modelCount = useMemo(() => new Set(data?.models?.map(m => m.name) ?? []).size, [data])
 
   if (loading) {
@@ -629,8 +602,8 @@ export default function DemandForecastingModels() {
               Electricity Demand Forecasting Models
             </h1>
             <p className="text-sm text-gray-400 mt-0.5">
-              Comparative analysis of ML forecasting approaches across NEM regions — ARIMA, LSTM,
-              XGBoost, Prophet, SARIMA, and Ensemble methods evaluated on accuracy and reliability.
+              LightGBM demand models trained on real AEMO NEMWEB data, evaluated on a held-out back-test
+              against a persistence baseline (forecast = latest observed demand).
             </p>
           </div>
         </div>
@@ -648,19 +621,19 @@ export default function DemandForecastingModels() {
         <KpiCard
           label="Best Model MAPE"
           value={fmtPct(bestMape)}
-          sub="Ensemble — NSW1"
+          sub={`${bestName} — NSW1`}
           accent="text-green-400"
         />
         <KpiCard
           label="Best RMSE"
           value={`${fmt1(bestRmse)} MW`}
-          sub="Ensemble — NSW1"
+          sub={`${bestName} — NSW1`}
           accent="text-blue-400"
         />
         <KpiCard
           label="Best R²"
           value={fmt2(bestR2)}
-          sub="Ensemble — NSW1"
+          sub={`${bestName} — NSW1`}
           accent="text-purple-400"
         />
         <KpiCard

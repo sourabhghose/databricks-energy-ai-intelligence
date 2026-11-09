@@ -14,7 +14,7 @@ from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from .shared import logger
+from .shared import _sample_data, logger
 
 router = APIRouter()
 
@@ -46,6 +46,7 @@ _TEAMS = [
 # =========================================================================
 
 @router.get("/api/aio/summary")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def aio_summary() -> JSONResponse:
     """Overall AIO compliance status for AusNet Services."""
     _r.seed(720)
@@ -74,6 +75,7 @@ async def aio_summary() -> JSONResponse:
 # =========================================================================
 
 @router.get("/api/aio/stpis")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def aio_stpis() -> JSONResponse:
     """STPIS performance incentive scheme metrics per DNSP."""
     _r.seed(721)
@@ -117,6 +119,7 @@ async def aio_stpis() -> JSONResponse:
 # =========================================================================
 
 @router.get("/api/aio/sections")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def aio_sections() -> JSONResponse:
     """AIO section completion status for all 8 sections."""
     _r.seed(722)
@@ -149,6 +152,7 @@ async def aio_sections() -> JSONResponse:
 # =========================================================================
 
 @router.get("/api/aio/validation")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def aio_validation() -> JSONResponse:
     """AIO submission validation issues across all sections."""
     _r.seed(723)
@@ -357,6 +361,7 @@ async def aio_generate_draft(body: AioDraftRequest) -> JSONResponse:
 # =========================================================================
 
 @router.get("/api/aio/stpis-anomalies")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def aio_stpis_anomalies() -> JSONResponse:
     """Isolation Forest + Z-score anomaly detection on SAIDI/SAIFI vs peer benchmarks."""
     _r.seed(728)

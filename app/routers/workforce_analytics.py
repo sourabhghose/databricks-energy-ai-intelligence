@@ -12,6 +12,8 @@ from datetime import date, timedelta
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from .shared import _sample_data
+
 router = APIRouter()
 
 _DNSPS = ["AusNet Services", "Ergon Energy", "Energex", "Ausgrid", "Essential Energy", "SA Power Networks"]
@@ -43,6 +45,7 @@ _CONTRACTOR_NAMES = [
 # =========================================================================
 
 @router.get("/api/workforce/summary")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def workforce_summary() -> JSONResponse:
     """Workforce composition and opex cost summary for AusNet Services."""
     _r.seed(820)
@@ -76,6 +79,7 @@ async def workforce_summary() -> JSONResponse:
 # =========================================================================
 
 @router.get("/api/workforce/contractors")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def workforce_contractors() -> JSONResponse:
     """Contractor performance, spend, and SLA compliance."""
     _r.seed(821)
@@ -112,6 +116,7 @@ async def workforce_contractors() -> JSONResponse:
 # =========================================================================
 
 @router.get("/api/workforce/opex-benchmark")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def workforce_opex_benchmark() -> JSONResponse:
     """Opex category benchmarking against AER allowances and peer frontier."""
     _r.seed(822)
@@ -143,6 +148,7 @@ async def workforce_opex_benchmark() -> JSONResponse:
 # =========================================================================
 
 @router.get("/api/workforce/productivity")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def workforce_productivity() -> JSONResponse:
     """Monthly field productivity trend for the last 12 months."""
     _r.seed(823)
@@ -173,6 +179,7 @@ async def workforce_productivity() -> JSONResponse:
 # =========================================================================
 
 @router.get("/api/workforce/forecast")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def workforce_forecast() -> JSONResponse:
     """18-month Prophet + XGBoost workforce demand forecast."""
     _r.seed(825)

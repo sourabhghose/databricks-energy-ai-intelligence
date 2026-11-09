@@ -12,6 +12,8 @@ from typing import Optional
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
+from .shared import _sample_data
+
 router = APIRouter()
 
 _ASSET_TYPES = [
@@ -25,6 +27,7 @@ _LIKELIHOODS = ["Almost Certain", "Likely", "Possible", "Unlikely"]
 
 
 @router.get("/api/asset-health/summary")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def asset_health_summary() -> JSONResponse:
     """Asset health KPI summary across all DNSPs."""
     _r.seed(500)
@@ -43,6 +46,7 @@ async def asset_health_summary() -> JSONResponse:
 
 
 @router.get("/api/asset-health/assets")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def asset_health_assets(
     dnsp: Optional[str] = Query(None, description="Filter by DNSP name"),
     risk_rating: Optional[str] = Query(None, description="Critical/High/Medium/Low"),
@@ -78,6 +82,7 @@ async def asset_health_assets(
 
 
 @router.get("/api/asset-health/risk-matrix")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def asset_health_risk_matrix() -> JSONResponse:
     """Risk matrix combining consequence and likelihood ratings."""
     _r.seed(502)
@@ -99,6 +104,7 @@ async def asset_health_risk_matrix() -> JSONResponse:
 
 
 @router.get("/api/asset-health/replacement-forecast")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def asset_health_replacement_forecast() -> JSONResponse:
     """5-year capital replacement forecast."""
     _r.seed(503)

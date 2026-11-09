@@ -13,6 +13,7 @@ from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
 from .shared import (
+    _sample_data,
     _CATALOG,
     _cache_get,
     _cache_set,
@@ -25,6 +26,7 @@ _DNSPS = ["AusNet Services", "Ergon Energy", "Energex"]
 
 
 @router.get("/api/connections/summary")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def connections_summary() -> JSONResponse:
     """Connection queue KPIs."""
     cache_key = "connections:summary"
@@ -75,6 +77,7 @@ async def connections_summary() -> JSONResponse:
 
 
 @router.get("/api/connections/queue")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def connections_queue(
     dnsp: Optional[str] = Query(None),
     status: Optional[str] = Query(None),
@@ -145,6 +148,7 @@ async def connections_queue(
 
 
 @router.get("/api/connections/compliance")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def connections_compliance(
     dnsp: Optional[str] = Query(None),
 ) -> JSONResponse:
@@ -182,6 +186,7 @@ async def connections_compliance(
 
 
 @router.get("/api/connections/large-customers")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def connections_large_customers() -> JSONResponse:
     """Large customer connection pipeline."""
     rows = _query_gold(f"""
@@ -223,6 +228,7 @@ async def connections_large_customers() -> JSONResponse:
 
 
 @router.get("/api/connections/capacity")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def connections_capacity() -> JSONResponse:
     """Connection capacity summary by zone substation."""
     rows = _query_gold(f"""

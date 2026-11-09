@@ -12,6 +12,8 @@ from datetime import date
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from .shared import _sample_data
+
 router = APIRouter()
 
 _DNSPS = ["AusNet Services", "Ergon Energy", "Energex", "Ausgrid", "Essential Energy", "SA Power Networks"]
@@ -48,6 +50,7 @@ _ZONES = ["Metro", "Inner Regional", "Outer Regional"]
 # =========================================================================
 
 @router.get("/api/dapr-assembly/summary")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def dapr_assembly_summary() -> JSONResponse:
     """DAPR submission progress summary for the 2025-2030 regulatory period."""
     _r.seed(840)
@@ -80,6 +83,7 @@ async def dapr_assembly_summary() -> JSONResponse:
 # =========================================================================
 
 @router.get("/api/dapr-assembly/demand-forecast")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def dapr_assembly_demand_forecast() -> JSONResponse:
     """Five-year demand forecast by zone for DAPR submission."""
     _r.seed(841)
@@ -117,6 +121,7 @@ async def dapr_assembly_demand_forecast() -> JSONResponse:
 # =========================================================================
 
 @router.get("/api/dapr-assembly/network-capability")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def dapr_assembly_network_capability() -> JSONResponse:
     """Bulk supply point network capability and N-1 headroom assessment."""
     _r.seed(842)
@@ -150,6 +155,7 @@ async def dapr_assembly_network_capability() -> JSONResponse:
 # =========================================================================
 
 @router.get("/api/dapr-assembly/augmentation-pipeline")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def dapr_assembly_augmentation_pipeline() -> JSONResponse:
     """Capital augmentation project pipeline for the DAPR regulatory period."""
     _r.seed(843)

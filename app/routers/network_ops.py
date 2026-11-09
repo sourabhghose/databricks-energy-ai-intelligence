@@ -12,6 +12,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Query
 
 from .shared import (
+    _sample_data,
     _CATALOG,
     _NEM_REGIONS,
     _cache_get,
@@ -239,18 +240,21 @@ def _core_network_summary() -> Dict[str, Any]:
 # =========================================================================
 
 @router.get("/api/network/summary")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def network_summary():
     """KPI dashboard: total assets, overloaded count, excursions today, DER MW."""
     return _core_network_summary()
 
 
 @router.get("/api/network/loading/alerts")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def loading_alerts(threshold: float = Query(default=80, ge=0, le=100)):
     """Assets above utilization threshold."""
     return _core_loading_alerts(threshold)
 
 
 @router.get("/api/network/loading")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def network_loading(
     region: Optional[str] = Query(default=None),
     min_utilization: float = Query(default=0, ge=0, le=100),
@@ -260,18 +264,21 @@ async def network_loading(
 
 
 @router.get("/api/network/loading/{asset_id}")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def loading_history(asset_id: str):
     """Single asset loading history (24h)."""
     return _core_loading_history(asset_id)
 
 
 @router.get("/api/network/voltage")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def voltage_events(region: Optional[str] = Query(default=None)):
     """Voltage excursion events."""
     return _core_voltage_events(region)
 
 
 @router.get("/api/network/voltage/{monitoring_point_id}")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def voltage_profile(monitoring_point_id: str):
     """Voltage profile for a monitoring point."""
     rows = _query_gold(f"""
@@ -303,6 +310,7 @@ async def voltage_profile(monitoring_point_id: str):
 
 
 @router.get("/api/network/power-quality")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def power_quality():
     """Power quality metrics (THD, flicker, unbalance)."""
     return _core_power_quality()

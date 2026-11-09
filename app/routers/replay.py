@@ -1,13 +1,12 @@
 """Market Replay Router — time-travel through historical NEM states."""
 from __future__ import annotations
 
-import random
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict
 
 from fastapi import APIRouter, Query
 
-from .shared import _CATALOG, _NEM_REGIONS, _query_gold, _sql_escape, logger
+from .shared import _no_real_data, _CATALOG, _query_gold, _sql_escape, logger
 
 router = APIRouter()
 
@@ -124,54 +123,6 @@ def _build_snapshot(timestamp_str: str, region: str) -> Dict[str, Any]:
     return snapshot
 
 
-def _build_mock_snapshot(ts: datetime, region: str) -> Dict[str, Any]:
-    """Generate a deterministic mock snapshot for a given timestamp."""
-    rng = random.Random(int(ts.timestamp()) // 300)
-    hour = ts.hour
-    # Diurnal price pattern
-    base_prices = {"NSW1": 72.5, "QLD1": 65.3, "VIC1": 55.8, "SA1": 88.1, "TAS1": 42.0}
-    hour_factor = 1.0 + 0.5 * max(0, 1 - abs(hour - 18) / 6)
-
-    prices = {}
-    for r in _NEM_REGIONS:
-        bp = base_prices[r]
-        p = bp * hour_factor * rng.uniform(0.8, 1.3)
-        prices[r] = {
-            "region": r,
-            "rrp": round(p, 2),
-            "demand_mw": round(rng.uniform(4000, 12000), 0),
-            "available_gen_mw": round(rng.uniform(8000, 15000), 0),
-        }
-
-    fuel_types = ["coal_black", "gas_ccgt", "hydro", "wind", "solar_utility", "battery"]
-    generation = [
-        {"fuel_type": ft, "mw": round(rng.uniform(200, 3000), 0), "is_renewable": ft in ("wind", "solar_utility")}
-        for ft in fuel_types
-    ]
-
-    return {
-        "timestamp": ts.isoformat(),
-        "region": region,
-        "prices": prices,
-        "generation": generation,
-        "interconnectors": [
-            {"id": "N-Q-MNSP1", "from_region": "NSW1", "to_region": "QLD1", "flow_mw": round(rng.uniform(-500, 500), 0), "limit_mw": 700, "congested": rng.random() < 0.1},
-            {"id": "VIC1-NSW1", "from_region": "VIC1", "to_region": "NSW1", "flow_mw": round(rng.uniform(-1000, 1000), 0), "limit_mw": 1350, "congested": rng.random() < 0.05},
-            {"id": "V-SA", "from_region": "VIC1", "to_region": "SA1", "flow_mw": round(rng.uniform(-400, 400), 0), "limit_mw": 600, "congested": rng.random() < 0.15},
-        ],
-        "weather": {
-            "temperature_c": round(rng.uniform(10, 38), 1),
-            "wind_kmh": round(rng.uniform(5, 40), 0),
-            "solar_wm2": round(max(0, rng.uniform(-100, 800) * (1 - abs(hour - 12) / 12)), 0),
-        },
-    }
-
-
-# ---------------------------------------------------------------------------
-# Endpoints
-# ---------------------------------------------------------------------------
-
-
 @router.get("/api/replay/snapshot", summary="Market snapshot at timestamp", tags=["Market Replay"])
 async def replay_snapshot(
     timestamp: str = Query(""),
@@ -188,12 +139,7 @@ async def replay_snapshot(
     except Exception as exc:
         logger.warning("Replay snapshot failed: %s", exc)
 
-    # Mock fallback
-    try:
-        ts = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
-    except Exception:
-        ts = datetime.now(timezone.utc)
-    return _build_mock_snapshot(ts, region)
+    _no_real_data("replay snapshot")
 
 
 @router.get("/api/replay/range", summary="Market replay range", tags=["Market Replay"])
@@ -334,11 +280,6 @@ async def replay_range(
     except Exception as exc:
         logger.warning("Replay range real data failed: %s", exc)
 
-    # Mock fallback
-    snapshots = []
-    current = start_dt
-    while current <= end_dt and len(snapshots) < max_snapshots:
-        snapshots.append(_build_mock_snapshot(current, region))
-        current += timedelta(minutes=step)
+    _no_real_data("replay range")
 
-    return {"snapshots": snapshots, "count": len(snapshots), "step_minutes": step}
+

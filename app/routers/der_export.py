@@ -12,6 +12,8 @@ from typing import Optional
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
+from .shared import _sample_data
+
 router = APIRouter()
 
 _DNSPS = ["AusNet Services", "Ergon Energy", "Energex", "Ausgrid", "Essential Energy"]
@@ -24,6 +26,7 @@ _FEEDER_STATUSES = ["Active", "Monitoring", "Constrained", "Under Review"]
 
 
 @router.get("/api/der-export/summary")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def der_export_summary() -> JSONResponse:
     """DER export and DOE compliance summary."""
     _r.seed(620)
@@ -39,6 +42,7 @@ async def der_export_summary() -> JSONResponse:
 
 
 @router.get("/api/der-export/feeders")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def der_export_feeders(
     dnsp: Optional[str] = Query(None, description="Filter by DNSP"),
 ) -> JSONResponse:
@@ -66,6 +70,7 @@ async def der_export_feeders(
 
 
 @router.get("/api/der-export/curtailment-events")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def der_export_curtailment_events() -> JSONResponse:
     """Curtailment events in the last 30 days."""
     _r.seed(622)
@@ -89,6 +94,7 @@ async def der_export_curtailment_events() -> JSONResponse:
 
 
 @router.get("/api/der-export/doe-settings")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def der_export_doe_settings() -> JSONResponse:
     """Dynamic operating envelope settings by feeder."""
     _r.seed(623)

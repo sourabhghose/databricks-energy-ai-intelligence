@@ -10,6 +10,8 @@ import random as _r
 from fastapi import APIRouter, Query
 from fastapi.responses import JSONResponse
 
+from .shared import _sample_data
+
 router = APIRouter()
 
 _DNSPS = ["AusNet Services", "Ergon Energy", "Energex"]
@@ -25,6 +27,7 @@ _CAPEX_CATEGORIES = [
 
 
 @router.get("/api/rab/summary")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def rab_summary(
     dnsp: str = Query("AusNet Services", description="DNSP name"),
 ) -> JSONResponse:
@@ -49,6 +52,7 @@ async def rab_summary(
 
 
 @router.get("/api/rab/rollforward")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def rab_rollforward(
     dnsp: str = Query("AusNet Services", description="DNSP name"),
 ) -> JSONResponse:
@@ -78,6 +82,7 @@ async def rab_rollforward(
 
 
 @router.get("/api/rab/capex-categories")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def rab_capex_categories(
     dnsp: str = Query("AusNet Services", description="DNSP name"),
 ) -> JSONResponse:
@@ -103,6 +108,7 @@ async def rab_capex_categories(
 
 
 @router.get("/api/rab/wacc-sensitivity")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def rab_wacc_sensitivity(
     dnsp: str = Query("AusNet Services", description="DNSP name"),
 ) -> JSONResponse:

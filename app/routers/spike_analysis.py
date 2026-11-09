@@ -7,7 +7,8 @@ from datetime import timezone as _tz
 
 from fastapi import APIRouter
 
-from .shared import _CATALOG, _query_gold
+from . import spike_dashboards as _sd
+from .shared import _no_real_data, _sample_data, _CATALOG, _query_gold
 
 router = APIRouter()
 
@@ -16,185 +17,107 @@ router = APIRouter()
 # 1) /api/spike-analysis/dashboard  ->  PSADashboard
 # ---------------------------------------------------------------------------
 
+SPIKE_THRESHOLD = 300.0  # $/MWh
+_AEST_TZ = "'Australia/Brisbane'"
+
+
+def _spike_events_sql(limit: int) -> str:
+    """Contiguous runs of >$300/MWh intervals per region (gaps <= 30 min merge), with pre-spike average and
+    the energy cost (price x actual regional demand x 5 min) — all from real gold.nem_prices_5min."""
+    g = f"{_CATALOG}.gold.nem_prices_5min"
+    return f"""
+        WITH sp AS (SELECT region_id, interval_datetime, rrp, total_demand_mw FROM {g} WHERE rrp > {SPIKE_THRESHOLD}),
+        m AS (SELECT *, CASE WHEN lag(interval_datetime) OVER (PARTITION BY region_id ORDER BY interval_datetime)
+                             >= interval_datetime - INTERVAL 30 MINUTES THEN 0 ELSE 1 END AS new_evt FROM sp),
+        e AS (SELECT *, sum(new_evt) OVER (PARTITION BY region_id ORDER BY interval_datetime) AS evt FROM m),
+        ev AS (SELECT region_id, evt, min(interval_datetime) AS start_ts, max(interval_datetime) AS end_ts,
+                      count(*) AS n_intervals, max(rrp) AS peak, avg(rrp) AS avg_during,
+                      sum(rrp * total_demand_mw / 12) / 1e6 AS energy_cost_m,
+                      sum((rrp - {SPIKE_THRESHOLD}) * total_demand_mw / 12) / 1e6 AS excess_cost_m
+               FROM e GROUP BY 1, 2),
+        pre AS (SELECT ev.region_id, ev.evt, avg(p.rrp) AS pre_avg FROM ev JOIN {g} p
+                  ON p.region_id = ev.region_id AND p.interval_datetime >= ev.start_ts - INTERVAL 1 HOUR
+                 AND p.interval_datetime < ev.start_ts GROUP BY 1, 2),
+        flag AS (SELECT ev.region_id, ev.evt, max(CAST(b.spike_flag AS INT)) AS flagged, count(b.actual) AS in_backtest
+                 FROM ev LEFT JOIN {_CATALOG}.gold.forecast_backtest b
+                   ON b.target = 'price' AND b.horizon_intervals = 12 AND b.region_id = ev.region_id
+                  AND b.interval_datetime BETWEEN ev.start_ts AND ev.end_ts GROUP BY 1, 2)
+        SELECT ev.*, pre.pre_avg, flag.flagged, flag.in_backtest,
+               from_utc_timestamp(ev.start_ts, {_AEST_TZ}) AS start_aest, from_utc_timestamp(ev.end_ts, {_AEST_TZ}) AS end_aest
+        FROM ev LEFT JOIN pre USING (region_id, evt) LEFT JOIN flag USING (region_id, evt)
+        ORDER BY ev.excess_cost_m DESC LIMIT {limit}
+    """
+
+
+def _spike_timeline(region: str, start_ts: str, end_ts: str) -> list[dict]:
+    return _query_gold(f"""
+        SELECT interval_datetime, rrp, total_demand_mw, available_gen_mw, net_interchange_mw
+        FROM {_CATALOG}.gold.nem_prices_5min
+        WHERE region_id = '{region}' AND interval_datetime BETWEEN TIMESTAMP '{start_ts}' - INTERVAL 1 HOUR
+              AND TIMESTAMP '{end_ts}' + INTERVAL 1 HOUR
+        ORDER BY interval_datetime
+    """) or []
+
+
 @router.get("/api/spike-analysis/dashboard")
 def spike_analysis_dashboard():
-    root_causes = [
-        "GENERATION_SHORTFALL", "NETWORK_CONSTRAINT", "DEMAND_SPIKE",
-        "STRATEGIC_BIDDING", "WEATHER",
-    ]
-    severities = ["MODERATE", "HIGH", "EXTREME", "MARKET_SUSPENSION"]
-    contribution_types = [
-        "WITHDREW_CAPACITY", "REBID_HIGH", "FCAS_RESPONSE",
-        "DEMAND_REDUCTION", "CONSTRAINT_BINDING",
-    ]
-    regulatory_actions = ["INVESTIGATED", "CAUTIONED", "FINED", "CLEARED", None]
-    technologies = ["Gas Peaker", "Coal", "Battery", "Hydro", "Wind"]
-    consumer_segments = ["Residential", "Commercial", "Industrial", "Large User"]
-    participants = [
-        "AGL Energy", "Origin Energy", "EnergyAustralia", "Snowy Hydro",
-        "CS Energy", "Stanwell", "Alinta Energy", "Engie",
-    ]
-
-    # Try real spike data from prices
-    spike_rows = _query_gold(f"""
-        SELECT region_id, rrp, interval_datetime, total_demand_mw
-        FROM {_CATALOG}.gold.nem_prices_5min
-        WHERE rrp > 300
-        ORDER BY rrp DESC
-        LIMIT 30
-    """)
-
+    """Real price-spike events from AEMO NEMWEB 5-minute prices. Root cause, participant contributions and consumer
+    segments are not derivable without bid / customer data, so those fields are 'UNCLASSIFIED' or empty."""
+    rows = _query_gold(_spike_events_sql(limit=25))
+    if not rows:
+        _no_real_data("Price spike events")
     spike_events = []
-    rng = _r.Random(101)
-
-    if spike_rows and len(spike_rows) > 0:
-        # Group consecutive spikes by region+date into events
-        seen_events = {}
-        for sr in spike_rows:
-            region = sr["region_id"]
-            ts = str(sr["interval_datetime"])
-            date_str = ts[:10]
-            key = f"{region}-{date_str}"
-            price = float(sr["rrp"])
-            if key not in seen_events:
-                seen_events[key] = {
-                    "region": region, "date": date_str, "peak": price,
-                    "start": ts, "end": ts, "count": 1,
-                }
-            else:
-                if price > seen_events[key]["peak"]:
-                    seen_events[key]["peak"] = price
-                seen_events[key]["count"] += 1
-                seen_events[key]["end"] = ts
-
-        for i, (key, ev) in enumerate(sorted(seen_events.items(), key=lambda x: -x[1]["peak"])):
-            peak = ev["peak"]
-            dur = ev["count"] * 5
-            if peak > 5000:
-                sev = "EXTREME"
-            elif peak > 1000:
-                sev = "HIGH"
-            else:
-                sev = "MODERATE"
-            pre_avg = rng.uniform(40, 120)
-            spike_events.append({
-                "spike_id": f"SPK-{ev['date'][:4]}-{i + 1:03d}",
-                "event_name": f"{ev['region']} Price Spike {ev['date']}",
-                "region": ev["region"],
-                "event_date": ev["date"],
-                "start_time": ev["start"][11:16] if len(ev["start"]) > 11 else "12:00",
-                "end_time": ev["end"][11:16] if len(ev["end"]) > 11 else "13:00",
-                "duration_minutes": dur,
-                "peak_price_aud_mwh": round(peak, 0),
-                "avg_price_during_spike": round(peak * rng.uniform(0.35, 0.65), 2),
-                "pre_spike_avg_price": round(pre_avg, 2),
-                "price_multiple": round(peak / pre_avg, 1),
-                "total_revenue_m_aud": round(peak * dur / 60 / 1000 * rng.uniform(0.5, 2), 2),
-                "consumer_cost_m_aud": round(peak * dur / 60 / 1000 * rng.uniform(1, 3), 1),
-                "hedged_consumer_cost_m_aud": round(peak * dur / 60 / 1000 * rng.uniform(0.1, 0.5), 2),
-                "root_cause": rng.choice(root_causes),
-                "severity": sev,
-            })
-
-    if not spike_events:
-        # Fallback to mock
-        _r.seed(101)
-        regions = ["NSW1", "VIC1", "QLD1", "SA1", "TAS1"]
-        event_names = [
-            "SA Heatwave Jan 2024", "QLD Cyclone Grid Stress", "VIC Evening Ramp Failure",
-            "NSW Coal Trip Aug 2023", "TAS Low Hydro Event", "SA Interconnector Trip",
-            "QLD Summer Demand Peak", "NSW Strategic Rebid Event",
-            "VIC Wind Drought Feb 2024", "SA Solar Cliff Event",
-            "QLD Generator Outage Mar 2024", "NSW Bushfire Network Fault",
-        ]
-        for i, name in enumerate(event_names):
-            region = regions[i % len(regions)]
-            base_date = _dt(2022, 6, 1) + _td(days=_r.randint(0, 900))
-            peak = _r.choice([5000, 8500, 12000, 15100, 16600])
-            dur = _r.choice([30, 60, 90, 120, 180, 240, 360])
-            pre_avg = _r.uniform(40, 120)
-            spike_events.append({
-                "spike_id": f"SPK-{2022 + i // 4}-{i + 1:03d}",
-                "event_name": name,
-                "region": region,
-                "event_date": base_date.strftime("%Y-%m-%d"),
-                "start_time": f"{_r.randint(6, 20):02d}:{_r.choice(['00', '30'])}",
-                "end_time": f"{_r.randint(7, 23):02d}:{_r.choice(['00', '30'])}",
-                "duration_minutes": dur,
-                "peak_price_aud_mwh": peak,
-                "avg_price_during_spike": round(peak * _r.uniform(0.35, 0.65), 2),
-                "pre_spike_avg_price": round(pre_avg, 2),
-                "price_multiple": round(peak / pre_avg, 1),
-                "total_revenue_m_aud": round(_r.uniform(1.5, 45.0), 2),
-                "consumer_cost_m_aud": round(_r.uniform(2.0, 55.0), 1),
-                "hedged_consumer_cost_m_aud": round(_r.uniform(0.5, 15.0), 2),
-                "root_cause": _r.choice(root_causes),
-                "severity": _r.choice(severities),
-            })
-
-    contributors = []
-    for ev in spike_events:
-        for _ in range(rng.randint(2, 5)):
-            contributors.append({
-                "spike_id": ev["spike_id"],
-                "participant_name": rng.choice(participants),
-                "technology": rng.choice(technologies),
-                "contribution_type": rng.choice(contribution_types),
-                "mw_impact": round(rng.uniform(-500, 800), 0),
-                "price_contribution_aud_mwh": round(rng.uniform(200, 8000), 0),
-                "revenue_gained_m_aud": round(rng.uniform(0.2, 12.0), 1),
-                "regulatory_action": rng.choice(regulatory_actions),
-            })
-
-    consumer_impacts = []
-    for ev in spike_events:
-        for seg in consumer_segments:
-            consumer_impacts.append({
-                "spike_id": ev["spike_id"],
-                "consumer_segment": seg,
-                "region": ev["region"],
-                "hedged_exposure_pct": round(rng.uniform(30, 95), 1),
-                "unhedged_cost_m_aud": round(rng.uniform(0.1, 18.0), 1),
-                "demand_response_mw": round(rng.uniform(5, 350), 0),
-                "air_con_curtailment_mw": round(rng.uniform(0, 180), 0),
-                "price_signal_response_pct": round(rng.uniform(2, 25), 1),
-            })
-
+    for i, ev in enumerate(rows):
+        peak, pre = float(ev["peak"]), float(ev["pre_avg"]) if ev.get("pre_avg") is not None else None
+        start, end = str(ev["start_aest"]), str(ev["end_aest"])
+        flagged = None if not ev.get("in_backtest") else bool(ev.get("flagged"))
+        spike_events.append({
+            "spike_id": f"SPK-{start[:10].replace('-', '')}-{ev['region_id']}-{i + 1:02d}",
+            "event_name": f"{ev['region_id']} price spike {start[:10]}",
+            "region": ev["region_id"], "event_date": start[:10],
+            "start_time": start[11:16], "end_time": end[11:16],
+            "duration_minutes": int(ev["n_intervals"]) * 5,
+            "peak_price_aud_mwh": round(peak, 0), "avg_price_during_spike": round(float(ev["avg_during"]), 2),
+            "pre_spike_avg_price": round(pre, 2) if pre is not None else None,
+            "price_multiple": round(peak / max(abs(pre), 1.0), 1) if pre is not None else None,
+            "total_revenue_m_aud": round(float(ev["energy_cost_m"]), 3),
+            "consumer_cost_m_aud": round(float(ev["energy_cost_m"]), 3),
+            "cost_above_300_m_aud": round(float(ev["excess_cost_m"]), 3),
+            "hedged_consumer_cost_m_aud": None,
+            "root_cause": "UNCLASSIFIED",
+            "severity": "EXTREME" if peak > 5000 else "HIGH" if peak > 1000 else "MODERATE",
+            "model_flagged_1h_ahead": flagged,
+        })
     regional_timelines = []
-    for ev in spike_events[:4]:
-        for minute_offset in range(0, 360, 30):
+    for ev, raw in zip(spike_events[:4], rows[:4]):
+        for t in _spike_timeline(ev["region"], str(raw["start_ts"]), str(raw["end_ts"])):
+            demand, avail = t.get("total_demand_mw"), t.get("available_gen_mw")
             regional_timelines.append({
-                "spike_id": ev["spike_id"],
-                "region": ev["region"],
-                "interval": (
-                    _dt.strptime(ev["event_date"], "%Y-%m-%d")
-                    + _td(minutes=minute_offset)
-                ).isoformat(),
-                "spot_price": round(rng.uniform(-50, ev["peak_price_aud_mwh"]), 2),
-                "generation_mw": round(rng.uniform(6000, 12000), 0),
-                "demand_mw": round(rng.uniform(7000, 13000), 0),
-                "interconnector_flow_mw": round(rng.uniform(-1000, 1000), 0),
-                "reserve_margin_pct": round(rng.uniform(-5, 25), 1),
+                "spike_id": ev["spike_id"], "region": ev["region"],
+                "interval": str(t["interval_datetime"]).replace(" ", "T"),
+                "spot_price": round(float(t["rrp"]), 2),
+                "generation_mw": round(float(avail), 0) if avail is not None else None,
+                "demand_mw": round(float(demand), 0) if demand is not None else None,
+                "interconnector_flow_mw": round(float(t["net_interchange_mw"]), 0) if t.get("net_interchange_mw") is not None else None,
+                "reserve_margin_pct": round((avail - demand) / demand * 100, 1) if demand and avail is not None else None,
             })
-
-    # Find most affected region
-    region_counts = {}
+    region_counts: dict[str, int] = {}
     for ev in spike_events:
         region_counts[ev["region"]] = region_counts.get(ev["region"], 0) + 1
-    most_affected = max(region_counts, key=region_counts.get) if region_counts else "SA1"
-
+    count_rows = _query_gold(f"""
+        SELECT count(*) AS n FROM (SELECT region_id, interval_datetime, CASE WHEN lag(interval_datetime)
+          OVER (PARTITION BY region_id ORDER BY interval_datetime) >= interval_datetime - INTERVAL 30 MINUTES THEN 0 ELSE 1 END AS s
+          FROM {_CATALOG}.gold.nem_prices_5min WHERE rrp > {SPIKE_THRESHOLD}) WHERE s = 1
+    """) or [{}]
     return {
-        "timestamp": _dt.now(_tz.utc).isoformat(),
-        "spike_events": spike_events,
-        "contributors": contributors,
-        "consumer_impacts": consumer_impacts,
-        "regional_timelines": regional_timelines,
-        "total_spike_events_2024": sum(1 for e in spike_events if "2024" in e.get("event_date", "")),
+        "timestamp": _dt.now(_tz.utc).isoformat(), "data_source": "gold.nem_prices_5min",
+        "source_note": "Events = runs of >$300/MWh intervals (gaps <= 30 min merged). Cost = price x actual demand x 5 min. "
+                       "Top 25 events by cost above $300/MWh. Root cause / participants need bid data (not ingested).",
+        "spike_events": spike_events, "contributors": [], "consumer_impacts": [], "regional_timelines": regional_timelines,
+        "total_spike_events_2024": int(count_rows[0].get("n") or 0),
         "total_consumer_cost_m_aud": round(sum(e["consumer_cost_m_aud"] for e in spike_events), 1),
-        "avg_spike_duration_min": round(
-            sum(e["duration_minutes"] for e in spike_events) / len(spike_events), 0
-        ) if spike_events else 0,
-        "most_affected_region": most_affected,
+        "avg_spike_duration_min": round(sum(e["duration_minutes"] for e in spike_events) / len(spike_events), 0),
+        "most_affected_region": max(region_counts, key=region_counts.get),
     }
 
 
@@ -204,261 +127,7 @@ def spike_analysis_dashboard():
 
 @router.get("/api/spot-price-forecast/dashboard")
 def spot_price_forecast_dashboard():
-    # --- Real data block ---
-    try:
-        price_rows = _query_gold(f"""
-            SELECT region_id, rrp, interval_datetime
-            FROM {_CATALOG}.gold.nem_prices_5min
-            WHERE interval_datetime >= current_timestamp() - INTERVAL 14 DAYS
-            ORDER BY interval_datetime DESC
-            LIMIT 1000
-        """)
-        if price_rows and len(price_rows) >= 50:
-            stat_rows = _query_gold(f"""
-                SELECT region_id,
-                       AVG(rrp) AS avg_price,
-                       STDDEV(rrp) AS std_price,
-                       MAX(rrp) AS max_price,
-                       MIN(rrp) AS min_price,
-                       COUNT(CASE WHEN rrp > 300 THEN 1 END) AS spike_count,
-                       COUNT(*) AS total_intervals
-                FROM {_CATALOG}.gold.nem_prices_5min
-                WHERE interval_datetime >= current_timestamp() - INTERVAL 30 DAYS
-                GROUP BY region_id
-            """)
-            regions = ["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]
-            rng = _r.Random(202)
-
-            # Build region stats lookup
-            region_stats = {}
-            if stat_rows:
-                for sr in stat_rows:
-                    region_stats[sr["region_id"]] = sr
-
-            # Models derived from real stats
-            model_defs_real = [
-                ("M001", "XGBoost-NSW-5min", "XGBOOST", "NSW1", 5, "PRODUCTION"),
-                ("M002", "LSTM-VIC-30min", "LSTM", "VIC1", 30, "DEPRECATED"),
-                ("M003", "Ensemble-NEM-1hr", "ENSEMBLE", "QLD1", 60, "PRODUCTION"),
-                ("M004", "Prophet-SA-DayAhead", "PROPHET", "SA1", 288, "SHADOW"),
-                ("M005", "XGBoost-QLD-30min", "XGBOOST", "QLD1", 30, "PRODUCTION"),
-                ("M006", "LSTM-SA-Spike", "LSTM", "SA1", 5, "SHADOW"),
-            ]
-            models = []
-            for mid, mname, mtype, region, horizon, status in model_defs_real:
-                rs = region_stats.get(region, {})
-                avg_p = float(rs.get("avg_price") or 80)
-                std_p = float(rs.get("std_price") or 30)
-                spike_ct = int(rs.get("spike_count") or 0)
-                total_ct = int(rs.get("total_intervals") or 1)
-                mae = round(std_p * rng.uniform(0.15, 0.4), 1)
-                rmse = round(mae * rng.uniform(1.3, 1.7), 1)
-                mape = round(mae / max(avg_p, 1) * 100, 1)
-                spike_recall = round(min(92, max(45, 90 - spike_ct / max(total_ct, 1) * 500)), 0)
-                models.append({
-                    "model_id": mid, "model_name": mname, "model_type": mtype,
-                    "region": region, "horizon_min": horizon,
-                    "mae_per_mwh": mae, "rmse_per_mwh": rmse,
-                    "mape_pct": mape, "r2_score": round(rng.uniform(0.72, 0.96), 2),
-                    "spike_detection_recall_pct": int(spike_recall),
-                    "negative_price_recall_pct": rng.randint(38, 85),
-                    "training_period": "2020-01 to 2026-02",
-                    "deployment_status": status,
-                })
-
-            # Build forecasts from real actuals + noise
-            forecasts = []
-            by_region = {}
-            for pr in price_rows:
-                reg = pr["region_id"]
-                if reg not in by_region:
-                    by_region[reg] = []
-                by_region[reg].append(pr)
-
-            regimes = ["NORMAL", "SPIKE", "NEGATIVE", "EXTREME"]
-            for reg in list(by_region.keys())[:3]:
-                for pr in by_region[reg][:18]:
-                    actual = float(pr["rrp"])
-                    noise = rng.uniform(-15, 15)
-                    fc = actual + noise
-                    regime = "SPIKE" if actual > 300 else ("NEGATIVE" if actual < 0 else ("EXTREME" if actual > 5000 else "NORMAL"))
-                    forecasts.append({
-                        "date": str(pr["interval_datetime"])[:10],
-                        "region": reg,
-                        "trading_interval": str(pr["interval_datetime"])[11:16],
-                        "actual_price": round(actual, 2),
-                        "forecast_price": round(fc, 2),
-                        "forecast_low": round(fc - rng.uniform(5, 25), 2),
-                        "forecast_high": round(fc + rng.uniform(5, 25), 2),
-                        "error_per_mwh": round(abs(noise), 2),
-                        "model_used": rng.choice(["M001", "M003", "M005"]),
-                        "price_regime": regime,
-                    })
-
-            # Feature importance (static structure, semi-real)
-            feature_names = [
-                "demand_forecast_mw", "temperature_forecast_c", "solar_generation_mw",
-                "wind_generation_mw", "gas_price_gj", "interconnector_flow_mw",
-                "time_of_day", "day_of_week", "coal_gen_mw", "battery_soc_pct",
-            ]
-            model_types = ["XGBOOST", "LSTM", "PROPHET", "ENSEMBLE"]
-            categories = ["DEMAND", "SUPPLY", "WEATHER", "MARKET", "TIME"]
-            features = []
-            for mtype in model_types:
-                for rank_i, fname in enumerate(feature_names, 1):
-                    features.append({
-                        "feature_name": fname, "model_type": mtype,
-                        "region": rng.choice(regions),
-                        "importance_score": round(rng.uniform(0.01, 0.22), 4),
-                        "rank": rank_i, "category": rng.choice(categories),
-                    })
-
-            # Drift from real price stats
-            drift = []
-            for mid in ["M001", "M003", "M004"]:
-                baseline_mae = round(rng.uniform(5.0, 10.0), 2)
-                for d_off in range(14):
-                    date_str = (_dt.now(_tz.utc) - _td(days=13 - d_off)).strftime("%Y-%m-%d")
-                    rolling = round(baseline_mae + rng.uniform(-3, 6), 2)
-                    drift_score = round(max(0, min(1, (rolling - baseline_mae) / max(baseline_mae, 1))), 3)
-                    drift.append({
-                        "model_id": mid, "date": date_str,
-                        "mae_rolling_7d": rolling, "mae_baseline": baseline_mae,
-                        "drift_score": drift_score, "drift_alert": drift_score > 0.7,
-                        "regime_shift": rng.choice(["NONE", "SPIKE_ENTRY", "NEGATIVE_ENTRY", "NONE"]),
-                    })
-
-            prod_models = [m for m in models if m["deployment_status"] == "PRODUCTION"]
-            best_mae = min(models, key=lambda m: m["mae_per_mwh"])
-            best_spike = max(models, key=lambda m: m["spike_detection_recall_pct"])
-            return {
-                "models": models, "forecasts": forecasts, "features": features, "drift": drift,
-                "summary": {
-                    "production_models": len(prod_models),
-                    "best_mae_model": best_mae["model_name"],
-                    "best_spike_recall_pct": best_spike["spike_detection_recall_pct"],
-                    "avg_mape_pct": round(sum(m["mape_pct"] for m in prod_models) / max(len(prod_models), 1), 1),
-                    "total_forecasts": len(forecasts),
-                },
-            }
-    except Exception:
-        pass
-    # --- End real data block ---
-
-    _r.seed(202)
-    regions = ["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]
-    model_types = ["XGBOOST", "LSTM", "PROPHET", "ENSEMBLE", "LINEAR"]
-    statuses = ["PRODUCTION", "SHADOW", "DEPRECATED"]
-    regimes = ["NORMAL", "SPIKE", "NEGATIVE", "EXTREME"]
-    categories = ["DEMAND", "SUPPLY", "WEATHER", "MARKET", "TIME"]
-    horizons = [5, 30, 60, 288]
-
-    models = []
-    model_defs = [
-        ("M001", "XGBoost-NSW-5min", "XGBOOST", "NSW1", 5, "PRODUCTION"),
-        ("M002", "LSTM-VIC-30min", "LSTM", "VIC1", 30, "DEPRECATED"),
-        ("M003", "Ensemble-NEM-1hr", "ENSEMBLE", "QLD1", 60, "PRODUCTION"),
-        ("M004", "Prophet-SA-DayAhead", "PROPHET", "SA1", 288, "SHADOW"),
-        ("M005", "XGBoost-QLD-30min", "XGBOOST", "QLD1", 30, "PRODUCTION"),
-        ("M006", "LSTM-SA-Spike", "LSTM", "SA1", 5, "SHADOW"),
-    ]
-    for mid, mname, mtype, region, horizon, status in model_defs:
-        models.append({
-            "model_id": mid,
-            "model_name": mname,
-            "model_type": mtype,
-            "region": region,
-            "horizon_min": horizon,
-            "mae_per_mwh": round(_r.uniform(3.5, 18.0), 1),
-            "rmse_per_mwh": round(_r.uniform(8.0, 35.0), 1),
-            "mape_pct": round(_r.uniform(4.0, 22.0), 1),
-            "r2_score": round(_r.uniform(0.72, 0.96), 2),
-            "spike_detection_recall_pct": _r.randint(45, 92),
-            "negative_price_recall_pct": _r.randint(38, 85),
-            "training_period": "2020-01 to 2024-06",
-            "deployment_status": status,
-        })
-
-    dates = [
-        (_dt(2024, 7, 1) + _td(days=d)).strftime("%Y-%m-%d")
-        for d in range(0, 14)
-    ]
-    intervals = [f"{h:02d}:{m:02d}" for h in range(0, 24) for m in [0, 30]]
-
-    forecasts = []
-    for date in dates[:3]:
-        for region in regions[:3]:
-            for interval in intervals[:6]:
-                actual = round(_r.uniform(-20, 350), 2)
-                fc = actual + _r.uniform(-15, 15)
-                forecasts.append({
-                    "date": date,
-                    "region": region,
-                    "trading_interval": interval,
-                    "actual_price": round(actual, 2),
-                    "forecast_price": round(fc, 2),
-                    "forecast_low": round(fc - _r.uniform(5, 25), 2),
-                    "forecast_high": round(fc + _r.uniform(5, 25), 2),
-                    "error_per_mwh": round(abs(actual - fc), 2),
-                    "model_used": _r.choice(["M001", "M003", "M005"]),
-                    "price_regime": _r.choice(regimes),
-                })
-
-    features = []
-    feature_names = [
-        "demand_forecast_mw", "temperature_forecast_c", "solar_generation_mw",
-        "wind_generation_mw", "gas_price_gj", "interconnector_flow_mw",
-        "time_of_day", "day_of_week", "coal_gen_mw", "battery_soc_pct",
-        "lagged_price_5min", "demand_ramp_rate",
-    ]
-    for mtype in model_types[:4]:
-        for rank_i, fname in enumerate(feature_names[:10], 1):
-            cat = _r.choice(categories)
-            features.append({
-                "feature_name": fname,
-                "model_type": mtype,
-                "region": _r.choice(regions),
-                "importance_score": round(_r.uniform(0.01, 0.22), 4),
-                "rank": rank_i,
-                "category": cat,
-            })
-
-    drift = []
-    for mid in ["M001", "M003", "M004"]:
-        baseline_mae = round(_r.uniform(5.0, 10.0), 2)
-        for d_off in range(14):
-            date_str = (_dt(2024, 6, 1) + _td(days=d_off)).strftime("%Y-%m-%d")
-            rolling = round(baseline_mae + _r.uniform(-3, 6), 2)
-            drift_score = round(max(0, min(1, (rolling - baseline_mae) / baseline_mae)), 3)
-            drift.append({
-                "model_id": mid,
-                "date": date_str,
-                "mae_rolling_7d": rolling,
-                "mae_baseline": baseline_mae,
-                "drift_score": drift_score,
-                "drift_alert": drift_score > 0.7,
-                "regime_shift": _r.choice(["NONE", "SPIKE_ENTRY", "NEGATIVE_ENTRY", "NONE"]),
-            })
-
-    prod_models = [m for m in models if m["deployment_status"] == "PRODUCTION"]
-    best_mae = min(models, key=lambda m: m["mae_per_mwh"])
-    best_spike = max(models, key=lambda m: m["spike_detection_recall_pct"])
-
-    return {
-        "models": models,
-        "forecasts": forecasts,
-        "features": features,
-        "drift": drift,
-        "summary": {
-            "production_models": len(prod_models),
-            "best_mae_model": best_mae["model_name"],
-            "best_spike_recall_pct": best_spike["spike_detection_recall_pct"],
-            "avg_mape_pct": round(
-                sum(m["mape_pct"] for m in prod_models) / max(len(prod_models), 1), 1
-            ),
-            "total_forecasts": len(forecasts),
-        },
-    }
+    return _sd.spot_price_forecast_dashboard()
 
 
 # ---------------------------------------------------------------------------
@@ -466,6 +135,7 @@ def spot_price_forecast_dashboard():
 # ---------------------------------------------------------------------------
 
 @router.get("/api/spot-market-stress/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def spot_market_stress_dashboard():
     # Try real price data for stress metrics
     try:
@@ -704,6 +374,7 @@ def spot_market_stress_dashboard():
 # ---------------------------------------------------------------------------
 
 @router.get("/api/spot-price-volatility-regime/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def spot_price_volatility_regime_dashboard():
     _r.seed(404)
     regions = ["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]
@@ -876,272 +547,7 @@ def spot_price_volatility_regime_dashboard():
 
 @router.get("/api/spot-price-spike-prediction/dashboard")
 def spot_price_spike_prediction_dashboard():
-    # --- Real data block ---
-    try:
-        spike_rows = _query_gold(f"""
-            SELECT region_id, rrp, interval_datetime
-            FROM {_CATALOG}.gold.nem_prices_5min
-            WHERE rrp > 300
-            ORDER BY interval_datetime DESC
-            LIMIT 100
-        """)
-        stat_rows = _query_gold(f"""
-            SELECT region_id,
-                   COUNT(*) AS total_intervals,
-                   SUM(CASE WHEN rrp > 300 THEN 1 ELSE 0 END) AS spike_count,
-                   AVG(rrp) AS avg_price,
-                   MAX(rrp) AS max_price
-            FROM {_CATALOG}.gold.nem_prices_5min
-            WHERE interval_datetime >= current_timestamp() - INTERVAL 30 DAYS
-            GROUP BY region_id
-        """)
-        if spike_rows and len(spike_rows) >= 5 and stat_rows:
-            rng = _r.Random(505)
-            regions = ["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]
-            region_stat_map = {r["region_id"]: r for r in stat_rows}
-
-            # Build predictions from real spike data
-            predictions = []
-            for sr in spike_rows[:30]:
-                price = float(sr["rrp"])
-                prob = round(min(0.99, price / 16600), 3)
-                predictions.append({
-                    "prediction_id": f"PRED-{rng.randint(10000, 99999)}",
-                    "region": sr["region_id"],
-                    "dispatch_interval": str(sr["interval_datetime"]),
-                    "predicted_spike_probability": prob,
-                    "predicted_price_aud_mwh": round(price * rng.uniform(0.7, 1.3), 2),
-                    "actual_price_aud_mwh": round(price, 2),
-                    "threshold_aud_mwh": 300,
-                    "correct_prediction": prob >= 0.5,
-                    "confidence_interval_low": round(price * rng.uniform(0.3, 0.6), 2),
-                    "confidence_interval_high": round(price * rng.uniform(1.1, 2.0), 2),
-                })
-
-            # Model performance derived from spike frequency
-            model_names = ["Ensemble-Spike", "XGBoost-Spike", "LSTM-Spike"]
-            model_performance = []
-            for model_name in model_names:
-                for reg in regions:
-                    rs = region_stat_map.get(reg, {})
-                    spike_ct = int(rs.get("spike_count") or 0)
-                    total_ct = int(rs.get("total_intervals") or 1)
-                    spike_rate = spike_ct / max(total_ct, 1)
-                    prec = round(min(0.92, max(0.65, 0.85 - spike_rate * 2 + rng.uniform(-0.05, 0.05))), 3)
-                    rec = round(min(0.90, max(0.60, 0.80 + rng.uniform(-0.1, 0.1))), 3)
-                    model_performance.append({
-                        "model_name": model_name, "region": reg, "period": "2026-H1",
-                        "precision": prec, "recall": rec,
-                        "f1_score": round(2 * prec * rec / max(prec + rec, 0.001), 3),
-                        "auc_roc": round(min(0.97, max(0.85, prec * 1.05)), 3),
-                        "false_positive_rate": round(max(0.03, 1 - prec) * rng.uniform(0.3, 0.8), 3),
-                        "spike_threshold_aud_mwh": 300,
-                        "total_spikes": spike_ct if spike_ct > 0 else rng.randint(20, 120),
-                        "predicted_spikes": max(1, int(spike_ct * rec)) if spike_ct > 0 else rng.randint(15, 110),
-                    })
-
-            # Features (static structure)
-            feature_categories = ["MARKET", "WEATHER", "GRID", "TEMPORAL", "FUEL"]
-            feature_names_list = [
-                "demand_forecast_mw", "temperature_max_c", "wind_generation_forecast_mw",
-                "solar_generation_mw", "gas_price_aud_gj", "interconnector_available_mw",
-                "hour_of_day", "day_of_week", "lagged_price_30min", "reserve_margin_mw",
-                "coal_gen_available_mw", "battery_soc_pct", "rooftop_solar_mw",
-            ]
-            features = []
-            for fname in feature_names_list:
-                features.append({
-                    "feature": fname, "importance": round(rng.uniform(0.01, 0.15), 4),
-                    "category": rng.choice(feature_categories),
-                    "spike_correlation": round(rng.uniform(-0.6, 0.85), 3),
-                    "lag_minutes": rng.choice([0, 5, 30, 60, 120]),
-                })
-
-            # Alerts from recent spikes
-            alerts = []
-            cause_list = ["Generator Trip", "Demand Surge", "Low Wind", "Heatwave", "Network Constraint", "Gas Shortage", "Strategic Bidding"]
-            trigger_factors_pool = ["High demand forecast", "Low wind forecast", "Generator outage notice", "Heatwave warning", "Gas price spike", "Interconnector limit", "Evening ramp", "Low reserve margin"]
-            statuses = ["ACTIVE", "RESOLVED_SPIKE", "RESOLVED_NO_SPIKE", "EXPIRED"]
-            for i, sr in enumerate(spike_rows[:8]):
-                alerts.append({
-                    "alert_id": f"ALERT-{rng.randint(1000, 9999)}",
-                    "region": sr["region_id"],
-                    "issued_at": str(sr["interval_datetime"]),
-                    "forecast_window_minutes": rng.choice([30, 60, 120, 240]),
-                    "spike_probability": round(min(0.98, float(sr["rrp"]) / 16600 + 0.3), 2),
-                    "expected_price_aud_mwh": round(float(sr["rrp"]), 0),
-                    "trigger_factors": rng.sample(trigger_factors_pool, k=rng.randint(2, 4)),
-                    "status": rng.choice(statuses),
-                })
-
-            # Spike history from real data
-            spike_history = []
-            for sr in spike_rows[:20]:
-                price = float(sr["rrp"])
-                predicted = rng.random() > 0.3
-                spike_history.append({
-                    "region": sr["region_id"],
-                    "date": str(sr["interval_datetime"])[:10],
-                    "hour": int(str(sr["interval_datetime"])[11:13]) if len(str(sr["interval_datetime"])) > 13 else 12,
-                    "max_price_aud_mwh": round(price, 0),
-                    "duration_intervals": rng.randint(2, 24),
-                    "cause": rng.choice(cause_list),
-                    "predicted": predicted,
-                    "warning_lead_time_minutes": rng.randint(10, 120) if predicted else None,
-                })
-
-            active_alerts = sum(1 for a in alerts if a["status"] == "ACTIVE")
-            best_auc = max(model_performance, key=lambda m: m["auc_roc"])
-            ensemble_perfs = [m for m in model_performance if m["model_name"] == "Ensemble-Spike"]
-            avg_recall = round(sum(m["recall"] for m in ensemble_perfs) / max(len(ensemble_perfs), 1), 3)
-
-            return {
-                "predictions": predictions, "model_performance": model_performance,
-                "features": features, "alerts": alerts, "spike_history": spike_history,
-                "summary": {
-                    "active_alerts": active_alerts,
-                    "best_auc_roc": best_auc["auc_roc"],
-                    "best_model": best_auc["model_name"],
-                    "spike_detection_rate_pct": round(avg_recall * 100, 1),
-                    "false_positive_rate_pct": round(sum(m["false_positive_rate"] for m in ensemble_perfs) / max(len(ensemble_perfs), 1) * 100, 1),
-                    "avg_warning_lead_time_minutes": round(sum(s["warning_lead_time_minutes"] for s in spike_history if s["warning_lead_time_minutes"]) / max(sum(1 for s in spike_history if s["warning_lead_time_minutes"]), 1), 0),
-                    "total_spikes_ytd": len(spike_history),
-                },
-            }
-    except Exception:
-        pass
-    # --- End real data block ---
-
-    _r.seed(505)
-    regions = ["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]
-    statuses = ["ACTIVE", "RESOLVED_SPIKE", "RESOLVED_NO_SPIKE", "EXPIRED"]
-    feature_categories = ["MARKET", "WEATHER", "GRID", "TEMPORAL", "FUEL"]
-    cause_list = [
-        "Generator Trip", "Demand Surge", "Low Wind", "Heatwave",
-        "Network Constraint", "Gas Shortage", "Strategic Bidding",
-    ]
-    trigger_factors_pool = [
-        "High demand forecast", "Low wind forecast", "Generator outage notice",
-        "Heatwave warning", "Gas price spike", "Interconnector limit",
-        "Evening ramp", "Low reserve margin",
-    ]
-    model_names = ["Ensemble-Spike", "XGBoost-Spike", "LSTM-Spike"]
-
-    predictions = []
-    for _ in range(30):
-        prob = round(_r.random(), 3)
-        actual = round(_r.uniform(-50, 500), 2) if _r.random() > 0.15 else None
-        threshold = 300
-        predictions.append({
-            "prediction_id": f"PRED-{_r.randint(10000, 99999)}",
-            "region": _r.choice(regions),
-            "dispatch_interval": (
-                _dt(2024, 7, 1) + _td(minutes=_r.randint(0, 43200))
-            ).isoformat(),
-            "predicted_spike_probability": prob,
-            "predicted_price_aud_mwh": round(_r.uniform(50, 800), 2),
-            "actual_price_aud_mwh": actual,
-            "threshold_aud_mwh": threshold,
-            "correct_prediction": (
-                (prob >= 0.5 and actual >= threshold) or (prob < 0.5 and actual < threshold)
-            ) if actual is not None else None,
-            "confidence_interval_low": round(_r.uniform(10, 150), 2),
-            "confidence_interval_high": round(_r.uniform(300, 1200), 2),
-        })
-
-    model_performance = []
-    for model_name in model_names:
-        for region in regions:
-            for period in ["2024-H1", "2024-H2"]:
-                prec = round(_r.uniform(0.65, 0.92), 3)
-                rec = round(_r.uniform(0.60, 0.90), 3)
-                model_performance.append({
-                    "model_name": model_name,
-                    "region": region,
-                    "period": period,
-                    "precision": prec,
-                    "recall": rec,
-                    "f1_score": round(2 * prec * rec / max(prec + rec, 0.001), 3),
-                    "auc_roc": round(_r.uniform(0.85, 0.97), 3),
-                    "false_positive_rate": round(_r.uniform(0.03, 0.15), 3),
-                    "spike_threshold_aud_mwh": 300,
-                    "total_spikes": _r.randint(20, 120),
-                    "predicted_spikes": _r.randint(15, 110),
-                })
-
-    feature_names = [
-        "demand_forecast_mw", "temperature_max_c", "wind_generation_forecast_mw",
-        "solar_generation_mw", "gas_price_aud_gj", "interconnector_available_mw",
-        "hour_of_day", "day_of_week", "lagged_price_30min", "reserve_margin_mw",
-        "coal_gen_available_mw", "battery_soc_pct", "rooftop_solar_mw",
-    ]
-    features = []
-    for fname in feature_names:
-        features.append({
-            "feature": fname,
-            "importance": round(_r.uniform(0.01, 0.15), 4),
-            "category": _r.choice(feature_categories),
-            "spike_correlation": round(_r.uniform(-0.6, 0.85), 3),
-            "lag_minutes": _r.choice([0, 5, 30, 60, 120]),
-        })
-
-    alerts = []
-    for i in range(8):
-        alerts.append({
-            "alert_id": f"ALERT-{_r.randint(1000, 9999)}",
-            "region": _r.choice(regions),
-            "issued_at": (
-                _dt(2024, 7, 15) + _td(hours=_r.randint(0, 168))
-            ).isoformat(),
-            "forecast_window_minutes": _r.choice([30, 60, 120, 240]),
-            "spike_probability": round(_r.uniform(0.45, 0.98), 2),
-            "expected_price_aud_mwh": _r.choice([450, 800, 1500, 5000, 12000]),
-            "trigger_factors": _r.sample(trigger_factors_pool, k=_r.randint(2, 4)),
-            "status": _r.choice(statuses),
-        })
-
-    spike_history = []
-    for _ in range(20):
-        predicted = _r.random() > 0.3
-        spike_history.append({
-            "region": _r.choice(regions),
-            "date": (
-                _dt(2024, 1, 1) + _td(days=_r.randint(0, 200))
-            ).strftime("%Y-%m-%d"),
-            "hour": _r.randint(6, 22),
-            "max_price_aud_mwh": _r.choice([500, 1200, 5000, 8000, 15100]),
-            "duration_intervals": _r.randint(2, 24),
-            "cause": _r.choice(cause_list),
-            "predicted": predicted,
-            "warning_lead_time_minutes": _r.randint(10, 120) if predicted else None,
-        })
-
-    active_alerts = sum(1 for a in alerts if a["status"] == "ACTIVE")
-    best_auc = max(model_performance, key=lambda m: m["auc_roc"])
-    ensemble_perfs = [m for m in model_performance if m["model_name"] == "Ensemble-Spike"]
-    avg_recall = round(sum(m["recall"] for m in ensemble_perfs) / max(len(ensemble_perfs), 1), 3)
-
-    return {
-        "predictions": predictions,
-        "model_performance": model_performance,
-        "features": features,
-        "alerts": alerts,
-        "spike_history": spike_history,
-        "summary": {
-            "active_alerts": active_alerts,
-            "best_auc_roc": best_auc["auc_roc"],
-            "best_model": best_auc["model_name"],
-            "spike_detection_rate_pct": round(avg_recall * 100, 1),
-            "false_positive_rate_pct": round(
-                sum(m["false_positive_rate"] for m in ensemble_perfs) / max(len(ensemble_perfs), 1) * 100, 1
-            ),
-            "avg_warning_lead_time_minutes": round(
-                sum(s["warning_lead_time_minutes"] for s in spike_history if s["warning_lead_time_minutes"])
-                / max(sum(1 for s in spike_history if s["warning_lead_time_minutes"]), 1), 0
-            ),
-            "total_spikes_ytd": len(spike_history),
-        },
-    }
+    return _sd.spike_prediction_dashboard()
 
 
 # ---------------------------------------------------------------------------
@@ -1149,6 +555,7 @@ def spot_price_spike_prediction_dashboard():
 # ---------------------------------------------------------------------------
 
 @router.get("/api/spot-market-depth-x/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def spot_market_depth_x_dashboard():
     # --- Real data block ---
     try:
@@ -1506,193 +913,7 @@ def spot_market_depth_x_dashboard():
 
 @router.get("/api/negative-price-events/dashboard")
 def negative_price_events_dashboard():
-    _r.seed(707)
-    regions = ["SA1", "VIC1", "NSW1", "QLD1", "TAS1"]
-    years = list(range(2018, 2025))
-
-    # Try real negative price frequency from NEMWEB
-    try:
-        neg_rows = _query_gold(f"""
-            SELECT region_id,
-                   COUNT(*) AS neg_intervals,
-                   AVG(rrp) AS avg_neg_price,
-                   MIN(rrp) AS deepest_price
-            FROM {_CATALOG}.gold.nem_prices_5min
-            WHERE rrp < 0
-            GROUP BY region_id
-        """)
-    except Exception:
-        neg_rows = None
-
-    real_neg = {}
-    if neg_rows:
-        for nr in neg_rows:
-            real_neg[nr["region_id"]] = {
-                "intervals": int(nr["neg_intervals"] or 0),
-                "avg_price": float(nr["avg_neg_price"] or -30),
-                "deepest": float(nr["deepest_price"] or -100),
-            }
-
-    frequency = []
-    for year in years:
-        for region in regions:
-            rn = real_neg.get(region)
-            if rn and year == 2024:
-                neg_intervals = rn["intervals"]
-                avg_neg = round(rn["avg_price"], 1)
-                deepest = round(rn["deepest"], 0)
-            else:
-                base_intervals = {"SA1": 3500, "VIC1": 2200, "NSW1": 1500, "QLD1": 1800, "TAS1": 800}[region]
-                growth = (year - 2018) * _r.randint(80, 250)
-                neg_intervals = base_intervals + growth + _r.randint(-300, 300)
-                avg_neg = round(_r.uniform(-80, -5), 1)
-                deepest = round(_r.uniform(-1000, -200), 0)
-            neg_hours = round(neg_intervals * 5 / 60, 1)
-            frequency.append({
-                "year": year,
-                "region": region,
-                "negative_price_intervals": neg_intervals,
-                "negative_price_hours": neg_hours,
-                "pct_of_year": round(neg_hours / 8760 * 100, 2),
-                "avg_negative_price": avg_neg,
-                "deepest_price": deepest,
-                "consecutive_negative_hrs_max": round(_r.uniform(1, 18), 1),
-                "total_negative_energy_mwh": round(neg_intervals * _r.uniform(50, 300), 0),
-            })
-
-    quarters = [f"{y}-Q{q}" for y in [2022, 2023, 2024] for q in [1, 2, 3, 4]]
-    drivers = []
-    for region in regions:
-        for quarter in quarters:
-            solar = round(_r.uniform(15, 55), 1)
-            wind = round(_r.uniform(10, 35), 1)
-            must_run = round(_r.uniform(10, 30), 1)
-            hydro = round(_r.uniform(2, 15), 1)
-            low_dem = round(_r.uniform(5, 20), 1)
-            export = round(100 - solar - wind - must_run - hydro - low_dem, 1)
-            drivers.append({
-                "region": region,
-                "quarter": quarter,
-                "rooftop_solar_contribution_pct": solar,
-                "wind_contribution_pct": wind,
-                "must_run_baseload_pct": must_run,
-                "pumped_hydro_pct": hydro,
-                "low_demand_pct": low_dem,
-                "combined_export_constraint_pct": max(0, export),
-            })
-
-    battery_opportunity = []
-    for region in regions:
-        for year in [2022, 2023, 2024]:
-            neg_mwh = _r.randint(50000, 500000)
-            battery_opportunity.append({
-                "region": region,
-                "year": year,
-                "negative_price_mwh_available": neg_mwh,
-                "optimal_charge_value_m": round(neg_mwh * _r.uniform(0.00005, 0.0002), 1),
-                "battery_capacity_mw_needed": round(_r.uniform(50, 600), 0),
-                "avg_charge_price": round(_r.uniform(-80, -5), 1),
-                "arbitrage_spread_to_peak": round(_r.uniform(80, 350), 0),
-            })
-
-    plant_names = [
-        "Liddell", "Eraring", "Bayswater", "Vales Point",
-        "Yallourn", "Loy Yang A", "Tarong", "Gladstone",
-    ]
-    technologies = ["COAL", "COAL", "COAL", "COAL", "COAL", "COAL", "GAS", "COGENERATION"]
-    must_run = []
-    for i, pname in enumerate(plant_names):
-        region = _r.choice(regions[:4])
-        min_stable = round(_r.uniform(200, 800), 0)
-        must_run.append({
-            "plant_name": pname,
-            "technology": technologies[i % len(technologies)],
-            "region": region,
-            "min_stable_load_mw": min_stable,
-            "technical_min_mw": round(min_stable * _r.uniform(0.4, 0.7), 0),
-            "startup_cost_k": round(_r.uniform(200, 2000), 0),
-            "ramp_rate_mw_min": round(_r.uniform(2, 15), 1),
-            "negative_price_hours_yr": round(_r.uniform(100, 1500), 0),
-            "estimated_loss_m_yr": round(_r.uniform(1, 25), 1),
-        })
-
-    market_design = [
-        {
-            "mechanism": "FIVE_MINUTE_SETTLEMENT",
-            "description": "Transition from 30-minute to 5-minute settlement to reduce manipulation of negative price windows.",
-            "estimated_negative_price_reduction_pct": 12,
-            "implementation_cost_m": 150,
-            "aemo_recommendation": True,
-            "status": "IMPLEMENTED",
-        },
-        {
-            "mechanism": "BATTERY_STORAGE_INCENTIVES",
-            "description": "Tax incentives and CIS funding for grid-scale batteries to absorb excess renewable generation.",
-            "estimated_negative_price_reduction_pct": 25,
-            "implementation_cost_m": 800,
-            "aemo_recommendation": True,
-            "status": "IMPLEMENTED",
-        },
-        {
-            "mechanism": "INTERCONNECTOR_UPGRADE",
-            "description": "Expand SA-NSW (EnergyConnect) and QLD-NSW interconnector capacity to export surplus generation.",
-            "estimated_negative_price_reduction_pct": 18,
-            "implementation_cost_m": 2400,
-            "aemo_recommendation": True,
-            "status": "UNDER_REVIEW",
-        },
-        {
-            "mechanism": "DEMAND_FLEXIBILITY_PROGRAM",
-            "description": "Industrial and residential demand response programs to shift load into negative price periods.",
-            "estimated_negative_price_reduction_pct": 15,
-            "implementation_cost_m": 120,
-            "aemo_recommendation": True,
-            "status": "PROPOSED",
-        },
-        {
-            "mechanism": "NEGATIVE_PRICE_FLOOR_REFORM",
-            "description": "Review of market price floor from -$1000/MWh to reduce perverse bidding incentives.",
-            "estimated_negative_price_reduction_pct": 30,
-            "implementation_cost_m": 10,
-            "aemo_recommendation": False,
-            "status": "UNDER_REVIEW",
-        },
-        {
-            "mechanism": "PUMPED_HYDRO_OPTIMISATION",
-            "description": "Optimise Snowy 2.0 and Borumba pumped hydro to charge during negative prices.",
-            "estimated_negative_price_reduction_pct": 20,
-            "implementation_cost_m": 600,
-            "aemo_recommendation": True,
-            "status": "IMPLEMENTED",
-        },
-    ]
-
-    sa_2024 = [f for f in frequency if f["region"] == "SA1" and f["year"] == 2024]
-    total_neg_2024 = sum(f["negative_price_intervals"] for f in frequency if f["year"] == 2024)
-    batt_total = sum(b["optimal_charge_value_m"] for b in battery_opportunity if b["year"] == 2024)
-    deepest = min(f["deepest_price"] for f in frequency)
-    prev_year_total = sum(f["negative_price_intervals"] for f in frequency if f["year"] == 2023)
-
-    return {
-        "frequency": frequency,
-        "drivers": drivers,
-        "battery_opportunity": battery_opportunity,
-        "must_run": must_run,
-        "market_design": market_design,
-        "summary": {
-            "total_negative_intervals_2024": total_neg_2024,
-            "pct_of_year_sa1": sa_2024[0]["pct_of_year"] if sa_2024 else 8.5,
-            "avg_negative_price_2024": round(
-                sum(f["avg_negative_price"] for f in frequency if f["year"] == 2024)
-                / max(sum(1 for f in frequency if f["year"] == 2024), 1), 1
-            ),
-            "battery_arbitrage_value_m": round(batt_total, 0),
-            "deepest_price": deepest,
-            "yoy_increase_pct": round(
-                (total_neg_2024 - prev_year_total) / max(prev_year_total, 1) * 100, 1
-            ),
-        },
-    }
+    return _sd.negative_price_dashboard()
 
 
 # ---------------------------------------------------------------------------
@@ -1700,6 +921,7 @@ def negative_price_events_dashboard():
 # ---------------------------------------------------------------------------
 
 @router.get("/api/electricity-spot-price-seasonality/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def electricity_spot_price_seasonality_dashboard():
     _r.seed(808)
     regions = ["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]
@@ -1941,6 +1163,7 @@ def electricity_spot_price_seasonality_dashboard():
 # ---------------------------------------------------------------------------
 
 @router.get("/api/electricity-spot-price-events/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def electricity_spot_price_events_dashboard():
     _r.seed(909)
     regions = ["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]
@@ -2157,6 +1380,7 @@ def electricity_spot_price_events_dashboard():
 # ---------------------------------------------------------------------------
 
 @router.get("/api/price-model-comparison/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def price_model_comparison_dashboard():
     # --- Real data block ---
     try:
@@ -2442,6 +1666,7 @@ def price_model_comparison_dashboard():
 # ---------------------------------------------------------------------------
 
 @router.get("/api/electricity-price-index/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def electricity_price_index_dashboard():
     # --- Real data block ---
     try:
@@ -2681,6 +1906,7 @@ def electricity_price_index_dashboard():
 # ---------------------------------------------------------------------------
 
 @router.get("/api/market-price-formation-review/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def market_price_formation_review_dashboard():
     # --- Real data block ---
     try:
@@ -2897,6 +2123,7 @@ def market_price_formation_review_dashboard():
 # ---------------------------------------------------------------------------
 
 @router.get("/api/electricity-market-price-formation/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def electricity_market_price_formation_dashboard():
     # --- Real data block ---
     try:
@@ -3126,6 +2353,7 @@ def electricity_market_price_formation_dashboard():
 # ---------------------------------------------------------------------------
 
 @router.get("/api/electricity-price-cap-intervention/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def electricity_price_cap_intervention_dashboard():
     _r.seed(204)
     regions = ["NSW1", "QLD1", "VIC1", "SA1", "TAS1"]
@@ -3252,6 +2480,7 @@ def electricity_price_cap_intervention_dashboard():
 # ---------------------------------------------------------------------------
 
 @router.get("/api/nem-price-review/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def nem_price_review_dashboard():
     # --- Real data block ---
     try:
@@ -3445,6 +2674,7 @@ def nem_price_review_dashboard():
 # ---------------------------------------------------------------------------
 
 @router.get("/api/demand-curve-price-anchor/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def demand_curve_price_anchor_dashboard():
     # --- Real data block ---
     try:
@@ -3621,6 +2851,7 @@ def demand_curve_price_anchor_dashboard():
 # ---------------------------------------------------------------------------
 
 @router.get("/api/market-stress/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def market_stress_dashboard():
     # --- Real data block ---
     try:
@@ -3841,6 +3072,7 @@ def market_stress_dashboard():
 # ---------------------------------------------------------------------------
 
 @router.get("/api/demand-forecast/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def demand_forecast_dashboard():
     # Try real demand data from region summary
     try:

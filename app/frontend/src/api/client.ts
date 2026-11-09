@@ -3159,6 +3159,9 @@ function getHeaders(): Record<string, string> {
   return { Accept: 'application/json' }
 }
 
+/** Fired when an endpoint serves illustrative data (backend sets X-Data-Source: sample). */
+export const SAMPLE_DATA_EVENT = 'energy-copilot:sample-data'
+
 async function get<T>(path: string): Promise<T> {
   const res = await fetch(path, {
     headers: { Accept: 'application/json' },
@@ -3166,6 +3169,9 @@ async function get<T>(path: string): Promise<T> {
   if (!res.ok) {
     const text = await res.text().catch(() => '')
     throw new Error(`API error ${res.status} ${res.statusText}: ${text}`)
+  }
+  if (res.headers.get('X-Data-Source') === 'sample') {
+    window.dispatchEvent(new CustomEvent(SAMPLE_DATA_EVENT, { detail: path }))
   }
   return res.json() as Promise<T>
 }
@@ -7340,9 +7346,9 @@ export interface DFMModelRecord {
   name: string
   region: string
   mae_mw: number
-  rmse_mw: number
-  mape_pct: number
-  r_squared: number
+  rmse_mw: number | null
+  mape_pct: number | null
+  r_squared: number | null
   training_data_years: number
   last_retrained: string
 }
@@ -7354,9 +7360,9 @@ export interface DFMForecastRecord {
   hour: number
   forecast_mw: number
   actual_mw: number | null
-  lower_bound_mw: number
-  upper_bound_mw: number
-  temperature_degc: number
+  lower_bound_mw: number | null
+  upper_bound_mw: number | null
+  temperature_degc: number | null
 }
 
 export interface DFMSeasonalPatternRecord {
@@ -7366,7 +7372,7 @@ export interface DFMSeasonalPatternRecord {
   avg_demand_mw: number
   min_demand_mw: number
   peak_hour: number
-  temp_sensitivity_mw_per_degc: number
+  temp_sensitivity_mw_per_degc: number | null
 }
 
 export interface DFMFeatureImportanceRecord {
@@ -14404,9 +14410,9 @@ export interface EPFModelRecord {
   region: string;
   horizon: string;
   mae_aud_mwh: number;
-  rmse_aud_mwh: number;
-  mape_pct: number;
-  r2_score: number;
+  rmse_aud_mwh: number | null;
+  mape_pct: number | null;
+  r2_score: number | null;
   training_samples: number;
   last_trained: string;
   active: boolean;
@@ -21398,7 +21404,7 @@ export interface EMFADemandRecord {
   rmse_mw: number
   mape_pct: number
   model_type: string
-  temperature_error_c: number
+  temperature_error_c: number | null
   season: string
 }
 

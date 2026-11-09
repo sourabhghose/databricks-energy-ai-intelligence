@@ -6,7 +6,7 @@ from datetime import datetime as _dt
 from fastapi import APIRouter
 
 from .curves import _build_forward_curve
-from .shared import _CATALOG, _query_gold, logger
+from .shared import _sample_data, _CATALOG, _query_gold, logger
 
 router = APIRouter()
 
@@ -90,6 +90,7 @@ def _get_price_stats():
 # =========================================================================
 
 @router.get("/api/futures/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def futures_dashboard(region: str = "NSW1"):
     # Try real ASX futures data first
     fd = _get_futures_data(region)
@@ -171,6 +172,7 @@ def futures_dashboard(region: str = "NSW1"):
 
 
 @router.get("/api/electricity-futures-options/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def efot_dashboard():
     # --- real ASX futures for contracts ---
     try:
@@ -300,6 +302,7 @@ def efot_dashboard():
 
 
 @router.get("/api/futures-market-risk/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def futures_market_risk_dashboard():
     ps = _get_price_stats()
     regions = ["NSW1", "QLD1", "VIC1", "SA1"]
@@ -353,6 +356,7 @@ def futures_market_risk_dashboard():
 
 
 @router.get("/api/futures-price-discovery/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def futures_price_discovery_dashboard():
     # --- real ASX futures term structure ---
     try:
@@ -472,6 +476,7 @@ def futures_price_discovery_dashboard():
 
 
 @router.get("/api/electricity-options/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def eov_dashboard():
     ps = _get_price_stats()
     regions = ["NSW1", "QLD1", "VIC1", "SA1"]
@@ -521,6 +526,7 @@ def eov_dashboard():
 # =========================================================================
 
 @router.get("/api/electricity-price-risk/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def eprm_dashboard():
     ps = _get_price_stats()
     regions = ["NSW1", "QLD1", "VIC1", "SA1"]
@@ -589,6 +595,7 @@ def eprm_dashboard():
 
 
 @router.get("/api/energy-market-credit-risk-x/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def emcrx_dashboard():
     ps = _get_price_stats()
     ptypes = ["Gentailer", "Generator", "Retailer", "Trader", "Financial"]
@@ -641,6 +648,7 @@ def emcrx_dashboard():
 
 
 @router.get("/api/hedge-effectiveness/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def hef_dashboard():
     ps = _get_price_stats()
     regions = ["NSW1", "QLD1", "VIC1", "SA1"]
@@ -698,6 +706,7 @@ def hef_dashboard():
 
 
 @router.get("/api/market-power/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def market_power_dashboard():
     # Use real facilities for HHI concentration
     try:
@@ -762,6 +771,7 @@ def market_power_dashboard():
 
 
 @router.get("/api/hedging/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def hedging_main_dashboard():
     # --- real ASX futures for hedge portfolio ---
     try:
@@ -873,6 +883,7 @@ def hedging_main_dashboard():
 
 
 @router.get("/api/hedging/contracts")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def hedging_contracts(region: str = None, contract_type: str = None, status: str = None):
     ps = _get_price_stats()
     regions = ["NSW1", "QLD1", "VIC1", "SA1"]
@@ -910,6 +921,7 @@ def hedging_contracts(region: str = None, contract_type: str = None, status: str
 
 
 @router.get("/api/hedging/portfolio")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def hedging_portfolio(region: str = None):
     try:
         region_filter = f"AND region = '{region}'" if region else ""
@@ -970,6 +982,7 @@ def hedging_portfolio(region: str = None):
 
 
 @router.get("/api/nem-participant-financial/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def npfp_dashboard():
     _r.seed(7022)
     participants_data = [("AGL", "Gentailer", "NSW1", 22.5), ("Origin", "Gentailer", "QLD1", 18.3), ("EnergyAustralia", "Retailer", "VIC1", 15.1), ("Snowy Hydro", "Generator", "NSW1", 12.8), ("CS Energy", "Generator", "QLD1", 8.2), ("Stanwell", "Generator", "QLD1", 7.5), ("Alinta", "Generator", "SA1", 5.4)]
@@ -981,6 +994,7 @@ def npfp_dashboard():
 
 
 @router.get("/api/energy-retailer-hedging/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def erha_dashboard():
     _r.seed(7023)
     retailers = ["AGL Retail", "Origin Retail", "EnergyAustralia", "Simply Energy", "Red Energy"]
@@ -994,6 +1008,7 @@ def erha_dashboard():
 
 
 @router.get("/api/voll-analytics/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def voll_analytics_dashboard():
     # Try real price data to derive VoLL-related metrics (price spikes indicate supply stress)
     try:
@@ -1052,6 +1067,7 @@ def voll_analytics_dashboard():
 # =========================================================================
 
 @router.get("/api/nem-five-minute-settlement/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def nfms_dashboard():
     # Try real 5-min price + demand data
     try:
@@ -1108,6 +1124,7 @@ def nfms_dashboard():
 
 
 @router.get("/api/aemo-5min-settlement/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def aemo5m_dashboard():
     try:
         # Dispatch intervals (last 6 hours of 5-min data)
@@ -1180,6 +1197,7 @@ def aemo5m_dashboard():
 
 
 @router.get("/api/settlement-analytics/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def settlement_analytics_dashboard():
     try:
         # Monthly settlement aggregates from real price data
@@ -1239,6 +1257,7 @@ def settlement_analytics_dashboard():
 
 
 @router.get("/api/transmission-congestion-revenue/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def tcra_dashboard():
     try:
         # Interconnector congestion and flow data
@@ -1308,6 +1327,7 @@ def tcra_dashboard():
 
 
 @router.get("/api/congestion-revenue/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def congestion_revenue_dashboard():
     # Try real interconnector + price data for congestion revenue
     try:
@@ -1363,6 +1383,7 @@ def congestion_revenue_dashboard():
 
 
 @router.get("/api/nem-congestion-rent/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def ncra_dashboard():
     # Use real interconnector data for congestion rents
     try:
@@ -1431,6 +1452,7 @@ def ncra_dashboard():
 
 
 @router.get("/api/sra/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def sra_main_dashboard():
     # --- real SRA residues data ---
     try:
@@ -1517,6 +1539,7 @@ def sra_main_dashboard():
 
 
 @router.get("/api/sra-analytics/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def sraa_dashboard():
     # --- real SRA analytics from nem_sra_residues ---
     try:
@@ -1614,6 +1637,7 @@ def sraa_dashboard():
 
 
 @router.get("/api/nem-settlement-residue-auction/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def nsra_dashboard():
     # --- real SRA + settlement data ---
     try:
@@ -1725,6 +1749,7 @@ def nsra_dashboard():
 # =========================================================================
 
 @router.get("/api/carbon-price-pathway/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def cpp_dashboard():
     # --- real emissions factors data ---
     try:
@@ -1826,6 +1851,7 @@ def cpp_dashboard():
 
 
 @router.get("/api/price-sensitivity/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def epsa_dashboard():
     # --- real-data block ---
     ps = _get_price_stats()
@@ -1865,6 +1891,7 @@ def epsa_dashboard():
 
 
 @router.get("/api/market-evolution-policy/dashboard")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 def mepa_dashboard():
     # --- real-data block (gen + emissions factors) ---
     try:

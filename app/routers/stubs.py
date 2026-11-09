@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from fastapi import APIRouter
 
-from .shared import _CATALOG, _query_gold, _query_gold_async
+from .shared import _sample_data, _CATALOG, _query_gold, _query_gold_async
 
 router = APIRouter()
 
@@ -14,6 +14,7 @@ router = APIRouter()
 # =========================================================================
 
 @router.get("/api/spot-depth/dashboard", summary="Spot market depth", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def spot_depth_dashboard():
     ts = datetime.now(timezone.utc).isoformat()
     regions = ["NSW1","QLD1","VIC1","SA1","TAS1"]
@@ -95,6 +96,7 @@ async def spot_depth_dashboard():
     return {"timestamp":ts,"bid_stacks":bid_stacks,"order_flows":order_flows,"depth_snapshots":depth_snapshots,"participant_flows":participant_flows}
 
 @router.get("/api/spot-forecast/dashboard", summary="Spot price forecast", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def spot_forecast_dashboard():
     ts = datetime.now(timezone.utc).isoformat()
 
@@ -172,6 +174,7 @@ async def spot_forecast_dashboard():
     return {"timestamp":ts,"forecast_intervals":intervals,"regional_summary":regional,"model_performance":models,"next_spike_alert":None,"overall_forecast_accuracy_pct":82.4}
 
 @router.get("/api/load-curve/dashboard", summary="Load duration curves", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def load_curve_dashboard():
     # Try real demand data from region summary
     try:
@@ -257,6 +260,7 @@ async def load_curve_dashboard():
     return {"hourly_profiles":hourly,"duration_curves":duration,"peak_records":peaks,"seasonal_trends":seasonal,"summary":{"max_peak_demand_mw":13800,"min_demand_mw":4200,"avg_load_factor_pct":62.3,"demand_growth_yoy_pct":1.8}}
 
 @router.get("/api/forward-curve/dashboard", summary="Energy futures forward curve", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def forward_curve_dashboard():
     ts = datetime.now(timezone.utc).isoformat()
     regions = ["NSW1","QLD1","VIC1","SA1"]
@@ -362,6 +366,7 @@ async def forward_curve_dashboard():
     return {"timestamp":ts,"base_spot_nsw_aud_mwh":87.5,"curve_steepness_nsw":3.2,"avg_implied_vol_pct":35.8,"total_open_interest_mw":12500,"forward_curve":curves,"cap_options":caps,"seasonal_premiums":seasonal}
 
 @router.get("/api/participant-market-share/dashboard", summary="Participant market share", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def participant_market_share_dashboard():
     ts = datetime.now(timezone.utc).isoformat()
 
@@ -461,6 +466,7 @@ async def participant_market_share_dashboard():
     return {"timestamp":ts,"participants":participants,"concentration":concentration,"ownership_changes":ownership,"regional_shares":regional}
 
 @router.get("/api/planned-outage/dashboard", summary="Planned outage schedule", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def planned_outage_dashboard():
     ts = datetime.now(timezone.utc).isoformat()
 
@@ -570,6 +576,7 @@ async def planned_outage_dashboard():
     return {"timestamp":ts,"outages":outages,"reserve_margins":reserve,"conflicts":conflicts,"kpis":kpis}
 
 @router.get("/api/hydrogen/dashboard", summary="Hydrogen economy dashboard", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def hydrogen_dashboard():
     ts = datetime.now(timezone.utc).isoformat()
     projects = [
@@ -583,6 +590,7 @@ async def hydrogen_dashboard():
     return {"timestamp":ts,"data_source":"illustrative","total_operating_capacity_mw":220,"total_pipeline_capacity_mw":52000,"national_avg_lcoh_aud_kg":6.50,"projects_at_target_cost":1,"projects":projects,"price_benchmarks":benchmarks,"capacity_records":capacity}
 
 @router.get("/api/regulatory/dashboard", summary="Regulatory compliance", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def regulatory_dashboard():
     ts = datetime.now(timezone.utc).isoformat()
     rules = [
@@ -598,6 +606,7 @@ async def regulatory_dashboard():
     return {"timestamp":ts,"data_source":"illustrative","open_consultations":8,"draft_rules":3,"final_rules_this_year":5,"transformative_changes":2,"upcoming_deadlines":12,"rule_changes":rules,"aer_determinations":determinations,"calendar_events":calendar}
 
 @router.get("/api/network-tariff-reform/dashboard", summary="Network tariff reform", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def network_tariff_reform_dashboard():
     ts = datetime.now(timezone.utc).isoformat()
     tariffs = [{"dnsp_id":f"DNSP-{s}","dnsp_name":n,"state":s,"tariff_name":tn,"tariff_category":cat,"structure_type":st,"daily_supply_charge":round(random.uniform(0.8,1.5),2),"peak_rate_kw_or_kwh":round(random.uniform(0.25,0.55),3),"off_peak_rate":round(random.uniform(0.08,0.18),3),"shoulder_rate":round(random.uniform(0.15,0.30),3),"demand_charge_kw_month":round(random.uniform(8,18),2) if st=="DEMAND" else None,"solar_export_rate":round(random.uniform(0.02,0.08),3),"customer_count":random.randint(200000,1200000),"reform_status":random.choice(["LEGACY","TRANSITIONING","REFORMED"])} for n,s,tn,cat,st in [("Ausgrid","NSW","EA010 TOU","RESIDENTIAL","TOU"),("Endeavour","NSW","N70 Demand","SME","DEMAND"),("Citipower","VIC","RESI TOU","RESIDENTIAL","TOU"),("SA Power","SA","RTOU Solar","RESIDENTIAL","TOU"),("Energex","QLD","T11 Flat","RESIDENTIAL","FLAT")]]
@@ -607,6 +616,7 @@ async def network_tariff_reform_dashboard():
     return {"timestamp":ts,"data_source":"illustrative","dnsp_tariffs":tariffs,"dnsp_revenue":revenue,"tariff_reforms":reforms,"der_network_impacts":der,"total_network_revenue_b_aud":22.4,"reformed_customers_pct":34.2,"avg_peak_demand_reduction_mw":185,"network_augmentation_avoided_b_aud":1.8}
 
 @router.get("/api/tariff/dashboard", summary="Tariff analysis", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def tariff_dashboard():
     ts = datetime.now(timezone.utc).isoformat()
 
@@ -776,6 +786,7 @@ async def tariff_dashboard():
     return {"timestamp":ts,"national_avg_residential_bill_aud":1780,"cheapest_state":"TAS","most_expensive_state":"SA","tou_adoption_pct":48.2,"avg_solar_export_rate_c_kwh":5.5,"network_cost_share_pct":42,"tariff_components":components,"tou_structures":tou,"bill_compositions":bills}
 
 @router.get("/api/mlf-analytics/dashboard", summary="Marginal loss factor analytics", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def mlf_analytics_dashboard():
     ts = datetime.now(timezone.utc).isoformat()
 
@@ -870,6 +881,7 @@ async def mlf_analytics_dashboard():
     return {"timestamp":ts,"connection_points":cps,"rez_mlfs":rez,"revenue_impacts":revenue,"historical":historical}
 
 @router.get("/api/settlement/dashboard", summary="Settlement dashboard", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def settlement_dashboard():
     ts = datetime.now(timezone.utc).isoformat()
 
@@ -991,6 +1003,7 @@ async def settlement_dashboard():
     return {"timestamp":ts,"settlement_period":"2026-02","total_energy_settlement_aud":245000000,"total_fcas_settlement_aud":18500000,"total_residues_aud":12800000,"prudential_exceedances":0,"pending_settlement_runs":1,"largest_residue_interconnector":"VIC1-NSW1","settlement_runs":runs,"residues":residues,"prudential_records":prudential,"tec_adjustments":tec}
 
 @router.get("/api/market-participant-financial/dashboard", summary="Participant financial", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def market_participant_financial_dashboard():
     # Derive settlement exposure from real FCAS settlement + energy price data
     try:
@@ -1079,6 +1092,7 @@ async def market_participant_financial_dashboard():
     return {"participants":participants,"settlement":settlement,"defaults":defaults,"credit_support":credit,"prudential":prudential,"summary":{"total_participants":total_parts,"total_prudential_requirement_m":total_prud_req,"market_coverage_ratio":mkt_cov,"red_flagged_participants":red_flagged,"default_events_2024":default_2024,"avg_credit_rating":avg_rating}}
 
 @router.get("/api/rec-market/dashboard", summary="Renewable energy certificates", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def rec_market_dashboard():
     ts = datetime.now(timezone.utc).isoformat()
 
@@ -1222,6 +1236,7 @@ async def rec_market_dashboard():
     return {"timestamp":ts,"lgc_spot_records":lgc_spot,"surplus_deficit":surplus,"lgc_creation":creation,"stc_records":stc,"current_lgc_price":45.20,"current_stc_price":39.80,"lgc_surplus_deficit_m":2.4,"lret_target_2030_twh":33.0,"lret_progress_pct":78.5}
 
 @router.get("/api/carbon-intensity/dashboard", summary="Carbon intensity", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def carbon_intensity_dashboard():
     ts = datetime.now(timezone.utc).isoformat()
 
@@ -1319,6 +1334,7 @@ async def carbon_intensity_dashboard():
     return {"timestamp":ts,"grid_intensity":grid,"marginal_emissions":marginal,"technology_emissions":tech,"decarbonisation":decarb}
 
 @router.get("/api/ppa/dashboard", summary="PPA market", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def ppa_dashboard():
     ts = datetime.now(timezone.utc).isoformat()
 
@@ -1406,6 +1422,7 @@ async def ppa_dashboard():
     return {"timestamp":ts,"total_ppa_capacity_gw":8.2,"active_ppas":145,"pipeline_ppas":62,"avg_ppa_price_aud_mwh":68.50,"tech_mix":[{"technology":"Wind","capacity_gw":4.8,"pct":58.5},{"technology":"Solar","capacity_gw":2.9,"pct":35.4},{"technology":"Hybrid","capacity_gw":0.5,"pct":6.1}],"lgc_spot_price":45.20,"rooftop_solar_total_gw":22.5,"ppas":ppas,"lgc_market":lgc,"behind_meter_assets":btm}
 
 @router.get("/api/rooftop-solar-grid/dashboard", summary="Rooftop solar grid impact", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def rooftop_solar_grid_dashboard():
     # Try real solar generation + demand data
     try:
@@ -1478,6 +1495,7 @@ async def rooftop_solar_grid_dashboard():
     return {"adoption":adoption,"generation":gen,"duck_curve":duck,"hosting_capacity":hosting,"export_management":export,"summary":{"total_rooftop_mw_2024":total_cap,"total_systems_2024":total_sys,"avg_penetration_pct":round(avg_pen,1),"peak_curtailment_pct":round(peak_curtail,1),"min_net_demand_2024_mw":min_net_2024,"min_net_demand_2030_mw":min_net_2030,"avg_payback_years":round(avg_payback,1)}}
 
 @router.get("/api/community-energy/dashboard", summary="Community energy", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def community_energy_dashboard():
     ts = datetime.now(timezone.utc).isoformat()
 
@@ -1565,6 +1583,7 @@ async def community_energy_dashboard():
     return {"timestamp":ts,"total_community_batteries":120,"total_community_battery_capacity_mwh":85.0,"total_solar_garden_capacity_mw":95.0,"total_solar_garden_subscribers":2500,"total_sps_systems":45,"total_sps_customers":380,"community_batteries":batteries,"solar_gardens":gardens,"sps_systems":sps}
 
 @router.get("/api/vpp/dashboard", summary="Virtual power plant", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def vpp_dashboard():
     ts = datetime.now(timezone.utc).isoformat()
 
@@ -1673,6 +1692,7 @@ async def vpp_dashboard():
     return {"timestamp":ts,"total_enrolled_participants":41000,"total_vpp_capacity_mw":410,"active_schemes":5,"total_revenue_ytd_aud":2800000,"schemes":schemes,"dispatches":dispatches,"performance":performance}
 
 @router.get("/api/ev/dashboard", summary="EV grid impact", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def ev_dashboard():
     ts = datetime.now(timezone.utc).isoformat()
     chargers = [{"charger_id":f"EV-{i}","site_name":n,"operator":op,"state":s,"charger_type":ct,"power_kw":pw,"num_connectors":conn,"utilisation_pct":round(random.uniform(15,65),1),"avg_session_kwh":round(random.uniform(15,60),1),"sessions_per_day":round(random.uniform(3,20),1),"revenue_aud_per_day":round(random.uniform(50,400),2),"managed_charging":mc,"grid_upgrade_required":random.choice([True,False]),"installation_year":random.choice([2023,2024,2025])} for i,(n,op,s,ct,pw,conn,mc) in enumerate([("Sydney Olympic Park","Chargefox","NSW","DC Ultra-Rapid",350,4,True),("Melbourne Airport","Evie","VIC","DC Fast",150,8,True),("Brisbane Supercharger","Tesla","QLD","DC Fast",250,12,False),("Adelaide CBD","Jolt","SA","DC Fast",50,6,True),("Hobart Waterfront","ChargePoint","TAS","AC Type 2",22,4,False)])]
@@ -1680,6 +1700,7 @@ async def ev_dashboard():
     return {"timestamp":ts,"data_source":"illustrative","total_chargers":4200,"total_ev_vehicles":270000,"total_charging_capacity_mw":850,"avg_utilisation_pct":32.5,"managed_charging_pct":28.4,"chargers":chargers,"grid_impacts":grid}
 
 @router.get("/api/isp-progress/dashboard", summary="ISP progress tracking", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def isp_progress_dashboard():
     ts = datetime.now(timezone.utc).isoformat()
 
@@ -1773,6 +1794,7 @@ async def isp_progress_dashboard():
     return {"timestamp":ts,"data_source":"illustrative","actionable_projects":projects,"capacity_milestones":milestones,"scenarios":scenarios,"delivery_risks":risks,"total_actionable_investment_b_aud":15.4,"committed_projects":3,"projects_on_track_pct":52.0,"step_change_renewable_target_gw_2030":68}
 
 @router.get("/api/rez-dev/dashboard", summary="REZ development", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def rez_dev_dashboard():
     ts = datetime.now(timezone.utc).isoformat()
 
@@ -1833,6 +1855,7 @@ async def rez_dev_dashboard():
     return {"timestamp":ts,"data_source":"illustrative","total_rez_zones":6,"total_pipeline_gw":18.5,"committed_capacity_mw":4200,"operating_capacity_mw":1800,"total_transmission_investment_m_aud":12500,"rez_records":rezs,"generation_projects":projects}
 
 @router.get("/api/isp/dashboard", summary="ISP major projects", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def isp_dashboard():
     ts = datetime.now(timezone.utc).isoformat()
 
@@ -1898,6 +1921,7 @@ async def isp_dashboard():
     return {"timestamp":ts,"data_source":"illustrative","total_pipeline_capex_bn_aud":28.5,"committed_projects":4,"projects_under_construction":3,"total_new_km":1805,"total_new_capacity_mw":6100,"delayed_projects":1,"isp_projects":projects,"tnsp_programs":tnsp}
 
 @router.get("/api/capacity-investment/dashboard", summary="Capacity investment signals", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def capacity_investment_dashboard():
     ts = datetime.now(timezone.utc).isoformat()
 
@@ -1959,6 +1983,7 @@ async def capacity_investment_dashboard():
     return {"timestamp":ts,"new_entrant_costs":new_entrant,"investment_activity":activity,"price_signals":signals,"exit_risks":exits}
 
 @router.get("/api/coal-retirement/dashboard", summary="Coal retirement tracker", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def coal_retirement_dashboard():
     ts = datetime.now(timezone.utc).isoformat()
 
@@ -2046,6 +2071,7 @@ async def coal_retirement_dashboard():
     return {"timestamp":ts,"operating_coal_units":18,"total_coal_capacity_mw":18200,"retirements_by_2030_mw":4640,"retirements_by_2035_mw":8140,"replacement_gap_2030_mw":-1200,"avg_coal_age_years":38,"retirement_records":records,"capacity_gaps":gaps,"transition_investments":investments}
 
 @router.get("/api/system-operator/dashboard", summary="System operator directions", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def system_operator_dashboard():
     ts = datetime.now(timezone.utc).isoformat()
 
@@ -2129,6 +2155,7 @@ async def system_operator_dashboard():
     return {"timestamp":ts,"directions":directions,"rert_activations":rert,"load_shedding":shedding,"constraint_relaxations":relaxations,"total_directions_2024":42,"total_rert_activations_2024":3,"total_load_shed_mwh":675,"total_direction_cost_m_aud":4.2}
 
 @router.get("/api/emergency-management/dashboard", summary="Emergency management", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def emergency_management_dashboard():
     # Derive emergencies from real anomaly events (price spikes = LOR-like conditions)
     try:
@@ -2212,6 +2239,7 @@ async def emergency_management_dashboard():
     return {"emergencies":emergencies,"protocols":protocols,"restoration":restoration,"preparedness":preparedness,"drills":drills,"summary":summary}
 
 @router.get("/api/stpasa-adequacy/dashboard", summary="ST PASA adequacy", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def stpasa_adequacy_dashboard():
     regions = ["NSW1","QLD1","VIC1","SA1","TAS1"]
 
@@ -2531,6 +2559,7 @@ async def stpasa_adequacy_dashboard():
     return {"outlooks":outlooks,"supply_records":supply,"outages":outages,"demand_forecasts":demand_fc,"interconnector_records":ic,"rert_activations":rert,"summary":stpa_summary}
 
 @router.get("/api/electricity-market-transparency/dashboard", summary="Market transparency", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def electricity_market_transparency_dashboard():
     # Try to build market concentration / HHI from real facility data
     try:
@@ -2597,6 +2626,7 @@ async def electricity_market_transparency_dashboard():
     return {"data_quality":data_quality,"compliance":compliance,"market_notices":notices,"audits":audits,"information_gaps":info_gaps,"transparency_scores":scores,"summary":emt_summary}
 
 @router.get("/api/aemo-market-operations/dashboard", summary="AEMO market operations", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def aemo_market_operations_dashboard():
     regions = ["NSW1","QLD1","VIC1","SA1","TAS1"]
 
@@ -2772,6 +2802,7 @@ async def aemo_market_operations_dashboard():
     return {"dispatch":dispatch,"notices":notices,"settlement":settlement,"predispatch":predispatch,"system_normal":system_normal,"summary":{"total_dispatched_twh":195.4,"avg_renewable_share_pct":38.2,"total_notices":total_notices,"avg_predispatch_accuracy_pct":round(avg_pred_acc,1)}}
 
 @router.get("/api/storage/dashboard", summary="Energy storage projects", tags=["Market Data"])
+@_sample_data("Illustrative dashboard: no ingested data source yet, values are synthetic")
 async def storage_dashboard():
     ts = datetime.now(timezone.utc).isoformat()
 

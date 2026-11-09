@@ -10,6 +10,8 @@ import random as _r
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from .shared import _sample_data
+
 router = APIRouter()
 
 _DNSPS = ["AusNet Services", "Ergon Energy", "Energex", "Ausgrid", "Essential Energy"]
@@ -21,6 +23,7 @@ _CHARGER_TYPES = ["AC Level 2 (7kW)", "AC Level 2 (22kW)", "DC Fast (50kW)", "DC
 
 
 @router.get("/api/fleet/summary")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def fleet_summary() -> JSONResponse:
     """Fleet electrification headline KPIs."""
     _r.seed(700)
@@ -38,6 +41,7 @@ async def fleet_summary() -> JSONResponse:
 
 
 @router.get("/api/fleet/vehicles")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def fleet_vehicles() -> JSONResponse:
     """Fleet breakdown by vehicle category."""
     _r.seed(701)
@@ -62,6 +66,7 @@ async def fleet_vehicles() -> JSONResponse:
 
 
 @router.get("/api/fleet/charging-network")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def fleet_charging_network() -> JSONResponse:
     """EV charging site infrastructure details."""
     _r.seed(702)
@@ -87,6 +92,7 @@ async def fleet_charging_network() -> JSONResponse:
 
 
 @router.get("/api/fleet/transition-plan")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def fleet_transition_plan() -> JSONResponse:
     """EV fleet transition roadmap from current year to 2030."""
     _r.seed(703)

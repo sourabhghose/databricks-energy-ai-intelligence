@@ -10,6 +10,8 @@ import random as _r
 from fastapi import APIRouter
 from fastapi.responses import JSONResponse
 
+from .shared import _sample_data
+
 router = APIRouter()
 
 _MONTHS = [
@@ -28,6 +30,7 @@ _TRENDS = ["Up", "Stable", "Down"]
 
 
 @router.get("/api/cx/summary")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def cx_summary() -> JSONResponse:
     """Customer experience headline KPIs."""
     _r.seed(660)
@@ -43,6 +46,7 @@ async def cx_summary() -> JSONResponse:
 
 
 @router.get("/api/cx/nps-trend")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def cx_nps_trend() -> JSONResponse:
     """12-month NPS and CSAT trend."""
     _r.seed(661)
@@ -63,6 +67,7 @@ async def cx_nps_trend() -> JSONResponse:
 
 
 @router.get("/api/cx/complaints")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def cx_complaints() -> JSONResponse:
     """Complaint volume by category — MTD, YTD, and benchmark comparison."""
     _r.seed(662)
@@ -93,6 +98,7 @@ async def cx_complaints() -> JSONResponse:
 
 
 @router.get("/api/cx/digital-channels")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def cx_digital_channels() -> JSONResponse:
     """Digital channel usage and satisfaction metrics."""
     _r.seed(663)

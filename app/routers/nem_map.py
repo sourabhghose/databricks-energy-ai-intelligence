@@ -7,6 +7,8 @@ from typing import Optional
 from fastapi import APIRouter, Query
 from routers.shared import _CATALOG, _query_gold
 
+from .shared import _sample_data
+
 router = APIRouter()
 
 # ---------------------------------------------------------------------------
@@ -39,6 +41,7 @@ FUEL_COLORS = {
 # GET /api/map/facilities
 # ---------------------------------------------------------------------------
 @router.get("/api/map/facilities")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def get_map_facilities(
     fuel_type: Optional[str] = Query(None, description="Filter by fuel_type"),
     region: Optional[str] = Query(None, description="Filter by region_id"),
@@ -70,6 +73,7 @@ async def get_map_facilities(
 # GET /api/map/layers
 # ---------------------------------------------------------------------------
 @router.get("/api/map/layers")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def get_map_layers():
     """Return available map layers with counts and colours."""
     sql = f"""
@@ -100,6 +104,7 @@ async def get_map_layers():
 # GET /api/map/facility/{duid}
 # ---------------------------------------------------------------------------
 @router.get("/api/map/facility/{duid}")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def get_map_facility_detail(duid: str):
     """Return detail for a single facility including recent generation if available."""
     sql = f"SELECT * FROM {_CATALOG}.gold.facility_locations WHERE duid = '{duid}' LIMIT 1"

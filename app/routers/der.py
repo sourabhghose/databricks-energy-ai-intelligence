@@ -12,6 +12,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Query
 
 from .shared import (
+    _sample_data,
     _CATALOG,
     _NEM_REGIONS,
     _cache_get,
@@ -381,42 +382,49 @@ def _core_der_summary() -> Dict[str, Any]:
 # =========================================================================
 
 @router.get("/api/der/summary")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def der_summary():
     """Total solar MW, battery MW, EVs, curtailment today."""
     return _core_der_summary()
 
 
 @router.get("/api/der/fleet")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def der_fleet(zone_substation: Optional[str] = Query(default=None)):
     """DER fleet summary by zone substation and technology."""
     return _core_der_fleet(zone_substation)
 
 
 @router.get("/api/der/fleet/{zone_substation}")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def der_fleet_detail(zone_substation: str):
     """Detailed DER breakdown for a zone sub."""
     return _core_der_fleet_detail(zone_substation)
 
 
 @router.get("/api/der/hosting-capacity")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def hosting_capacity(min_available_pct: Optional[float] = Query(default=None)):
     """Hosting capacity by feeder."""
     return _core_hosting_capacity(min_available_pct)
 
 
 @router.get("/api/der/hosting-capacity/{feeder_id}")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def hosting_capacity_detail(feeder_id: str):
     """Single feeder hosting capacity detail."""
     return _core_hosting_capacity_detail(feeder_id)
 
 
 @router.get("/api/der/curtailment/impact")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def curtailment_impact():
     """Financial impact of curtailment (MWh, AUD)."""
     return _core_curtailment_impact()
 
 
 @router.get("/api/der/curtailment")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def curtailment(
     region: Optional[str] = Query(default=None),
     days: int = Query(default=30, ge=1, le=365),
@@ -426,24 +434,28 @@ async def curtailment(
 
 
 @router.get("/api/der/vpp")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def vpp_events():
     """VPP dispatch events and performance."""
     return _core_vpp()
 
 
 @router.get("/api/der/vpp/{program_id}")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def vpp_detail(program_id: str):
     """Single VPP program performance detail."""
     return _core_vpp_detail(program_id)
 
 
 @router.get("/api/der/doe-compliance")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def doe_compliance():
     """DOE compliance rates by feeder."""
     return _core_doe_compliance()
 
 
 @router.get("/api/der/output")
+@_sample_data("Contains illustrative values: parts of this payload are generated, not read from an ingested source")
 async def der_output():
     """Estimated DER output by feeder (30-min intervals)."""
     return _core_der_output()
